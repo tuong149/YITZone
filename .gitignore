@@ -1,0 +1,18 @@
+# Node / Frontend
+yitzone-client/node_modules/
+yitzone-client/dist/
+yitzone-client/dev-dist/
+yitzone-client/.vite/
+
+# Java / Maven
+yitzone-server/target/
+*.jar
+*.war
+
+# Environment & IDE
+.env
+.env.local
+.idea/
+.vscode/
+*.iml
+.DS_Store

@@ -1,0 +1,82 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: yitzone-server
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/yitzone?replicaSet=rs0}
+      auto-index-creation: true
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 3s
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 30MB
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${OIDC_CLIENT_ID:dev-client-id}
+            client-secret: ${OIDC_CLIENT_SECRET:dev-client-secret}
+            scope: openid,profile,email
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+yitzone:
+  security:
+    jwt-secret: ${YITZONE_JWT_SECRET:change-me-in-production-min-64-chars-yitzone-secret-key-2026}
+    access-token-ttl-seconds: 900
+    refresh-token-ttl-seconds: 604800
+    cors-allowed-origins:
+      - http://localhost:5173
+      - http://localhost:80
+  storage:
+    endpoint: ${YITZONE_STORAGE_ENDPOINT:http://localhost:9000}
+    access-key: ${YITZONE_STORAGE_ACCESS_KEY:yitzone_dev_key}
+    secret-key: ${YITZONE_STORAGE_SECRET_KEY:yitzone_dev_secret}
+    public-bucket: ${YITZONE_STORAGE_PUBLIC_BUCKET:yitzone-public}
+    private-bucket: ${YITZONE_STORAGE_PRIVATE_BUCKET:yitzone-private}
+    presigned-url-ttl-seconds: 300
+  clamav:
+    enabled: ${YITZONE_CLAMAV_ENABLED:false}
+    host: ${YITZONE_CLAMAV_HOST:localhost}
+    port: ${YITZONE_CLAMAV_PORT:3310}
+  attendance:
+    qr-rotation-seconds: 10
+    qr-grace-window-seconds: 8
+    offline-bundle-max-age-hours: 12
+    offline-bucket-seconds: 15
+    risk-review-threshold: 2
+  ai:
+    provider: ${YITZONE_AI_PROVIDER:gemini}
+    api-key: ${YITZONE_AI_API_KEY:}
+    monthly-budget-usd: ${YITZONE_AI_MONTHLY_BUDGET_USD:25.00}
+    student-rate-limit-per-min: 20
+    guest-rate-limit-per-min: 5
+  payment:
+    webhook-secret: ${YITZONE_PAYMENT_WEBHOOK_SECRET:dev-hmac-secret}

@@ -1,0 +1,99 @@
+# YITZone Topology A — MVP & Standard Operation (HLD Section 6.1)
+# Note: All image tags are pinned per HLD 6.2 (especially pgsty/silo under AGPLv3).
+
+services:
+  mongodb:
+    image: mongo:8.0.4
+    container_name: yitzone-mongodb
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "2.0"]
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: yitzone
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongodb:27017'}]}).ok }"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.2-alpine
+    container_name: yitzone-redis
+    command: ["redis-server", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:1.4.2
+    container_name: yitzone-clamav
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    restart: unless-stopped
+
+  silo:
+    image: pgsty/silo:v0.2.0
+    container_name: yitzone-silo
+    ports:
+      - "9000:9000"
+    environment:
+      SILO_ACCESS_KEY: ${SILO_ACCESS_KEY:-yitzone_dev_key}
+      SILO_SECRET_KEY: ${SILO_SECRET_KEY:-yitzone_dev_secret}
+    volumes:
+      - silo_data:/data
+    restart: unless-stopped
+
+  yitzone-server:
+    build:
+      context: ./yitzone-server
+      dockerfile: Dockerfile
+    container_name: yitzone-server
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/yitzone?replicaSet=rs0
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      YITZONE_STORAGE_ENDPOINT: http://silo:9000
+      YITZONE_STORAGE_ACCESS_KEY: ${SILO_ACCESS_KEY:-yitzone_dev_key}
+      YITZONE_STORAGE_SECRET_KEY: ${SILO_SECRET_KEY:-yitzone_dev_secret}
+      YITZONE_CLAMAV_HOST: clamav
+      YITZONE_CLAMAV_PORT: 3310
+      YITZONE_JWT_SECRET: ${YITZONE_JWT_SECRET:-change-me-in-production-min-64-chars-yitzone-secret-key-2026}
+      JAVA_TOOL_OPTIONS: "-Xms512m -Xmx1536m"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  yitzone-client:
+    build:
+      context: ./yitzone-client
+      dockerfile: Dockerfile
+    container_name: yitzone-client
+    depends_on:
+      - yitzone-server
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  redis_data:
+  clamav_data:
+  silo_data:

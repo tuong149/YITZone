@@ -1,0 +1,46 @@
+name: YITZone CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  server-ci:
+    name: yitzone-server (Java 21 + Maven)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: yitzone-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run unit & integration tests
+        run: mvn -B test
+
+  client-ci:
+    name: yitzone-client (React + TS Strict + Vite PWA)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: yitzone-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: yitzone-client/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript strict typecheck
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Build PWA bundle
+        run: npm run build
