@@ -1,5 +1,6 @@
 package vn.edu.fit.yitzone.chatbot.controller;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -9,15 +10,22 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import vn.edu.fit.yitzone.chatbot.service.PiiRedactorService;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @RestController
 @RequestMapping("/api/v1/chatbot")
 public class ChatbotController {
     private final PiiRedactorService piiRedactorService;
+    private final ExecutorService sseVirtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     public ChatbotController(PiiRedactorService piiRedactorService) {
         this.piiRedactorService = piiRedactorService;
+    }
+
+    @PreDestroy
+    public void shutdownExecutor() {
+        sseVirtualThreadExecutor.close();
     }
 
     /**
@@ -27,7 +35,7 @@ public class ChatbotController {
     public SseEmitter streamReply(@Valid @RequestBody ChatStreamRequest request) {
         SseEmitter emitter = new SseEmitter(30_000L);
         String sanitizedPrompt = piiRedactorService.redact(request.message());
-        Executors.newVirtualThreadPerTaskExecutor().execute(() -> {
+        sseVirtualThreadExecutor.execute(() -> {
             try {
                 emitter.send(SseEmitter.event().name("chunk").data("YITBot đã tiếp nhận câu hỏi (đã khử PII): " + sanitizedPrompt));
                 emitter.send(SseEmitter.event().name("done").data("[DONE]"));

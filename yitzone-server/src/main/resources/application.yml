@@ -49,12 +49,12 @@ springdoc:
 
 yitzone:
   security:
-    jwt-secret: ${YITZONE_JWT_SECRET:change-me-in-production-min-64-chars-yitzone-secret-key-2026}
+    jwt-secret: ${YITZONE_JWT_SECRET}
     access-token-ttl-seconds: 900
     refresh-token-ttl-seconds: 604800
     cors-allowed-origins:
       - http://localhost:5173
-      - http://localhost:80
+      - http://localhost
   storage:
     endpoint: ${YITZONE_STORAGE_ENDPOINT:http://localhost:9000}
     access-key: ${YITZONE_STORAGE_ACCESS_KEY:yitzone_dev_key}
@@ -79,4 +79,4 @@ yitzone:
     student-rate-limit-per-min: 20
     guest-rate-limit-per-min: 5
   payment:
-    webhook-secret: ${YITZONE_PAYMENT_WEBHOOK_SECRET:dev-hmac-secret}
+    webhook-secret: ${YITZONE_PAYMENT_WEBHOOK_SECRET}

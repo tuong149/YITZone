@@ -29,6 +29,14 @@ interface AuthState {
   hasAuthority: (authority: string) => boolean;
 }
 
+const SESSION_STORAGE_KEY = "yitzone_auth_session_v1";
+
+function clearAuthenticatedApiCaches(): void {
+  if (typeof window !== "undefined" && "caches" in window) {
+    void window.caches.delete("yitzone-events-cache");
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   userId: null,
   email: null,
@@ -37,7 +45,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   activeScopeId: "FACULTY",
   roleScopes: [],
   authorities: [],
-  setSession: ({ userId, email, fullName, accessToken, authorities, roleScopes = [] }) =>
+  setSession: ({ userId, email, fullName, accessToken, authorities, roleScopes = [] }) => {
+    const activeScopeId = roleScopes[0]?.scopeId ?? "FACULTY";
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ userId, email, fullName, accessToken, authorities, roleScopes, activeScopeId })
+      );
+    }
     set({
       userId,
       email,
@@ -45,10 +60,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       accessToken,
       authorities,
       roleScopes,
-      activeScopeId: roleScopes[0]?.scopeId ?? "FACULTY"
-    }),
-  setActiveScopeId: (activeScopeId) => set({ activeScopeId }),
-  clearSession: () =>
+      activeScopeId
+    });
+  },
+  setActiveScopeId: (activeScopeId) => {
+    clearAuthenticatedApiCaches();
+    set({ activeScopeId });
+  },
+  clearSession: () => {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+    clearAuthenticatedApiCaches();
     set({
       userId: null,
       email: null,
@@ -57,9 +80,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       activeScopeId: "FACULTY",
       roleScopes: [],
       authorities: []
-    }),
+    });
+  },
   hasAuthority: (authority) => {
     const { authorities } = get();
     return authorities.includes("ROLE_STANDING_COMMITTEE") || authorities.includes(authority);
   }
 }));
+
+// Hydrate session from sessionStorage if available on page reload (F5)
+if (typeof window !== "undefined") {
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as {
+        userId: string;
+        email: string;
+        fullName: string;
+        accessToken: string;
+        authorities: string[];
+        roleScopes?: RoleScopeItem[];
+        activeScopeId?: string;
+      };
+      if (parsed.accessToken && parsed.userId) {
+        useAuthStore.setState({
+          userId: parsed.userId,
+          email: parsed.email,
+          fullName: parsed.fullName,
+          accessToken: parsed.accessToken,
+          authorities: parsed.authorities ?? [],
+          roleScopes: parsed.roleScopes ?? [],
+          activeScopeId: parsed.activeScopeId ?? "FACULTY"
+        });
+      }
+    }
+  } catch {
+    // Ignore corrupted session storage
+  }
+}

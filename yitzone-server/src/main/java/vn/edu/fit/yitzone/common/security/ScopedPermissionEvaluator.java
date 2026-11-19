@@ -21,12 +21,16 @@ public class ScopedPermissionEvaluator implements PermissionEvaluator {
         if (authentication == null || !authentication.isAuthenticated() || permission == null) {
             return false;
         }
-        String requiredPermission = permission.toString();
         if (hasStandingCommitteeBypass(authentication)) {
             return true;
         }
+        String requiredPermission = resolveRequiredPermission(targetDomainObject, permission);
         if (targetDomainObject instanceof ScopedTarget target) {
             return evaluateScopedTarget(authentication, target, requiredPermission);
+        }
+        List<EffectiveGrant> runtimeGrants = ScopeContextHolder.getEffectiveGrants();
+        if (!runtimeGrants.isEmpty()) {
+            return evaluateGrants(runtimeGrants, requiredPermission, null, Collections.emptyList(), false, Instant.now());
         }
         return hasAtomicPermission(authentication, requiredPermission);
     }
@@ -39,7 +43,24 @@ public class ScopedPermissionEvaluator implements PermissionEvaluator {
         if (hasStandingCommitteeBypass(authentication)) {
             return true;
         }
-        return hasAtomicPermission(authentication, permission.toString());
+        String requiredPermission = resolveRequiredPermission(targetType, permission);
+        List<EffectiveGrant> runtimeGrants = ScopeContextHolder.getEffectiveGrants();
+        if (!runtimeGrants.isEmpty()) {
+            String targetUnitId = targetId == null ? null : targetId.toString();
+            return evaluateGrants(runtimeGrants, requiredPermission, targetUnitId, Collections.emptyList(), false, Instant.now());
+        }
+        return hasAtomicPermission(authentication, requiredPermission);
+    }
+
+    private String resolveRequiredPermission(Object targetDomainOrType, Object permission) {
+        String permStr = permission.toString();
+        if (permStr.contains(":")) {
+            return permStr;
+        }
+        if (targetDomainOrType instanceof String domain && !domain.isBlank()) {
+            return domain + ":" + permStr;
+        }
+        return permStr;
     }
 
     public boolean evaluateGrants(
@@ -80,6 +101,25 @@ public class ScopedPermissionEvaluator implements PermissionEvaluator {
         boolean isInternalEventPerm = requiredPermission.startsWith("internal_event:");
         if (isInternalEventPerm && !target.internalCtvWithoutBenefits()) {
             return false;
+        }
+        List<EffectiveGrant> runtimeGrants = ScopeContextHolder.getEffectiveGrants();
+        if (!runtimeGrants.isEmpty()) {
+            return evaluateGrants(
+                    runtimeGrants,
+                    requiredPermission,
+                    target.unitId(),
+                    target.ancestors(),
+                    target.internalCtvWithoutBenefits(),
+                    Instant.now()
+            );
+        }
+        String activeScopeId = ScopeContextHolder.getActiveScopeId();
+        if (target.unitId() != null && activeScopeId != null && !"FACULTY".equals(activeScopeId)) {
+            boolean matchesUnit = activeScopeId.equals(target.unitId())
+                    || (target.ancestors() != null && target.ancestors().contains(activeScopeId));
+            if (!matchesUnit) {
+                return false;
+            }
         }
         return hasAtomicPermission(authentication, requiredPermission);
     }

@@ -1,6 +1,7 @@
 package vn.edu.fit.yitzone.common.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import org.slf4j.MDC;
 
 import java.time.Instant;
 import java.util.List;
@@ -44,6 +45,11 @@ public record ApiResponse<T>(
             List<FieldErrorDetail> fieldErrors
     ) {
         String slug = code.name().toLowerCase().replace('_', '-');
+        String currentTraceId = MDC.get("traceId");
+        if (currentTraceId == null || currentTraceId.isBlank()) {
+            currentTraceId = UUID.randomUUID().toString().replace("-", "");
+            MDC.put("traceId", currentTraceId);
+        }
         return new ApiResponse<>(
                 false,
                 null,
@@ -53,8 +59,8 @@ public record ApiResponse<T>(
                 detail,
                 instance,
                 code.name(),
-                detail,
-                UUID.randomUUID().toString().replace("-", ""),
+                null,
+                currentTraceId,
                 fieldErrors,
                 Instant.now()
         );

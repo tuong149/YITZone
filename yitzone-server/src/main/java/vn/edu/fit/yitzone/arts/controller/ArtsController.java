@@ -8,7 +8,6 @@ import vn.edu.fit.yitzone.common.api.ApiResponse;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -25,29 +24,45 @@ public class ArtsController {
      */
     @PostMapping("/events/{eventId}/export-jobs")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasPermission('performance', 'approve') or hasPermission('performance', 'view')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> createExportJob(@PathVariable String eventId) {
+    public ResponseEntity<ApiResponse<ExportJobCreatedResponse>> createExportJob(@PathVariable String eventId) {
         String jobId = "EXP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.ok(Map.of(
-                "jobId", jobId,
-                "eventId", eventId,
-                "status", "PROCESSING",
-                "statusUrl", "/api/v1/arts/events/" + eventId + "/export-jobs/" + jobId
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.ok(new ExportJobCreatedResponse(
+                jobId,
+                eventId,
+                "PROCESSING",
+                "/api/v1/arts/events/" + eventId + "/export-jobs/" + jobId
         )));
     }
 
     @GetMapping("/events/{eventId}/export-jobs/{jobId}")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasPermission('performance', 'approve') or hasPermission('performance', 'view')")
-    public ApiResponse<Map<String, Object>> getExportJobStatus(
+    public ApiResponse<ExportJobStatusResponse> getExportJobStatus(
             @PathVariable String eventId,
             @PathVariable String jobId
     ) {
-        return ApiResponse.ok(Map.of(
-                "jobId", jobId,
-                "eventId", eventId,
-                "status", "COMPLETED",
-                "supportsHttpRangeResume", true,
-                "presignedDownloadUrl", "https://silo.yitzone.edu.vn/arts-exports/" + eventId + "_" + jobId + ".zip",
-                "expiresAt", Instant.now().plusSeconds(3600)
+        return ApiResponse.ok(new ExportJobStatusResponse(
+                jobId,
+                eventId,
+                "COMPLETED",
+                true,
+                "https://silo.yitzone.edu.vn/arts-exports/" + eventId + "_" + jobId + ".zip",
+                Instant.now().plusSeconds(3600)
         ));
     }
+
+    public record ExportJobCreatedResponse(
+            String jobId,
+            String eventId,
+            String status,
+            String statusUrl
+    ) {}
+
+    public record ExportJobStatusResponse(
+            String jobId,
+            String eventId,
+            String status,
+            boolean supportsHttpRangeResume,
+            String presignedDownloadUrl,
+            Instant expiresAt
+    ) {}
 }

@@ -11,7 +11,6 @@ import vn.edu.fit.yitzone.common.api.ApiResponse;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @RestController
@@ -19,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 public class CertificateController {
 
     @GetMapping("/me")
-    public ApiResponse<List<Map<String, Object>>> myCertificates() {
+    public ApiResponse<List<CertificateSummaryResponse>> myCertificates() {
         return ApiResponse.ok(List.of());
     }
 
@@ -27,19 +26,19 @@ public class CertificateController {
      * Returns Pre-signed Silo URL of pre-rendered PDF with private Cache-Control instead of synchronous PDF rendering (ISS-09).
      */
     @GetMapping("/{id}/pdf")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getCertificatePdfUrl(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<CertificatePdfUrlResponse>> getCertificatePdfUrl(@PathVariable String id) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(300, TimeUnit.SECONDS).cachePrivate())
-                .body(ApiResponse.ok(Map.of(
-                        "certificateId", id,
-                        "presignedPdfUrl", "https://silo.yitzone.edu.vn/certificates/" + id + "_v1.pdf",
-                        "expiresInSeconds", 300
+                .body(ApiResponse.ok(new CertificatePdfUrlResponse(
+                        id,
+                        "https://silo.yitzone.edu.vn/certificates/" + id + "_v1.pdf",
+                        300
                 )));
     }
 
     @GetMapping("/verify/{code}")
-    public ApiResponse<Map<String, Object>> verifyCertificate(@PathVariable String code) {
-        return ApiResponse.ok(Map.of("certificateCode", code, "valid", false));
+    public ApiResponse<CertificateVerifyResponse> verifyCertificate(@PathVariable String code) {
+        return ApiResponse.ok(new CertificateVerifyResponse(code, false));
     }
 
     /**
@@ -47,39 +46,58 @@ public class CertificateController {
      */
     @PostMapping("/{id}/revoke")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasPermission('certificate', 'manage')")
-    public ApiResponse<Map<String, Object>> revokeCertificate(
+    public ApiResponse<CertificateRevokeResponse> revokeCertificate(
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CertificateActionRequest request,
             Authentication auth
     ) {
-        return ApiResponse.ok(Map.of(
-                "certificateId", id,
-                "certStatus", "REVOKED",
-                "reason", request.reason(),
-                "revokedBy", auth.getName(),
-                "revokedAt", Instant.now(),
-                "idempotencyKey", idempotencyKey
+        return ApiResponse.ok(new CertificateRevokeResponse(
+                id,
+                "REVOKED",
+                request.reason(),
+                auth.getName(),
+                Instant.now(),
+                idempotencyKey
         ));
     }
 
     @PostMapping("/{id}/reissue")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasPermission('certificate', 'manage')")
-    public ApiResponse<Map<String, Object>> reissueCertificate(
+    public ApiResponse<CertificateReissueResponse> reissueCertificate(
             @PathVariable String id,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CertificateActionRequest request,
             Authentication auth
     ) {
-        return ApiResponse.ok(Map.of(
-                "previousCertificateId", id,
-                "previousStatus", "SUPERSEDED",
-                "newCertVersion", 2,
-                "reason", request.reason(),
-                "reissuedBy", auth.getName(),
-                "idempotencyKey", idempotencyKey
+        return ApiResponse.ok(new CertificateReissueResponse(
+                id,
+                "SUPERSEDED",
+                2,
+                request.reason(),
+                auth.getName(),
+                idempotencyKey
         ));
     }
 
+    public record CertificateSummaryResponse(String certificateId, String certificateCode, String status) {}
+    public record CertificatePdfUrlResponse(String certificateId, String presignedPdfUrl, int expiresInSeconds) {}
+    public record CertificateVerifyResponse(String certificateCode, boolean valid) {}
+    public record CertificateRevokeResponse(
+            String certificateId,
+            String certStatus,
+            String reason,
+            String revokedBy,
+            Instant revokedAt,
+            String idempotencyKey
+    ) {}
+    public record CertificateReissueResponse(
+            String previousCertificateId,
+            String previousStatus,
+            int newCertVersion,
+            String reason,
+            String reissuedBy,
+            String idempotencyKey
+    ) {}
     public record CertificateActionRequest(@NotBlank String reason) {}
 }

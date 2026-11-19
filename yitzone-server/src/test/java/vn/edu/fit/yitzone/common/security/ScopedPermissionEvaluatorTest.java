@@ -1,6 +1,9 @@
 package vn.edu.fit.yitzone.common.security;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.time.Instant;
 import java.util.List;
@@ -11,6 +14,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ScopedPermissionEvaluatorTest {
 
     private final ScopedPermissionEvaluator evaluator = new ScopedPermissionEvaluator();
+
+    @AfterEach
+    void tearDown() {
+        ScopeContextHolder.clear();
+    }
+
+    @Test
+    void hasPermissionCombinesDomainAndActionAuthorityCorrectly() {
+        var eventCreatorAuth = new UsernamePasswordAuthenticationToken(
+                "user-1",
+                null,
+                List.of(new SimpleGrantedAuthority("event:create"))
+        );
+        var genericActionAuth = new UsernamePasswordAuthenticationToken(
+                "user-2",
+                null,
+                List.of(new SimpleGrantedAuthority("create"))
+        );
+
+        assertTrue(evaluator.hasPermission(eventCreatorAuth, "event", "create"));
+        assertFalse(evaluator.hasPermission(eventCreatorAuth, "certificate", "manage"));
+        assertFalse(evaluator.hasPermission(genericActionAuth, "event", "create"));
+    }
+
+    @Test
+    void hasPermissionEvaluatesRuntimeGrantsFromScopeContextHolder() {
+        Instant now = Instant.now();
+        var auth = new UsernamePasswordAuthenticationToken("user-ctv", null, List.of());
+        ScopeContextHolder.setActiveScopeId("EMFIT");
+        ScopeContextHolder.setEffectiveGrants(List.of(
+                new EffectiveGrant("event:create", "COMMITTEE", "EMFIT", now.plusSeconds(3600))
+        ));
+
+        assertTrue(evaluator.hasPermission(auth, "event", "create"));
+
+        ScopeContextHolder.setActiveScopeId("OFIT");
+        assertFalse(evaluator.hasPermission(auth, "event", "create"));
+    }
 
     @Test
     void expiredGrantMustBeRejectedImmediately() {

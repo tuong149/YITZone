@@ -3,6 +3,8 @@ package vn.edu.fit.yitzone.office.controller;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -10,7 +12,6 @@ import vn.edu.fit.yitzone.common.api.ApiResponse;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -30,33 +31,33 @@ public class OfficeController {
      * Separated leave-requests and swap-requests per RESTful action semantics (ISS-11).
      */
     @PostMapping("/duty/shifts/{id}/leave-requests")
-    public ApiResponse<Map<String, Object>> submitLeaveRequest(
+    public ResponseEntity<ApiResponse<LeaveRequestResponse>> submitLeaveRequest(
             @PathVariable String id,
             @Valid @RequestBody LeaveRequestDto request,
             Authentication auth
     ) {
-        return ApiResponse.ok(Map.of(
-                "shiftId", id,
-                "userId", auth.getName(),
-                "makeupShiftId", request.makeupShiftId(),
-                "status", "AUTO_APPROVED",
-                "submittedAt", Instant.now()
-        ));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.ok(new LeaveRequestResponse(
+                id,
+                auth.getName(),
+                request.makeupShiftId(),
+                "PENDING_VERIFICATION",
+                Instant.now()
+        )));
     }
 
     @PostMapping("/duty/shifts/{id}/swap-requests")
-    public ApiResponse<Map<String, Object>> submitSwapRequest(
+    public ResponseEntity<ApiResponse<SwapRequestResponse>> submitSwapRequest(
             @PathVariable String id,
             @Valid @RequestBody SwapRequestDto request,
             Authentication auth
     ) {
-        return ApiResponse.ok(Map.of(
-                "shiftId", id,
-                "requesterUserId", auth.getName(),
-                "targetUserId", request.targetUserId(),
-                "targetShiftId", request.targetShiftId(),
-                "status", "PENDING_PEER_CONFIRMATION"
-        ));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.ok(new SwapRequestResponse(
+                id,
+                auth.getName(),
+                request.targetUserId(),
+                request.targetShiftId(),
+                "PENDING_PEER_CONFIRMATION"
+        )));
     }
 
     /**
@@ -64,12 +65,12 @@ public class OfficeController {
      */
     @PostMapping("/office/borrowers/barcode-lookup")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasPermission('inventory', 'scan_barcode')")
-    public ApiResponse<Map<String, Object>> lookupBorrowerByBarcode(
+    public ApiResponse<BorrowerBarcodeLookupResponse> lookupBorrowerByBarcode(
             @Valid @RequestBody BorrowerBarcodeLookupRequest request
     ) {
-        return ApiResponse.ok(Map.of(
-                "studentCode", request.studentCode(),
-                "activeBorrows", List.of()
+        return ApiResponse.ok(new BorrowerBarcodeLookupResponse(
+                request.studentCode(),
+                List.of()
         ));
     }
 
@@ -78,14 +79,35 @@ public class OfficeController {
             @NotBlank String reason
     ) {}
 
+    public record LeaveRequestResponse(
+            String shiftId,
+            String userId,
+            String makeupShiftId,
+            String status,
+            Instant submittedAt
+    ) {}
+
     public record SwapRequestDto(
             @NotBlank String targetUserId,
             @NotBlank String targetShiftId,
             @NotBlank String reason
     ) {}
 
+    public record SwapRequestResponse(
+            String shiftId,
+            String requesterUserId,
+            String targetUserId,
+            String targetShiftId,
+            String status
+    ) {}
+
     public record BorrowerBarcodeLookupRequest(
             @NotBlank @Pattern(regexp = "^[0-9]{8}$") String studentCode,
             String hardwareType
+    ) {}
+
+    public record BorrowerBarcodeLookupResponse(
+            String studentCode,
+            List<Object> activeBorrows
     ) {}
 }

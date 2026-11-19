@@ -7,19 +7,39 @@ export interface FieldErrorDetail {
   message: string;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
+export interface ApiSuccess<T> {
+  success: true;
   data: T;
-  type?: string;
-  title?: string;
-  status?: number;
-  detail?: string;
-  instance?: string;
-  errorCode?: string;
   message?: string;
-  traceId?: string;
+  timestamp: string;
+}
+
+export interface ApiProblem {
+  success: false;
+  data?: undefined;
+  type: string;
+  title: string;
+  status: number;
+  detail: string;
+  instance?: string;
+  errorCode: string;
+  traceId: string;
   fieldErrors?: FieldErrorDetail[];
   timestamp: string;
+}
+
+export type ApiResponse<T> = ApiSuccess<T> | ApiProblem;
+
+export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
+  const { accessToken, activeScopeId } = useAuthStore.getState();
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+  if (activeScopeId) {
+    headers["X-Active-Scope-Id"] = activeScopeId;
+  }
+  return headers;
 }
 
 export const apiClient = axios.create({
@@ -29,12 +49,19 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const { accessToken, activeScopeId } = useAuthStore.getState();
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
-  }
-  if (activeScopeId) {
-    config.headers["X-Active-Scope-Id"] = activeScopeId;
+  const authHeaders = getAuthHeaders();
+  for (const [k, v] of Object.entries(authHeaders)) {
+    config.headers.set(k, v);
   }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      useAuthStore.getState().clearSession();
+    }
+    return Promise.reject(error);
+  }
+);

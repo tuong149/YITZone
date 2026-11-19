@@ -12,6 +12,7 @@ interface UseHidBarcodeScannerOptions {
 /**
  * Scoped HID Barcode Wedge Hook (30-50ms/char) for physical Student ID cards (HLD 5.1, LLD 5.1.C, A24).
  * Active ONLY when mounted & enabled on ticket/store/office scanner screens.
+ * Uses callback refs so parent re-renders (e.g. 1s bucket timers) do NOT reset the keystroke buffer mid-scan.
  */
 export function useHidBarcodeScanner({
   enabled,
@@ -21,6 +22,13 @@ export function useHidBarcodeScanner({
 }: UseHidBarcodeScannerOptions): void {
   const bufferRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
+  const onScanRef = useRef(onScan);
+  const onInvalidCodeRef = useRef(onInvalidCode);
+
+  useEffect(() => {
+    onScanRef.current = onScan;
+    onInvalidCodeRef.current = onInvalidCode;
+  }, [onScan, onInvalidCode]);
 
   useEffect(() => {
     if (!enabled) {
@@ -47,9 +55,9 @@ export function useHidBarcodeScanner({
 
         event.preventDefault();
         if (STUDENT_CODE_REGEX.test(candidate)) {
-          onScan(candidate);
+          onScanRef.current(candidate);
         } else {
-          onInvalidCode?.(candidate);
+          onInvalidCodeRef.current?.(candidate);
         }
         return;
       }
@@ -62,7 +70,6 @@ export function useHidBarcodeScanner({
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      bufferRef.current = "";
     };
-  }, [enabled, maxCharIntervalMs, onInvalidCode, onScan]);
+  }, [enabled, maxCharIntervalMs]);
 }

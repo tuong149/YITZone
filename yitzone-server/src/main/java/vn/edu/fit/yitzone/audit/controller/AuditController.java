@@ -6,12 +6,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import vn.edu.fit.yitzone.audit.domain.AuditLog;
 import vn.edu.fit.yitzone.common.api.ApiResponse;
 import vn.edu.fit.yitzone.common.api.ErrorCode;
 import vn.edu.fit.yitzone.common.exception.BusinessException;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/audit")
@@ -23,7 +23,7 @@ public class AuditController {
      */
     @GetMapping("/logs")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasRole('SYSTEM_ADMIN') or hasPermission('audit', 'view')")
-    public ApiResponse<Map<String, Object>> listAuditLogs(
+    public ApiResponse<AuditLogPageResponse> listAuditLogs(
             @RequestParam(required = false) Long beforeSeq,
             @RequestParam(defaultValue = "50") int limit
     ) {
@@ -31,20 +31,34 @@ public class AuditController {
             throw new BusinessException(ErrorCode.INVALID_PAGE_SIZE, HttpStatus.BAD_REQUEST,
                     "Giới hạn limit của nhật ký kiểm toán phải nằm trong khoảng 1.." + MAX_AUDIT_LIMIT);
         }
-        return ApiResponse.ok(Map.of(
-                "hashChainVerified", true,
-                "beforeSeq", beforeSeq == null ? -1L : beforeSeq,
-                "limit", limit,
-                "items", List.of()
+        return ApiResponse.ok(new AuditLogPageResponse(
+                false,
+                beforeSeq == null ? -1L : beforeSeq,
+                limit,
+                List.of()
         ));
     }
 
     @GetMapping("/verify-chain")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasRole('SYSTEM_ADMIN') or hasPermission('audit', 'view')")
-    public ApiResponse<Map<String, Object>> verifyAuditChain() {
-        return ApiResponse.ok(Map.of(
-                "chainId", "MAIN_CHAIN",
-                "integrityValid", true
+    public ApiResponse<AuditChainVerificationResponse> verifyAuditChain() {
+        return ApiResponse.ok(new AuditChainVerificationResponse(
+                "MAIN_CHAIN",
+                false,
+                0L
         ));
     }
+
+    public record AuditLogPageResponse(
+            boolean hashChainVerified,
+            long beforeSeq,
+            int limit,
+            List<AuditLog> items
+    ) {}
+
+    public record AuditChainVerificationResponse(
+            String chainId,
+            boolean integrityValid,
+            long verifiedEntriesCount
+    ) {}
 }

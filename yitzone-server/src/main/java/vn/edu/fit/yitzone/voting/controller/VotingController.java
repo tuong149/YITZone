@@ -21,7 +21,8 @@ import vn.edu.fit.yitzone.voting.repository.VotingCampaignRepository;
 import java.security.SecureRandom;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/api/v1/voting")
@@ -30,6 +31,7 @@ public class VotingController {
 
     private final VotingCampaignRepository votingCampaignRepository;
     private final DevicePopVerifierService devicePopVerifierService;
+    private final Set<String> issuedReceiptHashes = ConcurrentHashMap.newKeySet();
 
     public VotingController(
             VotingCampaignRepository votingCampaignRepository,
@@ -40,7 +42,7 @@ public class VotingController {
     }
 
     @PostMapping("/campaigns/{id}/cast-ballot")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> castBallot(
+    public ResponseEntity<ApiResponse<CastBallotResponse>> castBallot(
             @PathVariable String id,
             @Valid @RequestBody CastBallotRequest request,
             Authentication auth
@@ -49,7 +51,7 @@ public class VotingController {
         String canonicalActionFields = id + "|" + String.join(",", sortedCandidates) + "|"
                 + (request.resolutionChoice() == null ? "" : request.resolutionChoice());
 
-        devicePopVerifierService.verifyAndBuildCanonicalString(
+        devicePopVerifierService.verifyDevicePop(
                 "POST",
                 "/api/v1/voting/campaigns/" + id + "/cast-ballot",
                 auth.getName(),
@@ -63,17 +65,18 @@ public class VotingController {
         String rawReceipt = "VOTE-" + hex.substring(0, 4) + "-" + hex.substring(4, 8)
                 + "-" + hex.substring(8, 12) + "-" + hex.substring(12, 16);
         String receiptHash = DevicePopVerifierService.sha256Hex(rawReceipt);
+        issuedReceiptHashes.add(id + ":" + receiptHash);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(Map.of(
-                "campaignId", id,
-                "receiptCode", rawReceipt,
-                "receiptHash", receiptHash,
-                "status", "BUFFERED_IN_OUTBOX"
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(new CastBallotResponse(
+                id,
+                rawReceipt,
+                receiptHash,
+                "BUFFERED_IN_OUTBOX"
         )));
     }
 
     @PostMapping("/campaigns/{id}/judge-scores")
-    public ApiResponse<Map<String, Object>> submitJudgeScore(
+    public ApiResponse<JudgeScoreResponse> submitJudgeScore(
             @PathVariable String id,
             @Valid @RequestBody JudgeScoreRequest request,
             Authentication auth
@@ -88,24 +91,26 @@ public class VotingController {
                     "Tài khoản không nằm trong danh sách Ban Giám khảo (judgeUserIds) của chiến dịch này");
         }
 
-        return ApiResponse.ok(Map.of(
-                "campaignId", id,
-                "judgeUserId", auth.getName(),
-                "candidateId", request.candidateId(),
-                "score", request.score()
+        return ApiResponse.ok(new JudgeScoreResponse(
+                id,
+                auth.getName(),
+                request.candidateId(),
+                request.score()
         ));
     }
 
     @GetMapping("/campaigns/{id}/verify-receipt")
-    public ApiResponse<Map<String, Object>> verifyBallotReceipt(
+    public ApiResponse<BallotReceiptVerificationResponse> verifyBallotReceipt(
             @PathVariable String id,
             @RequestParam("code") String receiptCode
     ) {
         String receiptHash = DevicePopVerifierService.sha256Hex(receiptCode);
-        return ApiResponse.ok(Map.of(
-                "campaignId", id,
-                "ballotReceiptHash", receiptHash,
-                "status", "COUNTED_VALID"
+        boolean exists = issuedReceiptHashes.contains(id + ":" + receiptHash);
+        return ApiResponse.ok(new BallotReceiptVerificationResponse(
+                id,
+                receiptHash,
+                exists,
+                exists ? "COUNTED_VALID" : "NOT_FOUND"
         ));
     }
 
@@ -115,9 +120,30 @@ public class VotingController {
             @NotNull @Valid DevicePopProof devicePop
     ) {}
 
+    public record CastBallotResponse(
+            String campaignId,
+            String receiptCode,
+            String receiptHash,
+            String status
+    ) {}
+
     public record JudgeScoreRequest(
             @NotBlank String candidateId,
             @DecimalMin("0.0") @DecimalMax("100.0") double score,
             String note
+    ) {}
+
+    public record JudgeScoreResponse(
+            String campaignId,
+            String judgeUserId,
+            String candidateId,
+            double score
+    ) {}
+
+    public record BallotReceiptVerificationResponse(
+            String campaignId,
+            String ballotReceiptHash,
+            boolean valid,
+            String status
     ) {}
 }

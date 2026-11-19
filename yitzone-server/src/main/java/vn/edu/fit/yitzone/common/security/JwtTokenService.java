@@ -26,12 +26,23 @@ public class JwtTokenService {
     }
 
     public String generateAccessToken(String userId, String email, long permissionVersion, List<String> authorities) {
+        return generateAccessToken(userId, email, permissionVersion, authorities, List.of("FACULTY"));
+    }
+
+    public String generateAccessToken(
+            String userId,
+            String email,
+            long permissionVersion,
+            List<String> authorities,
+            List<String> allowedScopes
+    ) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(userId)
                 .claim("email", email)
                 .claim("permVer", permissionVersion)
                 .claim("authorities", authorities)
+                .claim("scopes", allowedScopes == null || allowedScopes.isEmpty() ? List.of("FACULTY") : allowedScopes)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(accessTokenTtlSeconds)))
                 .signWith(secretKey)

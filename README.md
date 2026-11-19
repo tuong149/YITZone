@@ -1,15 +1,15 @@
 # YITZone — Hệ thống Quản lý Hoạt động Đoàn - Hội & Học thuật Khoa CNTT
 
-Codebase được khởi tạo bám sát kiến trúc **Decoupled Client-Server & Modular Monolith** trong [HLD_YITZone.md](./HLD_YITZone.md), [LLD_YITZone.md](./LLD_YITZone.md) và [SRS_YITZone.md](./SRS_YITZone.md).
+Codebase được khởi tạo bám sát kiến trúc **Decoupled Client-Server & Modular Monolith** trong [HLD_YITZone.md](./document/HLD_YITZone.md), [LLD_YITZone.md](./document/LLD_YITZone.md) và [SRS_YITZone.md](./document/SRS_YITZone.md).
 
 ## Cấu trúc Thư mục
 
 ```text
 YITZone/
-├── yitzone-client/          # React 19 + TypeScript (Strict) + Vite 6 + PWA (Workbox/Dexie/WebCrypto) + Tailwind CSS
-├── yitzone-server/          # Java 21 LTS (Virtual Threads) + Spring Boot 3.3.x Modular Monolith (22 modules)
+├── yitzone-client/          # React 18.3 + TypeScript (Strict) + Vite 6 + PWA (Workbox/Dexie/WebCrypto) + Tailwind CSS
+├── yitzone-server/          # Java 21 LTS (Virtual Threads) + Spring Boot 3.4.x Modular Monolith (22 modules)
 ├── nginx/                   # Reverse Proxy cho Static PWA, REST/SSE (/api/*) & STOMP WebSocket (/ws/*)
-├── .github/workflows/       # CI pipeline (mvn test + tsc --noEmit + eslint + vite build)
+├── .github/workflows/       # CI pipeline (mvn test + tsc -b + eslint + vite build)
 ├── docker-compose.yml       # Hạ tầng Topology A (MongoDB RS, Redis 7.4, ClamAV, pgsty/silo, Client, Server)
 └── .env.example             # Mẫu biến môi trường
 ```

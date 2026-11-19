@@ -25,7 +25,8 @@ export interface OfflineScanRecord {
   studentCode?: string;
   physicalCardVerified?: boolean;
   adjustedScanAt: number;
-  synced: boolean;
+  /** 0 = pending sync, 1 = synced (numeric index for IndexedDB / Dexie compatibility) */
+  synced: 0 | 1;
 }
 
 export class YitZoneOfflineDatabase extends Dexie {
@@ -35,7 +36,7 @@ export class YitZoneOfflineDatabase extends Dexie {
 
   constructor() {
     super("yitzone_offline_vault");
-    this.version(1).stores({
+    this.version(2).stores({
       deviceKeys: "id, createdAt",
       offlineBundles: "eventId, expiresAt",
       offlineScanQueue: "++localSeq, eventId, synced, adjustedScanAt"
@@ -50,4 +51,11 @@ export async function wipeExpiredOfflineBundles(nowMs: number = Date.now()): Pro
   if (expired.length === 0) return 0;
   await offlineDb.offlineBundles.bulkDelete(expired.map((b) => b.eventId));
   return expired.length;
+}
+
+/**
+ * Deletes only already-synced scans (synced === 1) so unsynced attendance records are never accidentally lost.
+ */
+export async function clearSyncedScansOnly(): Promise<number> {
+  return offlineDb.offlineScanQueue.where("synced").equals(1).delete();
 }

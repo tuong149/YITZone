@@ -1,27 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
 import { Calendar, QrCode, ShieldAlert } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { apiClient, type ApiResponse } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-interface EventItem {
-  id: string;
-  title: string;
-  description?: string;
-  visibility: "PUBLIC_FACULTY" | "INTERNAL_CTV";
-  organizerUnitId?: string;
-  benefitTypes: string[];
-}
+import { useEvents } from "@/features/events/api";
 
 export function EventsPage() {
-  const { data: events = [], isLoading, isError } = useQuery({
-    queryKey: ["events"],
-    queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<EventItem[]>>("/events");
-      return res.data.data;
-    },
-    retry: false
-  });
+  const { data: events = [], isLoading, isError } = useEvents();
 
   return (
     <div className="space-y-6">

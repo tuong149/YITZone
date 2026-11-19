@@ -29,7 +29,14 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/v1/events"),
+            // Only cache unauthenticated public GET /api/v1/events requests without custom scope header
+            // to prevent leaking internal events across users on shared BTC devices
+            urlPattern: ({ url, request }) =>
+              request.method === "GET" &&
+              url.pathname.startsWith("/api/v1/events") &&
+              !request.headers.has("Authorization") &&
+              (!request.headers.has("X-Active-Scope-Id") ||
+                request.headers.get("X-Active-Scope-Id") === "FACULTY"),
             handler: "NetworkFirst",
             options: {
               cacheName: "yitzone-events-cache",

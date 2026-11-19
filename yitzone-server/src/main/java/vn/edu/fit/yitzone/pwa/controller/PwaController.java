@@ -26,23 +26,23 @@ public class PwaController {
     );
 
     @GetMapping("/vapid-public-key")
-    public ApiResponse<Map<String, String>> getVapidPublicKey() {
-        return ApiResponse.ok(Map.of("publicKey", ""));
+    public ApiResponse<VapidKeyResponse> getVapidPublicKey() {
+        return ApiResponse.ok(new VapidKeyResponse(""));
     }
 
     /**
      * Strict Domain Allowlist + HTTPS-only check prevents Blind SSRF via Web Push endpoint (ISS-04).
      */
     @PostMapping("/push-subscriptions")
-    public ApiResponse<Map<String, Object>> subscribeWebPush(
+    public ApiResponse<PushSubscriptionResponse> subscribeWebPush(
             @Valid @RequestBody PushSubscriptionRequest request,
             Authentication auth
     ) {
         validatePushEndpointAgainstSsrf(request.endpoint());
-        return ApiResponse.ok(Map.of(
-                "userId", auth.getName(),
-                "endpoint", request.endpoint(),
-                "active", true
+        return ApiResponse.ok(new PushSubscriptionResponse(
+                auth.getName(),
+                request.endpoint(),
+                true
         ));
     }
 
@@ -75,4 +75,8 @@ public class PwaController {
             @NotEmpty Map<String, String> keys,
             String deviceName
     ) {}
+
+    public record VapidKeyResponse(String publicKey) {}
+
+    public record PushSubscriptionResponse(String userId, String endpoint, boolean active) {}
 }

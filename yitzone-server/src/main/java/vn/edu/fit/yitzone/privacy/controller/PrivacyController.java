@@ -7,33 +7,34 @@ import org.springframework.web.bind.annotation.*;
 import vn.edu.fit.yitzone.common.api.ApiResponse;
 
 import java.time.Instant;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/privacy")
 public class PrivacyController {
 
     @PostMapping("/consents")
-    public ApiResponse<Map<String, Object>> recordConsent(
+    public ApiResponse<ConsentRecordResponse> recordConsent(
             @Valid @RequestBody ConsentRequest request,
             Authentication auth
     ) {
-        return ApiResponse.ok(Map.of(
-                "userId", auth.getName(),
-                "purpose", request.purpose(),
-                "granted", request.granted(),
-                "recordedAt", Instant.now()
+        return ApiResponse.ok(new ConsentRecordResponse(
+                auth.getName(),
+                request.purpose(),
+                request.granted(),
+                Instant.now()
         ));
     }
 
     @PostMapping("/my-data-exports")
-    public ApiResponse<Map<String, Object>> requestPersonalDataExport(Authentication auth) {
-        return ApiResponse.ok(Map.of(
-                "userId", auth.getName(),
-                "status", "PROCESSING",
-                "requestedAt", Instant.now()
+    public ApiResponse<DataExportRequestResponse> requestPersonalDataExport(Authentication auth) {
+        return ApiResponse.ok(new DataExportRequestResponse(
+                auth.getName(),
+                "PROCESSING",
+                Instant.now()
         ));
     }
 
     public record ConsentRequest(@NotBlank String purpose, boolean granted) {}
+    public record ConsentRecordResponse(String userId, String purpose, boolean granted, Instant recordedAt) {}
+    public record DataExportRequestResponse(String userId, String status, Instant requestedAt) {}
 }

@@ -6,7 +6,7 @@
 
 ## 1. Sơ đồ Kiến trúc Giao tiếp & Phân nhóm API Tổng quan (System-Wide API Landscape)
 
-Sơ đồ dưới đây tổng hợp toàn bộ **4 kênh giao tiếp API** (`HTTPS REST /api/v1/*`, `SSE Streaming`, `WSS STOMP WebSocket /ws`, và `External Webhooks / Integrations`) ánh xạ trực tiếp với **20 phân hệ nghiệp vụ (Mục 4.1 – 4.20)** và **nhóm tuân thủ bảo vệ dữ liệu cá nhân (`NFR-PRIV`)** trong `SRS_YITZone.md`:
+Sơ đồ dưới đây tổng hợp toàn bộ **4 kênh giao tiếp API** (`HTTPS REST /api/v1/*`, `SSE Streaming`, `WSS STOMP WebSocket /ws`, và `External Webhooks / Integrations`) ánh xạ trực tiếp với **20 phân hệ nghiệp vụ trong SRS (Mục 4.1 – 4.20, triển khai thành 22 module kỹ thuật khi tách riêng `rbac` và `privacy`)** và **nhóm tuân thủ bảo vệ dữ liệu cá nhân (`NFR-PRIV`)** trong `SRS_YITZone.md`:
 
 ```mermaid
 flowchart LR
@@ -83,11 +83,11 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph RequestSecurity["Chuẩn Header, Cookie, Idempotency & Chữ ký Thiết bị Bắt buộc trên API"]
-        H1["Authorization: Bearer <JWT Access Token (chứa permVer)>"]
-        H2["Cookie: yitz_dt=<HttpOnly Device Token> + Canonical Device PoP (ECDSA P-256: method|path|userId|ts|nonce|bodySha256)"]
+        H1["Authorization: Bearer <JWT Access Token (chứa permVer & scopes)>"]
+        H2["Cookie: yitz_dt=<HttpOnly Device Token> + Canonical Device PoP (ECDSA P-256 IEEE P1363 Base64: method|path|userId|ts|nonce|SHA-256(canonicalActionFields))"]
         H3["X-Active-Scope-Id: <unitId | eventId | campaignId | FACULTY> + If-Match: <version> (Optimistic Lock)"]
         H4["Idempotency-Key: <UUIDv4> (Bắt buộc trên POST tạo đơn, bàn giao COD, nộp hồ sơ, duyệt lô)"]
-        H5["X-Webhook-Signature: <HMAC-SHA256> + X-Webhook-Timestamp (Dành riêng cho POST /api/v1/store/webhooks/vietqr)"]
+        H5["X-Webhook-Signature: <HMAC-SHA256 hex trên '{timestamp}.' + rawBody> + X-Webhook-Timestamp (POST /api/v1/store/webhooks/vietqr)"]
     end
 
     subgraph PublicEndpoints["Nhóm API Công khai (Không yêu cầu đăng nhập — Có Rate Limit chống Brute-force)"]
@@ -152,7 +152,7 @@ flowchart TB
 | :--- | :--- | :--- |
 | `POST /api/v1/events/{id}/attendance/open` | `FR-ATT-01..02` | Mở phiên điểm danh (`DYNAMIC_ROTATING_QR` 10s mặc định hoặc `STATIC_QR` ngoài trời). |
 | `STOMP /topic/attendance.{eventId}.qr` & `.count` | `FR-ATT-01` | Broadcast mã QR ký số `ECDSA P-256` xoay vòng mỗi 10s và cập nhật sĩ số trực tiếp. |
-| `POST /api/v1/attendance/check-in` | `FR-ATT-01..05`, `FR-ATT-08` | Sinh viên tự quét QR bằng camera (`getUserMedia`) kèm **Canonical `devicePop` (`ECDSA P-256` ký `method\|path\|userId\|ts\|nonce\|bodySha256`, chống Replay bằng Redis `pop:nonce:{nonce}`)** và tọa độ GPS; kiểm tra hạn QR theo `serverReceivedAt` ($10\text{s} + N$, $N=8\text{s}$) và chấm **Điểm rủi ro có trọng số** (`< 2đ`: chấp nhận; $\ge 2\text{đ}$: vào `PENDING_REVIEW`). |
+| `POST /api/v1/attendance/check-in` | `FR-ATT-01..05`, `FR-ATT-08` | Sinh viên tự quét QR bằng camera (`getUserMedia`) kèm **Canonical `devicePop` (`ECDSA P-256` định dạng `IEEE P1363 64-byte raw r||s` mã hóa Base64, ký `method\|path\|userId\|ts\|nonce\|SHA-256(canonicalActionFields)`, chống Replay bằng Redis `pop:nonce:{nonce}`)** và tọa độ GPS; kiểm tra chữ ký Server trên `signedQrPayload` và hạn QR theo `serverReceivedAt` ($10\text{s} + N$, $N=8\text{s}$) và chấm **Điểm rủi ro có trọng số** (`< 2đ`: trả `200 OK`; $\ge 2\text{đ}$: trả `202 Accepted` vào `PENDING_REVIEW`). |
 | `GET /api/v1/events/{id}/offline-ticket` | `FR-ATT-06`, `FR-PWA-02` | Tải vé ngoại tuyến đã ký bởi Server gắn khóa công khai `ECDSA P-256` của thiết bị sinh viên (sinh mã QR bước nhảy `15 giây`). |
 | `GET /api/v1/events/{id}/offline-bundle` | `FR-ATT-07` (`A14`, `A34`) | Máy BTC tải gói dữ liệu soát vé ngoại tuyến hỗ trợ **Delta Sync (`?sinceRevision=`) & `ETag` (`If-None-Match`)**, ảnh thẻ nén thumbnail WebP $\le 8\text{ KB}$ tải nền tách biệt (mã hóa `AES-GCM` trong `IndexedDB`, chỉ hợp lệ khi đồng bộ $\le 12\text{ giờ}$). |
 | `POST /api/v1/events/{id}/offline-scans/sync` | `FR-ATT-07` (`A10`, `A14`) | Đồng bộ lô quét ngoại tuyến (Idempotent theo `batchId`), phát hiện trùng vé đa máy (`DUPLICATE_OFFLINE_TICKET_SCAN +2đ`) và kích hoạt tự xóa gói dữ liệu (`Auto-Wipe`). |
@@ -302,60 +302,72 @@ flowchart TB
 ## 4. Quy chuẩn Kiến trúc Giao tiếp API, Bảo mật & Xử lý Lỗi Dùng chung (Cross-Cutting API Standards)
 
 ### 4.1. Chuẩn Ký số Bằng chứng Sở hữu Khóa Thiết bị (`Canonical ECDSA P-256 Device PoP`)
-Để ngăn chặn tấn công phát lại (Replay Attack) và chỉnh sửa nội dung gói tin (Payload Tampering) trên các luồng nhạy cảm (`POST /api/v1/attendance/check-in`, `POST /api/v1/voting/campaigns/{id}/cast-ballot`, `POST /api/v1/exams/{examId}/attempts`), mọi request bắt buộc đính kèm `Cookie: yitz_dt=<HttpOnly Device Token>` và đối tượng `devicePop` chuẩn hóa:
+Để ngăn chặn tấn công phát lại (Replay Attack) và chỉnh sửa nội dung gói tin (Payload Tampering) trên các luồng nhạy cảm (`POST /api/v1/attendance/check-in`, `POST /api/v1/voting/campaigns/{id}/cast-ballot`, `POST /api/v1/exams/{examId}/attempts`), mọi request bắt buộc đính kèm đối tượng `devicePop` chuẩn hóa (tương thích trực tiếp với đầu ra `crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" })` của WebCrypto API trên trình duyệt):
 
 ```json
 {
   "devicePop": {
     "timestamp": 1763559700,
     "nonce": "c4f1a2b3-89d0-4e5f-a1b2-3c4d5e6f7a8b",
-    "signature": "MEUCIQDf7...base64url_ecdsa_p256_signature..."
+    "signature": "r8sP1363Raw64BytesStandardBase64EncodedSignature=="
   }
 }
 ```
 
+* **Định dạng Chữ ký (`IEEE P1363 Raw r||s` & Base64):**
+  * WebCrypto `crypto.subtle.sign` xuất chữ ký **ECDSA P-256 dạng `IEEE P1363` (`r || s` nối tiếp đúng `64 byte`)**, client encode bằng **Base64 chuẩn** (`btoa`, hoặc Base64URL).
+  * Backend (`DevicePopVerifierService`) giải mã Base64/Base64URL linh hoạt và xác minh bằng thuật toán JCA标准 `SHA256withECDSAinP1363Format` (hoặc `SHA256withECDSA` nếu độ dài khác 64 byte cho client native DER).
 * **Chuỗi Canonical bắt buộc để ký và xác minh (`ECDSA P-256 / SHA-256`):**
-  $$\texttt{canonicalPayload} = \texttt{HTTP\_METHOD} \;\|\; \texttt{URI\_PATH} \;\|\; \texttt{userId} \;\|\; \texttt{timestamp} \;\|\; \texttt{nonce} \;\|\; \text{SHA-256}(\texttt{canonicalActionFields})$$
-  *(trong đó `canonicalActionFields` là chuỗi chuẩn hóa của các trường nghiệp vụ cốt lõi: `eventId|sessionId|qrIssuedAt` với Điểm danh; `campaignId|sorted(selectedCandidateIds)|resolutionChoice` với Bỏ phiếu; `examId|deviceType` với Thi trắc nghiệm).*
-* **Quy tắc Xác minh trên Server (`DevicePopVerificationFilter`):**
+  $$\texttt{canonicalPayload} = \texttt{HTTP\_METHOD} \;\|\; \texttt{URI\_PATH} \;\|\; \texttt{userId} \;\|\; \texttt{timestamp} \;\|\; \texttt{nonce} \;\|\; \text{SHA-256\_HEX}(\texttt{canonicalActionFields})$$
+  *(trong đó `canonicalActionFields` là chuỗi chuẩn hóa của các trường nghiệp vụ cốt lõi: `eventId|sessionId|qrIssuedAtEpochSeconds` với Điểm danh; `campaignId|sorted(selectedCandidateIds)|resolutionChoice` với Bỏ phiếu; `examId|deviceType` với Thi trắc nghiệm).*
+* **Quy tắc Xác minh trên Server (`DevicePopVerifierService`):**
   1. Kiểm tra độ lệch thời gian: $|\text{serverTimeEpochSec} - \text{timestamp}| \le 30\text{ giây}$.
-  2. Chống phát lại (Anti-Replay): Thực thi `SET pop:nonce:{nonce} 1 NX EX 60` trên Redis; nếu key đã tồn tại $\implies$ từ chối ngay với mã lỗi `403 POP_NONCE_REPLAYED`.
-  3. Lấy `publicKeyJwk` từ bảng `DEVICE_TOKENS` theo hash của cookie `yitz_dt` (thuộc đúng `userId` và `isRevoked == false`) để verify `signature`.
+  2. Kiểm tra `nonce` chưa từng xuất hiện trên Redis (`pop:nonce:{nonce}`).
+  3. Lấy `publicKeyJwk` từ bảng `DEVICE_TOKENS` của `userId` (`revoked == false`) để verify chữ ký `signature` **trước khi** ghi nhận tiêu thụ `nonce` (ngăn kẻ tấn công gửi chữ ký giả để đốt `nonce`).
+  4. Chống phát lại (Anti-Replay): Thực thi `SET pop:nonce:{nonce} 1 NX EX 60` trên Redis; nếu key đã tồn tại $\implies$ từ chối ngay với mã lỗi `403 POP_NONCE_REPLAYED`.
 
 ### 4.2. Chuẩn Phân trang (`Cursor` vs `Offset`), Lọc & Giới hạn Payload (`Pagination & Query Contract`)
 * **Giới hạn kích thước trang cứng (`Hard Limit`):** Mọi endpoint danh sách bắt buộc giới hạn `defaultSize = 20`, `maxPageSize = 50` (tối đa `100` đối với API đối soát nội bộ của `BTV`/Thủ quỹ). Nếu Client truyền `size > maxPageSize`, Backend trả `400 Bad Request` (`INVALID_PAGE_SIZE`).
-* **Cursor-based Pagination (`?cursor=<opaque_token>&limit=20`):** Áp dụng bắt buộc cho các bảng dữ liệu lớn/thời gian thực để đạt độ phức tạp $O(1)$ qua Index, cấm dùng `SKIP`:
+* **Cursor-based Pagination (`?beforeSeq=...&limit=50` hoặc `?cursor=<opaque_token>&limit=20`):** Áp dụng bắt buộc cho các bảng nhật ký/tin nhắn thời gian thực để đạt độ phức tạp $O(1)$ qua Index, cấm dùng `SKIP`:
   * `GET /api/v1/audit/logs?beforeSeq=15420&limit=50`
   * `GET /api/v1/qa/conversations/{id}/messages?beforeId=...&limit=30`
   * `GET /api/v1/notifications?cursor=...&limit=20`
-  * `GET /api/v1/events?cursor=...&limit=20`
-* **Offset Pagination (`?page=1&size=20&sort=createdAt,desc`):** Áp dụng cho các bảng danh mục quản trị (`USERS`, `STORE_PRODUCTS`, `ATTENDANCE_REVIEW_QUEUE`), trong đó trường `sort` bắt buộc kiểm tra qua **Strict Sort Allowlist** của từng Controller.
+* **Offset Pagination (`?page=0&size=20`):** Áp dụng cho các bảng danh mục sự kiện và quản trị (`GET /api/v1/events?page=0&size=20`, `USERS`, `STORE_PRODUCTS`, `ATTENDANCE_REVIEW_QUEUE`), trong đó điều kiện lọc hiển thị (`PUBLIC_FACULTY` vs `INTERNAL_CTV` theo `X-Active-Scope-Id` đã xác thực) bắt buộc đẩy xuống tầng truy vấn MongoDB trước khi phân trang.
 
-### 4.3. Chuẩn `Idempotency-Key`, Optimistic Locking (`If-Match`) & Chống Mass Assignment
-1. **HTTP `Idempotency-Key` Header:** Bắt buộc gửi `Idempotency-Key: <UUIDv4>` trên các lệnh ghi nhạy cảm: `POST /api/v1/store/orders`, `POST /api/v1/store/orders/{id}/fulfill`, `POST /api/v1/store/cod-handovers`, `POST /api/v1/awards/campaigns/{id}/applications`, `POST /api/v1/attendance/review-queue/bulk-action`, `POST /api/v1/certificates/{id}/revoke`, `POST /api/v1/certificates/{id}/reissue`. Server lưu trạng thái xử lý trên Redis (`idemp:{userId}:{method}:{path}:{key}`, TTL `24h`) để trả lại đúng kết quả cũ nếu Client retry do đứt mạng.
-2. **Optimistic Locking (`@Version` & `If-Match`):** Các tài nguyên cộng tác nhiều người (`EVENTS`, `BLOG_POSTS`, `VOTING_CAMPAIGNS`, `STORE_PRODUCTS`, `PERFORMANCE_ACTS`, `STUDENT_PORTFOLIOS`) lưu trường `@Version Long version`. Khi gọi `PUT`/`PATCH`, Client gửi kèm `version` (hoặc Header `If-Match: "<version>"`); nếu không khớp, Server trả `409 Conflict` (`OPTIMISTIC_LOCK_CONFLICT`) chống ghi đè mất dữ liệu.
-3. **Chống Mass Assignment:** Toàn bộ Request DTO bật `DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES = true` và tách riêng DTO theo từng trạng thái nghiệp vụ (tuyệt đối không bind trực tiếp vào MongoDB `@Document` entity).
+### 4.3. Chuẩn `Idempotency-Key`, Optimistic Locking (`If-Match`), Webhook HMAC & Chống Mass Assignment
+1. **HTTP `Idempotency-Key` Header:** Bắt buộc gửi `Idempotency-Key: <UUIDv4>` trên các lệnh ghi nhạy cảm: `POST /api/v1/store/orders`, `POST /api/v1/store/orders/{id}/fulfill`, `POST /api/v1/store/cod-handovers`, `POST /api/v1/awards/campaigns/{id}/applications`, `POST /api/v1/attendance/review-queue/bulk-action`, `POST /api/v1/certificates/{id}/revoke`, `POST /api/v1/certificates/{id}/reissue`. Server lưu trạng thái xử lý kèm `payloadHash` (SHA-256 của request body) trên Redis (`idemp:{userId}:{method}:{path}:{key}`, TTL `24h`); nếu trùng key và cùng body thì trả kết quả cũ, nếu trùng key nhưng khác body thì trả `409 Conflict`.
+2. **Optimistic Locking (`@Version` & `If-Match`):** Các tài nguyên cộng tác nhiều người (`EVENTS`, `BLOG_POSTS`, `VOTING_CAMPAIGNS`, `STORE_PRODUCTS`, `PERFORMANCE_ACTS`, `STUDENT_PORTFOLIOS`) lưu trường `@Version Long version`. Khi gọi `PUT`/`PATCH`, Client **bắt buộc** gửi kèm `version` trong body hoặc Header `If-Match: "<version>"`; nếu thiếu trả `400 Bad Request`, nếu không khớp trả `409 Conflict` (`OPTIMISTIC_LOCK_CONFLICT`) chống ghi đè mất dữ liệu.
+3. **Chuẩn Chữ ký Webhook VietQR (`POST /api/v1/store/webhooks/vietqr`):** Chuỗi đầu vào HMAC-SHA256 là `"{X-Webhook-Timestamp}." + rawBodyBytes` (UTF-8), chữ ký được biểu diễn dạng chuỗi `hex` viết thường (chấp nhận cả có hoặc không có tiền tố `sha256=`), so sánh hằng thời gian bằng `MessageDigest.isEqual` trong cửa sổ $|\text{now} - \text{timestamp}| \le 300\text{s}$.
+4. **Chống Mass Assignment & Strict DTO:** Toàn bộ Request DTO bật `DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES = true` và toàn bộ Response trả về qua `record` DTO định kiểu chặt (tuyệt đối không bind hay trả trực tiếp MongoDB `@Document` entity hoặc `Map<String, Object>` không tường minh).
 
 ### 4.4. Chuẩn Phản hồi Lỗi Thống nhất theo RFC 9457 (`application/problem+json`)
-Toàn bộ lỗi `4xx` và `5xx` trên 20 phân hệ trả về định dạng chuẩn **RFC 9457 Problem Details** (tích hợp trực tiếp với `ProblemDetail` của Spring Boot 3), tuyệt đối không lộ Stack Trace hay tên bảng MongoDB nội bộ:
+Toàn bộ lỗi `4xx` và `5xx` trên các phân hệ trả về định dạng chuẩn **RFC 9457 Problem Details** thông qua `ApiResponse.problem(...)` (gắn `traceId` từ MDC để đối chiếu log, không lặp trùng `detail`/`message`), tuyệt đối không lộ Stack Trace hay tên bảng MongoDB nội bộ:
 
 ```json
 {
-  "type": "https://yitzone.edu.vn/errors/attendance-qr-expired",
-  "title": "Mã QR điểm danh đã hết hạn",
+  "success": false,
+  "type": "https://yitzone.edu.vn/errors/qr-expired",
+  "title": "QR_EXPIRED",
   "status": 422,
-  "detail": "Mã QR đã quá thời hạn 18 giây (10s chu kỳ + 8s ân hạn mạng). Vui lòng hướng camera vào mã QR mới nhất trên màn hình.",
+  "detail": "Mã QR điểm danh đã hết hạn so với thời điểm máy chủ nhận (18s)",
   "instance": "/api/v1/attendance/check-in",
-  "errorCode": "ATT_QR_EXPIRED",
+  "errorCode": "QR_EXPIRED",
   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
-  "timestamp": "2026-11-19T13:45:12.410Z",
-  "fieldErrors": [
-    {
-      "field": "signedQrPayload",
-      "code": "EXPIRED_TIMESTAMP",
-      "message": "Thời gian phát hành QR đã vượt ngưỡng cho phép"
-    }
-  ]
+  "timestamp": "2026-11-19T13:45:12.410Z"
 }
 ```
 *(Khi vi phạm giới hạn tần suất `429 Too Many Requests`, Server bắt buộc đính kèm HTTP Header `Retry-After: <seconds>`).*
+
+### 4.5. Bảng Danh mục Quyền Nguyên tử (`Atomic Permissions`) & Trạng thái Triển khai
+| Mã Quyền (`domain:action`) | Gói Module (`MOD_*`) / Vai trò | Endpoint tiêu biểu & Trạng thái hiện tại |
+| :--- | :--- | :--- |
+| `event:view`, `event:create`, `event:update` | `MOD_EVENT_CORE` | `GET/POST/PUT /api/v1/events` (`✅ Done`) |
+| `internal_event:create`, `internal_event:update` | `MOD_INTERNAL_EVENT` (Ràng buộc `A16` không gắn quyền lợi Khoa) | `POST/PUT /api/v1/events` (`✅ Done`) |
+| `attendance:check_in`, `attendance:scan_barcode` | Sinh viên / `MOD_ATTENDANCE_SCANNER` | `POST /api/v1/attendance/check-in`, `GET /api/v1/events/{id}/offline-bundle`, `POST .../barcode-scan` (`✅ Done`) |
+| `certificate:manage` | `MOD_CERT_MANAGER` | `POST /api/v1/certificates/{id}/revoke` & `/reissue` (`✅ Done`) |
+| `store:view`, `store:scan_barcode`, `store:fulfill` | Sinh viên / `MOD_STORE_BOOTH` | `POST /api/v1/store/orders`, `POST .../barcode-lookup`, `POST .../fulfill`, `POST .../webhooks/vietqr` (`✅ Done`) |
+| `inventory:scan_barcode` | `MOD_OFFICE_INVENTORY` | `POST /api/v1/office/borrowers/barcode-lookup` (`✅ Done`) |
+| `voting:cast`, `voting:host` | Cử tri / `MOD_VOTING_HOST` | `POST /api/v1/voting/campaigns/{id}/cast-ballot`, `POST .../judge-scores`, `STOMP /topic/voting.{id}.admin` (`✅ Done`) |
+| `performance:view`, `performance:approve` | `MOD_ARTS_DIRECTOR` | `POST/GET /api/v1/arts/events/{eventId}/export-jobs` (`✅ Done`) |
+| `audit:view` | `MOD_AUDIT_VIEWER` | `GET /api/v1/audit/logs`, `GET /api/v1/audit/verify-chain` (`🚧 Safe Stub`) |
+| `rbac:manage` | `ROLE_STANDING_COMMITTEE` (`BTV`) | `POST /api/v1/iam/roster/import` (`🚧 Safe Stub`) |

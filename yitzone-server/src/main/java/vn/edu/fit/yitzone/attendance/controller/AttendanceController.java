@@ -19,9 +19,14 @@ import vn.edu.fit.yitzone.common.exception.BusinessException;
 import vn.edu.fit.yitzone.common.security.DevicePopProof;
 import vn.edu.fit.yitzone.common.security.DevicePopVerifierService;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 
 @RestController
@@ -33,33 +38,91 @@ public class AttendanceController {
     private final DevicePopVerifierService devicePopVerifierService;
     private final long qrRotationSeconds;
     private final long qrGraceSeconds;
+    private final String qrSigningSecret;
 
     public AttendanceController(
             WeightedRiskScoringService riskScoringService,
             DevicePopVerifierService devicePopVerifierService,
             @Value("${yitzone.attendance.qr-rotation-seconds:10}") long qrRotationSeconds,
-            @Value("${yitzone.attendance.qr-grace-window-seconds:8}") long qrGraceSeconds
+            @Value("${yitzone.attendance.qr-grace-window-seconds:8}") long qrGraceSeconds,
+            @Value("${yitzone.security.jwt-secret}") String qrSigningSecret
     ) {
         this.riskScoringService = riskScoringService;
         this.devicePopVerifierService = devicePopVerifierService;
         this.qrRotationSeconds = qrRotationSeconds;
         this.qrGraceSeconds = qrGraceSeconds;
+        this.qrSigningSecret = qrSigningSecret;
+    }
+
+    public String issueSignedQrPayload(String eventId, String sessionId, long issuedAtEpochSeconds) {
+        String data = eventId + "|" + sessionId + "|" + issuedAtEpochSeconds;
+        String sig = computeQrHmacHex(data, qrSigningSecret);
+        return data + "|" + sig;
+    }
+
+    public static String computeQrHmacHex(String data, String secret) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return HexFormat.of().formatHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot compute QR HMAC-SHA256", e);
+        }
+    }
+
+    private long parseAndVerifySignedQrPayload(String signedQrPayload, String expectedEventId, String expectedSessionId) {
+        String[] parts = signedQrPayload == null ? new String[0] : signedQrPayload.split("\\|");
+        if (parts.length != 4) {
+            throw new BusinessException(ErrorCode.INVALID_QR_SIGNATURE, HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Định dạng signedQrPayload không hợp lệ (yêu cầu eventId|sessionId|issuedAtEpochSeconds|signature)");
+        }
+        String qrEventId = parts[0];
+        String qrSessionId = parts[1];
+        long issuedAtEpochSec;
+        try {
+            issuedAtEpochSec = Long.parseLong(parts[2]);
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.INVALID_QR_SIGNATURE, HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Mốc thời gian phát hành trong signedQrPayload không hợp lệ");
+        }
+        String providedSig = parts[3];
+        if (!qrEventId.equals(expectedEventId) || !qrSessionId.equals(expectedSessionId)) {
+            throw new BusinessException(ErrorCode.INVALID_QR_SIGNATURE, HttpStatus.UNPROCESSABLE_ENTITY,
+                    "signedQrPayload không khớp với eventId hoặc sessionId được yêu cầu");
+        }
+        String expectedSig = computeQrHmacHex(qrEventId + "|" + qrSessionId + "|" + issuedAtEpochSec, qrSigningSecret);
+        boolean valid = MessageDigest.isEqual(
+                expectedSig.getBytes(StandardCharsets.UTF_8),
+                providedSig.toLowerCase().getBytes(StandardCharsets.UTF_8)
+        );
+        if (!valid) {
+            throw new BusinessException(ErrorCode.INVALID_QR_SIGNATURE, HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Chữ ký Server trên mã QR điểm danh không hợp lệ hoặc đã bị giả mạo");
+        }
+        return issuedAtEpochSec;
     }
 
     @PostMapping("/attendance/check-in")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> checkIn(
+    public ResponseEntity<ApiResponse<CheckInResponse>> checkIn(
             @Valid @RequestBody CheckInRequest request,
             Authentication auth
     ) {
-        Instant now = Instant.now();
-        long ageSeconds = now.getEpochSecond() - request.qrIssuedAtEpochSeconds();
-        if (ageSeconds > (qrRotationSeconds + qrGraceSeconds)) {
+        Instant serverReceivedAt = Instant.now();
+        long verifiedIssuedAtEpochSeconds = parseAndVerifySignedQrPayload(
+                request.signedQrPayload(),
+                request.eventId(),
+                request.sessionId()
+        );
+
+        long ageSeconds = serverReceivedAt.getEpochSecond() - verifiedIssuedAtEpochSeconds;
+        long maxAllowedAge = qrRotationSeconds + qrGraceSeconds;
+        if (ageSeconds < -2 || ageSeconds > maxAllowedAge) {
             throw new BusinessException(ErrorCode.QR_EXPIRED, HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Mã QR điểm danh đã hết hạn (" + (qrRotationSeconds + qrGraceSeconds) + "s)");
+                    "Mã QR điểm danh đã hết hạn so với thời điểm máy chủ nhận (" + maxAllowedAge + "s)");
         }
 
-        String canonicalActionFields = request.eventId() + "|" + request.sessionId() + "|" + request.qrIssuedAtEpochSeconds();
-        devicePopVerifierService.verifyAndBuildCanonicalString(
+        String canonicalActionFields = request.eventId() + "|" + request.sessionId() + "|" + verifiedIssuedAtEpochSeconds;
+        devicePopVerifierService.verifyDevicePop(
                 "POST",
                 "/api/v1/attendance/check-in",
                 auth.getName(),
@@ -67,22 +130,25 @@ public class AttendanceController {
                 canonicalActionFields
         );
 
-        List<EventAttendance.RiskSignal> signals = request.gpsAvailable()
-                ? List.of()
-                : List.of(EventAttendance.RiskSignal.GPS_UNAVAILABLE);
+        List<EventAttendance.RiskSignal> signals = new ArrayList<>();
+        if (!request.gpsAvailable() || request.lat() == null || request.lng() == null) {
+            signals.add(EventAttendance.RiskSignal.GPS_UNAVAILABLE);
+        } else if (request.accuracy() != null && request.accuracy() > 150.0) {
+            signals.add(EventAttendance.RiskSignal.GPS_MODERATE_DRIFT);
+        }
         var assessment = riskScoringService.evaluate(signals, null);
 
         HttpStatus httpStatus = assessment.reviewStatus() == EventAttendance.ReviewStatus.PENDING_REVIEW
                 ? HttpStatus.ACCEPTED
                 : HttpStatus.OK;
 
-        return ResponseEntity.status(httpStatus).body(ApiResponse.ok(Map.of(
-                "userId", auth.getName(),
-                "eventId", request.eventId(),
-                "sessionId", request.sessionId(),
-                "riskScore", assessment.riskScore(),
-                "reviewStatus", assessment.reviewStatus(),
-                "checkinAt", now
+        return ResponseEntity.status(httpStatus).body(ApiResponse.ok(new CheckInResponse(
+                auth.getName(),
+                request.eventId(),
+                request.sessionId(),
+                assessment.riskScore(),
+                assessment.reviewStatus(),
+                serverReceivedAt
         )));
     }
 
@@ -90,12 +156,12 @@ public class AttendanceController {
      * Standardized lowercase kebab-case URI /events/{id}/offline-ticket (ISS-11).
      */
     @GetMapping("/events/{id}/offline-ticket")
-    public ApiResponse<Map<String, Object>> getOfflineTicket(@PathVariable String id, Authentication auth) {
-        return ApiResponse.ok(Map.of(
-                "eventId", id,
-                "userId", auth.getName(),
-                "bucketSeconds", 15,
-                "issuedAt", Instant.now()
+    public ApiResponse<OfflineTicketResponse> getOfflineTicket(@PathVariable String id, Authentication auth) {
+        return ApiResponse.ok(new OfflineTicketResponse(
+                id,
+                auth.getName(),
+                15,
+                Instant.now()
         ));
     }
 
@@ -104,7 +170,7 @@ public class AttendanceController {
      */
     @GetMapping("/events/{id}/offline-bundle")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasPermission('attendance', 'scan_barcode')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getOfflineBundle(
+    public ResponseEntity<ApiResponse<OfflineBundleResponse>> getOfflineBundle(
             @PathVariable String id,
             @RequestParam(value = "sinceRevision", defaultValue = "0") long sinceRevision,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
@@ -116,34 +182,34 @@ public class AttendanceController {
         }
         return ResponseEntity.ok()
                 .eTag(etag)
-                .body(ApiResponse.ok(Map.of(
-                        "eventId", id,
-                        "revision", currentRevision,
-                        "sinceRevision", sinceRevision,
-                        "serverTime", Instant.now().toEpochMilli(),
-                        "bucketSeconds", 15,
-                        "maxBundleAgeHours", 12,
-                        "roster", List.of()
+                .body(ApiResponse.ok(new OfflineBundleResponse(
+                        id,
+                        currentRevision,
+                        sinceRevision,
+                        Instant.now().toEpochMilli(),
+                        15,
+                        12,
+                        List.of()
                 )));
     }
 
     @PostMapping("/events/{id}/offline-scans/sync")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasPermission('attendance', 'scan_barcode')")
-    public ApiResponse<Map<String, Object>> syncOfflineScans(
+    public ApiResponse<OfflineScanSyncResponse> syncOfflineScans(
             @PathVariable String id,
             @Valid @RequestBody OfflineScanSyncRequest request
     ) {
-        return ApiResponse.ok(Map.of(
-                "eventId", id,
-                "batchId", request.batchId(),
-                "syncedCount", request.scans() == null ? 0 : request.scans().size(),
-                "wipeRecommended", true
+        return ApiResponse.ok(new OfflineScanSyncResponse(
+                id,
+                request.batchId(),
+                request.scans() == null ? 0 : request.scans().size(),
+                true
         ));
     }
 
     @PostMapping("/events/{id}/attendance/barcode-scan")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasPermission('attendance', 'scan_barcode')")
-    public ApiResponse<Map<String, Object>> scanPhysicalStudentBarcode(
+    public ApiResponse<BarcodeScanResponse> scanPhysicalStudentBarcode(
             @PathVariable String id,
             @Valid @RequestBody BarcodeScanRequest request
     ) {
@@ -152,12 +218,12 @@ public class AttendanceController {
             throw new BusinessException(ErrorCode.BAD_REQUEST, HttpStatus.BAD_REQUEST,
                     "MSSV phải đúng 8 chữ số và phải xác nhận thẻ sinh viên nhựa vật lý");
         }
-        return ApiResponse.ok(Map.of(
-                "eventId", id,
-                "attendeeKey", "SV:" + request.studentCode(),
-                "studentCode", request.studentCode(),
-                "hardwareType", request.hardwareType(),
-                "checkinAt", Instant.now()
+        return ApiResponse.ok(new BarcodeScanResponse(
+                id,
+                "SV:" + request.studentCode(),
+                request.studentCode(),
+                request.hardwareType(),
+                Instant.now()
         ));
     }
 
@@ -173,6 +239,32 @@ public class AttendanceController {
             boolean gpsAvailable
     ) {}
 
+    public record CheckInResponse(
+            String userId,
+            String eventId,
+            String sessionId,
+            int riskScore,
+            EventAttendance.ReviewStatus reviewStatus,
+            Instant checkinAt
+    ) {}
+
+    public record OfflineTicketResponse(
+            String eventId,
+            String userId,
+            int bucketSeconds,
+            Instant issuedAt
+    ) {}
+
+    public record OfflineBundleResponse(
+            String eventId,
+            long revision,
+            long sinceRevision,
+            long serverTime,
+            int bucketSeconds,
+            int maxBundleAgeHours,
+            List<Object> roster
+    ) {}
+
     public record OfflineScanItem(String ticketId, String studentCode, long adjustedScanAtEpochMs, long localSeq) {}
 
     public record OfflineScanSyncRequest(
@@ -182,10 +274,25 @@ public class AttendanceController {
             List<OfflineScanItem> scans
     ) {}
 
+    public record OfflineScanSyncResponse(
+            String eventId,
+            String batchId,
+            int syncedCount,
+            boolean wipeRecommended
+    ) {}
+
     public record BarcodeScanRequest(
             @NotBlank String sessionId,
             @NotBlank @Pattern(regexp = "^[0-9]{8}$") String studentCode,
             @NotBlank String hardwareType,
             boolean physicalCardVerified
+    ) {}
+
+    public record BarcodeScanResponse(
+            String eventId,
+            String attendeeKey,
+            String studentCode,
+            String hardwareType,
+            Instant checkinAt
     ) {}
 }
