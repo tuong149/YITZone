@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 
 interface ExamQuestion {
   id: string;
@@ -81,17 +82,20 @@ const EXAM_QUESTIONS: ExamQuestion[] = [
 
 const MAX_DESKTOP_VIOLATIONS = 3;
 const PASSING_SCORE = 75;
+const EXAM_DURATION_SECONDS = 20 * 60;
 
-export function ExamTakePage(){
+export function ExamTakePage() {
   const { id } = useParams();
   const examCode = id ?? "ex-fit-2026";
+  const userId = useAuthStore((s) => s.userId) ?? "guest";
+  const draftStorageKey = `yitzone-exam-draft:${userId}:${examCode}`;
 
   const [phase, setPhase] = useState<"gate" | "taking" | "submitted">("gate");
   const [deviceMode, setDeviceMode] = useState<"DESKTOP" | "MOBILE">("DESKTOP");
   const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>({});
   const [flagged, setFlagged] = useState<string[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [secondsLeft, setSecondsLeft] = useState(20 * 60);
+  const [secondsLeft, setSecondsLeft] = useState(EXAM_DURATION_SECONDS);
   const [lastSavedAt, setLastSavedAt] = useState<string>("Chưa lưu");
   const [violations, setViolations] = useState<
     { at: string; type: "TAB_BLUR" | "HEARTBEAT_GAP" | "MOBILE_LOG_ONLY"; note: string }[]
@@ -99,38 +103,102 @@ export function ExamTakePage(){
   const [autoSubmitReason, setAutoSubmitReason] = useState<string | null>(null);
   const [copyWarning, setCopyWarning] = useState<string | null>(null);
 
+  const deadlineMsRef = useRef<number | null>(null);
+  const answersRef = useRef(answers);
+  const flaggedRef = useRef(flagged);
+  answersRef.current = answers;
+  flaggedRef.current = flagged;
+
   const desktopBlurCount = violations.filter((v) => v.type === "TAB_BLUR").length;
 
-  const finishExam = useCallback((reason?: string) => {
-    if (reason) setAutoSubmitReason(reason);
-    setPhase("submitted");
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => {});
+  // Restore saved draft for this user & exam on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(draftStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        answers?: Record<string, "A" | "B" | "C" | "D">;
+        flagged?: string[];
+        savedAt?: string;
+      };
+      if (parsed.answers) setAnswers(parsed.answers);
+      if (Array.isArray(parsed.flagged)) setFlagged(parsed.flagged);
+      if (parsed.savedAt) setLastSavedAt(parsed.savedAt);
+    } catch {
+      // Ignore malformed draft
     }
-  }, []);
+  }, [draftStorageKey]);
 
-  // Countdown timer
+  const finishExam = useCallback(
+    (reason?: string) => {
+      if (reason) setAutoSubmitReason(reason);
+      setPhase("submitted");
+      deadlineMsRef.current = null;
+      try {
+        window.localStorage.removeItem(draftStorageKey);
+      } catch {
+        // Ignore storage errors
+      }
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    },
+    [draftStorageKey]
+  );
+
+  // Trigger auto-submit outside state updater when desktop violation threshold is reached
+  useEffect(() => {
+    if (phase === "taking" && deviceMode === "DESKTOP" && desktopBlurCount >= MAX_DESKTOP_VIOLATIONS) {
+      finishExam(`Đạt ngưỡng ${MAX_DESKTOP_VIOLATIONS} lần rời tab trên Desktop — Hệ thống tự động thu bài.`);
+    }
+  }, [phase, deviceMode, desktopBlurCount, finishExam]);
+
+  // Wall-clock countdown timer (resistant to background-tab setInterval throttling)
   useEffect(() => {
     if (phase !== "taking") return;
-    if (secondsLeft <= 0) {
-      finishExam("Hết thời gian làm bài — Server tự động thu bài (ân hạn truyền 5s).");
-      return;
+    if (deadlineMsRef.current === null) {
+      deadlineMsRef.current = Date.now() + secondsLeft * 1000;
     }
-    const t = window.setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    const syncRemaining = () => {
+      const deadline = deadlineMsRef.current;
+      if (deadline === null) return;
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining <= 0) {
+        finishExam("Hết thời gian làm bài — Server tự động thu bài (ân hạn truyền 5s).");
+      }
+    };
+    syncRemaining();
+    const t = window.setInterval(syncRemaining, 1000);
     return () => window.clearInterval(t);
-  }, [phase, secondsLeft, finishExam]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, finishExam]);
 
-  // Auto-save draft every 8s
+  // Auto-save real draft to localStorage every 8s
   useEffect(() => {
     if (phase !== "taking") return;
-    const t = window.setInterval(() => {
+    const persistDraft = () => {
       const now = new Date();
-      setLastSavedAt(
-        `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`
-      );
-    }, 8000);
+      const label = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+      try {
+        window.localStorage.setItem(
+          draftStorageKey,
+          JSON.stringify({
+            answers: answersRef.current,
+            flagged: flaggedRef.current,
+            savedAt: label
+          })
+        );
+      } catch {
+        // Ignore quota errors
+      }
+      setLastSavedAt(label);
+    };
+    persistDraft();
+    const t = window.setInterval(persistDraft, 8000);
     return () => window.clearInterval(t);
-  }, [phase]);
+  }, [phase, draftStorageKey]);
 
   // Real visibilitychange / blur monitor
   useEffect(() => {
@@ -139,32 +207,31 @@ export function ExamTakePage(){
       const now = new Date().toLocaleTimeString("vi-VN");
       if (deviceMode === "MOBILE") {
         setViolations((prev) => [
-          { at: now, type: "MOBILE_LOG_ONLY", note: "Chuyển ứng dụng trên Mobile — ghi LOG_ONLY, không thu bài oan." },
-...prev
+          {
+            at: now,
+            type: "MOBILE_LOG_ONLY",
+            note: "Chuyển ứng dụng trên Mobile — ghi LOG_ONLY, không thu bài oan."
+          },
+          ...prev
         ]);
         return;
       }
-      setViolations((prev) => {
-        const next = [
-          { at: now, type: "TAB_BLUR" as const, note: "Rời tab / mất tiêu điểm cửa sổ trên Desktop." },
-...prev
-        ];
-        const count = next.filter((v) => v.type === "TAB_BLUR").length;
-        if (count >= MAX_DESKTOP_VIOLATIONS) {
-          finishExam(`Đạt ngưỡng ${MAX_DESKTOP_VIOLATIONS} lần rời tab trên Desktop — Hệ thống tự động thu bài.`);
-        }
-        return next;
-      });
+      setViolations((prev) => [
+        { at: now, type: "TAB_BLUR" as const, note: "Rời tab / mất tiêu điểm cửa sổ trên Desktop." },
+        ...prev
+      ]);
     };
 
     const onVis = () => {
-      if (document.hidden) recordViolation;
+      if (document.hidden) recordViolation();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [phase, deviceMode, finishExam]);
+  }, [phase, deviceMode]);
 
   const handleStartExam = () => {
+    deadlineMsRef.current = Date.now() + EXAM_DURATION_SECONDS * 1000;
+    setSecondsLeft(EXAM_DURATION_SECONDS);
     setPhase("taking");
     setLastSavedAt(new Date().toLocaleTimeString("vi-VN"));
     if (deviceMode === "DESKTOP" && document.documentElement.requestFullscreen) {
@@ -177,21 +244,14 @@ export function ExamTakePage(){
     if (deviceMode === "MOBILE") {
       setViolations((prev) => [
         { at: now, type: "MOBILE_LOG_ONLY", note: "Mobile rời cửa sổ — chỉ ghi LOG_ONLY hậu kiểm." },
-...prev
+        ...prev
       ]);
       return;
     }
-    setViolations((prev) => {
-      const next = [
-        { at: now, type: "TAB_BLUR" as const, note: "Giả lập vi phạm rời tab / blur trên Desktop." },
-...prev
-      ];
-      const count = next.filter((v) => v.type === "TAB_BLUR").length;
-      if (count >= MAX_DESKTOP_VIOLATIONS) {
-        finishExam(`Đạt ngưỡng ${MAX_DESKTOP_VIOLATIONS} lần rời tab trên Desktop — Hệ thống tự động thu bài.`);
-      }
-      return next;
-    });
+    setViolations((prev) => [
+      { at: now, type: "TAB_BLUR" as const, note: "Giả lập vi phạm rời tab / blur trên Desktop." },
+      ...prev
+    ]);
   };
 
   const handleSimulateHeartbeatGap = () => {
@@ -461,7 +521,7 @@ export function ExamTakePage(){
                       Câu tiếp theo
                     </Button>
                   ): (
-                    <Button type="button" onClick={() => finishExam}>
+                    <Button type="button" onClick={() => finishExam()}>
                       Nộp bài &amp; Mở khóa YITBot
                     </Button>
                   )}
@@ -518,7 +578,7 @@ export function ExamTakePage(){
                   </div>
                 </div>
 
-                <Button type="button" className="w-full" onClick={() => finishExam}>
+                <Button type="button" className="w-full" onClick={() => finishExam()}>
                   Nộp bài ngay
                 </Button>
               </CardContent>

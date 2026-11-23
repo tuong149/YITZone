@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlertCircle,
   ArrowLeft,
   CalendarDays,
   Check,
@@ -20,6 +21,7 @@ import { Badge, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { extractApiErrorMessage } from "@/lib/api-client";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -47,6 +49,7 @@ interface VotingCampaign {
   timeWindow: string;
   location: string;
   isSecretBallot: boolean;
+  isResolution?: boolean;
   allowChangeVote: boolean;
   minSelect: number;
   maxSelect: number;
@@ -114,6 +117,7 @@ const VOTING_CAMPAIGNS: VotingCampaign[] = [
     timeWindow: "Đang mở · Phiên toàn thể",
     location: "Hội trường A5 · HCM-UTE",
     isSecretBallot: true,
+    isResolution: true,
     allowChangeVote: false,
     minSelect: 1,
     maxSelect: 1,
@@ -158,6 +162,8 @@ export function VotingPage() {
   });
   const [submittedMap, setSubmittedMap] = useState<Record<string, boolean>>({});
   const [secretReceipts, setSecretReceipts] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const filteredCampaigns = useMemo(
@@ -192,21 +198,32 @@ export function VotingPage() {
   };
 
   const handleSubmitCampaign = async (campaign: VotingCampaign) => {
+    if (submitting) return;
     const picked = selections[campaign.id] ?? [];
     if (picked.length < campaign.minSelect) return;
+    if (campaign.isSecretBallot && secretReceipts[campaign.id]) return;
 
-    if (campaign.isSecretBallot) {
-      if (secretReceipts[campaign.id]) return;
-      try {
-        const res = await castVotingBallot(campaign.id, picked, picked[0] ?? "");
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const selectedCandidateIds = campaign.isResolution ? [] : picked;
+      const resolutionChoice = campaign.isResolution ? picked[0] : undefined;
+      const res = await castVotingBallot(campaign.id, selectedCandidateIds, resolutionChoice);
+      if (campaign.isSecretBallot) {
         setSecretReceipts((prev) => ({ ...prev, [campaign.id]: res.receiptCode }));
-      } catch {
-        setSecretReceipts((prev) => ({ ...prev, [campaign.id]: "VOTE-7F4A-91C2-E804" }));
+      } else {
+        setSubmittedMap((prev) => ({ ...prev, [campaign.id]: true }));
       }
-      return;
+    } catch (err) {
+      setSubmitError(
+        extractApiErrorMessage(
+          err,
+          "Không thể gửi lá phiếu lên máy chủ. Phiếu của bạn CHƯA được ghi nhận — vui lòng kiểm tra kết nối và thử lại."
+        )
+      );
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmittedMap((prev) => ({ ...prev, [campaign.id]: true }));
   };
 
   return (
@@ -450,6 +467,16 @@ export function VotingPage() {
             </CardHeader>
 
             <CardContent className="space-y-4">
+              {submitError && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2.5 rounded-xl border border-status-danger/35 bg-status-danger/10 px-4 py-3 text-sm text-status-danger"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{submitError}</span>
+                </div>
+              )}
+
               {activeCampaign.isSecretBallot ? (
                 <>
                   {/* Secret ballot: ONLY total voter turnout, NEVER live candidate tally */}
@@ -525,11 +552,18 @@ export function VotingPage() {
                       <Button
                         type="button"
                         className="h-12 w-full rounded-full sm:h-11"
-                        disabled={(selections[activeCampaign.id] ?? []).length < activeCampaign.minSelect}
+                        disabled={
+                          submitting ||
+                          (selections[activeCampaign.id] ?? []).length < activeCampaign.minSelect
+                        }
                         onClick={() => void handleSubmitCampaign(activeCampaign)}
                       >
                         <Lock className="h-4 w-4" />
-                        <span>Gửi Lá phiếu Kín (Không thể đổi sau khi xác nhận)</span>
+                        <span>
+                          {submitting
+                            ? "Đang gửi lá phiếu kín..."
+                            : "Gửi Lá phiếu Kín (Không thể đổi sau khi xác nhận)"}
+                        </span>
                       </Button>
                     </>
                   )}
@@ -604,11 +638,17 @@ export function VotingPage() {
                           <Button
                             type="button"
                             className="liquid-glass-btn-cobalt h-11 w-full rounded-full sm:w-auto sm:px-6"
-                            disabled={picked.length < activeCampaign.minSelect}
+                            disabled={submitting || picked.length < activeCampaign.minSelect}
                             onClick={() => void handleSubmitCampaign(activeCampaign)}
                           >
                             <Vote className="h-4 w-4" />
-                            <span>{isSubmitted ? "Cập nhật phiếu bình chọn" : "Xác nhận Bình chọn"}</span>
+                            <span>
+                              {submitting
+                                ? "Đang gửi phiếu..."
+                                : isSubmitted
+                                  ? "Cập nhật phiếu bình chọn"
+                                  : "Xác nhận Bình chọn"}
+                            </span>
                           </Button>
                         </div>
                       </>

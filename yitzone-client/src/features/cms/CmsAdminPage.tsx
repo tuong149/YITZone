@@ -708,7 +708,7 @@ export function CmsAdminPage(){
                       setDraftCoverError(null);
                       if (!f) return;
                       if (f.size > 5 * 1024 * 1024) {
-                        setDraftCoverError;
+                        setDraftCoverError("Ảnh bìa vượt quá dung lượng tối đa 5MB.");
                       } else {
                         setDraftCoverLabel(`${f.name} (${(f.size / 1024).toFixed(0)} KB)`);
                       }

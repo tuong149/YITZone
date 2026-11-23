@@ -140,7 +140,7 @@ export function MessengerPage(){
   const handleCreateTicket = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newBody.trim()) return;
-    const id = `TH-${Math.floor(2050 + Math.random() * 900)}`;
+    const id = `TH-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const created: StudentThread = {
       id,
       category: newCategory,

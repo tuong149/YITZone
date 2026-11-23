@@ -21,10 +21,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { apiClient, extractApiErrorMessage, resolveApiPath, type ApiResponse } from "@/lib/api-client";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { getCurrentOfflineBucket } from "@/lib/webcrypto";
+import { createCanonicalDevicePop, getCurrentOfflineBucket } from "@/lib/webcrypto";
 import { useAuthStore } from "@/stores/auth-store";
 
 interface RegisteredTicket {
@@ -156,6 +156,30 @@ export function StudentCheckinPage() {
     }
   }, [activeTab, cameraActive, stopCamera]);
 
+  const readCurrentGps = useCallback(async (): Promise<{
+    lat: number | null;
+    lng: number | null;
+    accuracy: number | null;
+    gpsAvailable: boolean;
+  }> => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      return { lat: null, lng: null, accuracy: null, gpsAvailable: false };
+    }
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) =>
+          resolve({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            gpsAvailable: true
+          }),
+        () => resolve({ lat: null, lng: null, accuracy: null, gpsAvailable: false }),
+        { enableHighAccuracy: true, timeout: 4000, maximumAge: 30_000 }
+      );
+    });
+  }, []);
+
   const submitCheckin = useCallback(
     async (rawCode: string, method: "CAMERA_QR" | "MANUAL_PIN") => {
       const cleaned = rawCode.trim().toUpperCase();
@@ -169,39 +193,70 @@ export function StudentCheckinPage() {
       setSubmitting(true);
 
       try {
-        try {
-          await apiClient.post<ApiResponse<{ status: string }>>("/events/checkin", {
-            qrPayload: cleaned,
-            studentCode: userId,
-            method
-          });
-        } catch {
-          // Demo/offline fallback when backend endpoint is not running locally
+        const matchedTicket = REGISTERED_TICKETS.find(
+          (t) => cleaned.includes(t.eventId) || cleaned.includes("CLOUD")
+        );
+        const eventId = matchedTicket?.eventId ?? activeTicket.eventId;
+        const sessionId = cleaned.split("|")[2] ?? "SESSION-1";
+        const relativePath = "/attendance/check-in";
+
+        const [gps, devicePop] = await Promise.all([
+          readCurrentGps(),
+          createCanonicalDevicePop({
+            method: "POST",
+            path: resolveApiPath(relativePath),
+            userId,
+            canonicalActionFields: `${eventId}|${sessionId}|${cleaned}`
+          })
+        ]);
+
+        const res = await apiClient.post<ApiResponse<{ status: string; eventTitle?: string }>>(
+          relativePath,
+          {
+            eventId,
+            sessionId,
+            signedQrPayload: cleaned,
+            devicePop,
+            lat: gps.lat,
+            lng: gps.lng,
+            accuracy: gps.accuracy,
+            gpsAvailable: gps.gpsAvailable
+          }
+        );
+
+        if (!res.data.success) {
+          throw new Error(res.data.detail);
         }
 
         const nowLabel = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
         const matchedEvent =
-          REGISTERED_TICKETS.find((t) => cleaned.includes(t.eventId) || cleaned.includes("CLOUD"))?.title ??
-          "Sự kiện Khoa CNTT HCM-UTE";
+          res.data.data?.eventTitle ?? matchedTicket?.title ?? "Sự kiện Khoa CNTT HCM-UTE";
 
         setHistory((prev) => [
           {
-            id: `CHK-${Date.now()}`,
+            id: `CHK-${crypto.randomUUID()}`,
             eventTitle: matchedEvent,
             code: cleaned.slice(0, 24),
             time: `${nowLabel} · Vừa xong`,
             method,
-            statusLabel: "Đã ghi nhận"
+            statusLabel: "Đã xác nhận"
           },
           ...prev
         ]);
         setCheckinSuccess(`Điểm danh thành công mã "${cleaned.slice(0, 24)}" lúc ${nowLabel}.`);
         setManualCode("");
+      } catch (err) {
+        setCheckinError(
+          extractApiErrorMessage(
+            err,
+            "Điểm danh thất bại. Hệ thống chưa ghi nhận lượt điểm danh này — vui lòng kiểm tra mạng và thử lại."
+          )
+        );
       } finally {
         setSubmitting(false);
       }
     },
-    [userId]
+    [userId, activeTicket.eventId, readCurrentGps]
   );
 
   const startCamera = async () => {
@@ -382,14 +437,21 @@ export function StudentCheckinPage() {
                 </div>
 
                 {checkinSuccess && (
-                  <div className="flex items-center gap-2.5 rounded-xl border border-status-success/35 bg-status-success/10 px-3.5 py-3 text-sm text-status-success">
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="flex items-center gap-2.5 rounded-xl border border-status-success/35 bg-status-success/10 px-3.5 py-3 text-sm text-status-success"
+                  >
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                     <span>{checkinSuccess}</span>
                   </div>
                 )}
 
                 {checkinError && (
-                  <div className="flex items-center gap-2.5 rounded-xl border border-status-danger/35 bg-status-danger/10 px-3.5 py-3 text-sm text-status-danger">
+                  <div
+                    role="alert"
+                    className="flex items-center gap-2.5 rounded-xl border border-status-danger/35 bg-status-danger/10 px-3.5 py-3 text-sm text-status-danger"
+                  >
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     <span>{checkinError}</span>
                   </div>

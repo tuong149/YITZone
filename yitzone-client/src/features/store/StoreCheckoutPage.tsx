@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   Building2,
@@ -17,6 +18,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { createIdempotencyKey, createStoreOrder } from "@/features/store/api";
+import { extractApiErrorMessage } from "@/lib/api-client";
 import { campaignBucketKey, formatVnd, useCartStore } from "@/stores/cart-store";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +36,10 @@ export function StoreCheckoutPage(){
   const [classShift, setClassShift] = useState("Ca 2 (09:30–11:30)");
   const [paymentMethod, setPaymentMethod] = useState<"VIETQR" | "COD">("VIETQR");
   const [existingPendingCodCount] = useState(1);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string>(createIdempotencyKey());
 
   const [createdOrder, setCreatedOrder] = useState<{
     orderCode: string;
@@ -51,39 +58,79 @@ export function StoreCheckoutPage(){
     return items.filter((i) => campaignBucketKey(i.campaignId) === fallbackBucket);
   }, [items, selectedBucket]);
 
-  const activeBucketKey = activeItems[0] ? campaignBucketKey(activeItems[0].campaignId): selectedBucket;
+  const activeBucketKey = activeItems[0] ? campaignBucketKey(activeItems[0].campaignId) : selectedBucket;
   const campaignLabel = activeItems[0]?.campaignLabel ?? "Vật phẩm Khoa (Thường trực)";
 
-  const subtotal = useMemo(() => activeItems.reduce((s, i) => s + i.unitPrice * i.qty, 0),
-    [activeItems]
-  );
-  const totalWeightKg = useMemo(() => Number(activeItems.reduce((s, i) => s + i.weightKg * i.qty, 0).toFixed(2)),
+  useEffect(() => {
+    // Rotate intent-scoped Idempotency-Key only when the checkout bucket changes
+    idempotencyKeyRef.current = createIdempotencyKey();
+  }, [activeBucketKey]);
+
+  const subtotal = useMemo(() => activeItems.reduce((s, i) => s + i.unitPrice * i.qty, 0), [activeItems]);
+  const totalWeightKg = useMemo(
+    () => Number(activeItems.reduce((s, i) => s + i.weightKg * i.qty, 0).toFixed(2)),
     [activeItems]
   );
 
   const overweightForClassroom = deliveryMethod === "CLASSROOM" && totalWeightKg > 5;
-  const rawShipFee = deliveryMethod === "CLASSROOM" ? 5_000: 0;
-  const shipFee = appliedVoucher?.freeShip ? 0: rawShipFee;
+  const rawShipFee = deliveryMethod === "CLASSROOM" ? 5_000 : 0;
+  const shipFee = appliedVoucher?.freeShip ? 0 : rawShipFee;
   const discountGoods = appliedVoucher?.discountGoods ?? 0;
   const grandTotal = Math.max(0, subtotal - discountGoods) + shipFee;
 
-  const handlePlaceOrder = () => {
-    if (activeItems.length === 0 || overweightForClassroom) return;
-    if (paymentMethod === "COD" && existingPendingCodCount >= 2) return;
-    const orderCode = `YIT-STR-${Math.floor(100000 + Math.random() * 899999)}`;
-    const deliveryLabel =
-      deliveryMethod === "OFFICE"
-        ? `Nhận tại Văn phòng Đoàn – Hội (${campus === "CS1" ? "Cơ sở 1": "Cơ sở 2"})`
-: `Giao phòng ${roomCode} (${building}, ${campus === "CS1" ? "CS1": "CS2"}) · ${classShift}`;
+  const handlePlaceOrder = async () => {
+    if (submitting || activeItems.length === 0 || overweightForClassroom) return;
+    if (paymentMethod === "COD" && existingPendingCodCount >= 2) {
+      setOrderError("Bạn đã đạt giới hạn tối đa 2 đơn COD đang chờ xử lý.");
+      return;
+    }
 
-    setCreatedOrder({
-      orderCode,
-      method: paymentMethod,
-      total: grandTotal,
-      campaignLabel,
-      deliveryLabel
-    });
-    clearBucket(activeBucketKey);
+    setOrderError(null);
+    setSubmitting(true);
+    try {
+      const order = await createStoreOrder(
+        {
+          items: activeItems.map((item) => ({
+            productId: item.productId,
+            size: item.size,
+            color: item.color,
+            qty: item.qty
+          })),
+          deliveryMethod,
+          paymentMethod,
+          voucherCode: appliedVoucher?.code,
+          campus,
+          building: deliveryMethod === "CLASSROOM" ? building : undefined,
+          roomCode: deliveryMethod === "CLASSROOM" ? roomCode : undefined,
+          classShift: deliveryMethod === "CLASSROOM" ? classShift : undefined
+        },
+        idempotencyKeyRef.current
+      );
+
+      const deliveryLabel =
+        deliveryMethod === "OFFICE"
+          ? `Nhận tại Văn phòng Đoàn – Hội (${campus === "CS1" ? "Cơ sở 1" : "Cơ sở 2"})`
+          : `Giao phòng ${roomCode} (${building}, ${campus === "CS1" ? "CS1" : "CS2"}) · ${classShift}`;
+
+      setCreatedOrder({
+        orderCode: order.orderCode,
+        method: paymentMethod,
+        total: typeof order.totalAmount === "number" ? order.totalAmount : grandTotal,
+        campaignLabel,
+        deliveryLabel
+      });
+      clearBucket(activeBucketKey);
+      idempotencyKeyRef.current = createIdempotencyKey();
+    } catch (err) {
+      setOrderError(
+        extractApiErrorMessage(
+          err,
+          "Không thể tạo đơn hàng lúc này. Giỏ hàng của bạn vẫn được giữ nguyên — vui lòng thử lại."
+        )
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -418,16 +465,29 @@ export function StoreCheckoutPage(){
                 </div>
               </div>
 
+              {orderError && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-lg border border-status-danger/35 bg-status-danger/10 p-3 text-xs text-status-danger"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{orderError}</span>
+                </div>
+              )}
+
               <Button
+                type="button"
                 className="w-full"
-                disabled={overweightForClassroom}
-                onClick={handlePlaceOrder}
+                disabled={submitting || overweightForClassroom}
+                onClick={() => void handlePlaceOrder()}
               >
                 <CheckCircle2 className="h-4 w-4" />
                 <span>
-                  {paymentMethod === "VIETQR"
-                    ? "Xác nhận & Tạo mã VietQR"
-: "Xác nhận đặt đơn COD (Hạn 3 ngày)"}
+                  {submitting
+                    ? "Đang khởi tạo đơn hàng..."
+                    : paymentMethod === "VIETQR"
+                      ? "Xác nhận & Tạo mã VietQR"
+                      : "Xác nhận đặt đơn COD (Hạn 3 ngày)"}
                 </span>
               </Button>
             </CardContent>

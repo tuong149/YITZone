@@ -1,42 +1,96 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Barcode,
   CheckCircle2,
   CloudUpload,
   Info,
+  Radio,
   RefreshCw,
   ScanLine,
   ShieldCheck,
   Trash2,
   Wifi,
-  WifiOff
+  WifiOff,
+  X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useHidBarcodeScanner } from "@/hooks/useHidBarcodeScanner";
-import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { apiClient, extractApiErrorMessage, type ApiResponse } from "@/lib/api-client";
 import {
   clearSyncedScansOnly,
   offlineDb,
   wipeExpiredOfflineBundles,
   type OfflineScanRecord
 } from "@/lib/offline-db";
-import { getCurrentOfflineBucket } from "@/lib/webcrypto";
+import { useEventStore } from "@/stores/event-store";
+
+interface ScannerEventOption {
+  id: string;
+  label: string;
+  sessions: { id: string; label: string }[];
+}
+
+const FALLBACK_EVENTS: ScannerEventOption[] = [
+  {
+    id: "EVT-2026-CLOUD",
+    label: "Hội thảo Cloud Native & DevOps 2026",
+    sessions: [{ id: "SESSION-MORNING", label: "Buổi 1 · Khai mạc & Chuyên đề chính" }]
+  }
+];
 
 export function OfflineScannerPage() {
+  const [searchParams] = useSearchParams();
+  const storedEvents = useEventStore((s) => s.events);
+
+  const eventOptions = useMemo<ScannerEventOption[]>(() => {
+    if (storedEvents.length === 0) return FALLBACK_EVENTS;
+    return storedEvents.map((evt) => ({
+      id: evt.id,
+      label: evt.title,
+      sessions:
+        evt.sessions.length > 0
+          ? evt.sessions.map((ses) => ({
+              id: ses.id,
+              label: ses.name || `Buổi ${ses.step}`
+            }))
+          : [{ id: "SESSION-1", label: "Phiên chính" }]
+    }));
+  }, [storedEvents]);
+
+  const [eventId, setEventId] = useState<string>(
+    () => searchParams.get("eventId") ?? eventOptions[0]!.id
+  );
+  const selectedEvent = useMemo(
+    () => eventOptions.find((e) => e.id === eventId) ?? eventOptions[0]!,
+    [eventOptions, eventId]
+  );
+
+  const [sessionId, setSessionId] = useState<string>(
+    () => searchParams.get("sessionId") ?? selectedEvent.sessions[0]!.id
+  );
+  const activeSession = useMemo(
+    () => selectedEvent.sessions.find((s) => s.id === sessionId) ?? selectedEvent.sessions[0]!,
+    [selectedEvent, sessionId]
+  );
+
   const [hidEnabled, setHidEnabled] = useState(true);
+  const [inputFocused, setInputFocused] = useState(false);
   const [manualMssv, setManualMssv] = useState("");
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [clockOffsetMs, setClockOffsetMs] = useState<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
-  const [bucket, setBucket] = useState<number>(() => getCurrentOfflineBucket());
   const [secondsLeft, setSecondsLeft] = useState<number>(() => 15 - (Math.floor(Date.now() / 1000) % 15));
   const [queuedScans, setQueuedScans] = useState<OfflineScanRecord[]>([]);
 
@@ -44,15 +98,19 @@ export function OfflineScannerPage() {
   const syncedCount = queuedScans.length - pendingCount;
 
   const reloadQueue = useCallback(async () => {
-    const items = await offlineDb.offlineScanQueue.reverse().limit(30).toArray();
+    const [items, bundle] = await Promise.all([
+      offlineDb.offlineScanQueue.reverse().limit(50).toArray(),
+      offlineDb.offlineBundles.get(selectedEvent.id)
+    ]);
     setQueuedScans(items);
-  }, []);
+    setClockOffsetMs(bundle?.clockOffsetMs ?? 0);
+  }, [selectedEvent.id]);
 
   useEffect(() => {
     void reloadQueue();
     const timer = window.setInterval(() => {
-      setBucket(getCurrentOfflineBucket());
-      setSecondsLeft(15 - (Math.floor(Date.now() / 1000) % 15));
+      const adjustedSec = Math.floor((Date.now() + clockOffsetMs) / 1000);
+      setSecondsLeft(15 - (adjustedSec % 15));
     }, 1000);
 
     const handleOnline = () => setIsOnline(true);
@@ -65,25 +123,37 @@ export function OfflineScannerPage() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [reloadQueue]);
+  }, [reloadQueue, clockOffsetMs]);
 
   const recordBarcodeScan = useCallback(
     async (studentCode: string) => {
       setScanError(null);
       setStatusMessage(null);
+
+      const duplicate = await offlineDb.offlineScanQueue
+        .where("[eventId+sessionId+studentCode]")
+        .equals([selectedEvent.id, activeSession.id, studentCode])
+        .first();
+      if (duplicate) {
+        setScanError(
+          `MSSV ${studentCode} đã được quét trước đó trong "${activeSession.label}" (${new Date(duplicate.adjustedScanAt).toLocaleTimeString("vi-VN")}).`
+        );
+        return;
+      }
+
       setLastScanned(studentCode);
       await offlineDb.offlineScanQueue.add({
-        eventId: "DEMO_EVENT",
-        sessionId: "SESSION_1",
+        eventId: selectedEvent.id,
+        sessionId: activeSession.id,
         scanMethod: "BARCODE_1D",
         studentCode,
         physicalCardVerified: true,
-        adjustedScanAt: Date.now(),
+        adjustedScanAt: Date.now() + clockOffsetMs,
         synced: 0
       });
       await reloadQueue();
     },
-    [reloadQueue]
+    [selectedEvent.id, activeSession.id, activeSession.label, clockOffsetMs, reloadQueue]
   );
 
   useHidBarcodeScanner({
@@ -110,6 +180,7 @@ export function OfflineScannerPage() {
 
   const handleSyncPendingScans = async () => {
     setScanError(null);
+    setStatusMessage(null);
     setIsSyncing(true);
     try {
       const pending = await offlineDb.offlineScanQueue.where("synced").equals(0).toArray();
@@ -117,24 +188,73 @@ export function OfflineScannerPage() {
         setStatusMessage("Không có bản ghi nào đang chờ đồng bộ.");
         return;
       }
-      const keys = pending.map((p) => p.localSeq).filter((k): k is number => typeof k === "number");
-      try {
-        await apiClient.post<ApiResponse<{ syncedCount: number }>>("/events/DEMO_EVENT/offline-scans/sync", {
-          batchId: `BATCH-${Date.now()}`,
-          lastServerSyncAtEpochMs: Date.now(),
-          clockOffsetMs: 0,
-          scans: pending.map((p) => ({
-            ticketId: p.ticketId ?? null,
-            studentCode: p.studentCode ?? null,
-            adjustedScanAtEpochMs: p.adjustedScanAt,
-            localSeq: p.localSeq ?? 0
-          }))
-        });
-      } catch {
-        // Fallback đánh dấu đồng bộ cục bộ trong chế độ demo ngoại tuyến
+
+      // Group pending scans by eventId so each event syncs to its own endpoint
+      const byEvent = new Map<string, OfflineScanRecord[]>();
+      for (const item of pending) {
+        const list = byEvent.get(item.eventId) ?? [];
+        list.push(item);
+        byEvent.set(item.eventId, list);
       }
-      await offlineDb.offlineScanQueue.where("localSeq").anyOf(keys).modify({ synced: 1 });
-      setStatusMessage(`Đã đồng bộ ${keys.length} lượt quét lên hệ thống.`);
+
+      let totalConfirmed = 0;
+      const failedEvents: string[] = [];
+
+      for (const [targetEventId, records] of byEvent.entries()) {
+        const keys = records
+          .map((p) => p.localSeq)
+          .filter((k): k is number => typeof k === "number");
+        if (keys.length === 0) continue;
+
+        // Reuse existing batchId across retries so server deduplicates idempotently
+        const batchId = records.find((r) => r.batchId)?.batchId ?? `BATCH-${crypto.randomUUID()}`;
+        await offlineDb.offlineScanQueue.where("localSeq").anyOf(keys).modify({ batchId });
+
+        const bundle = await offlineDb.offlineBundles.get(targetEventId);
+        const effectiveOffset = bundle?.clockOffsetMs ?? clockOffsetMs;
+
+        try {
+          const res = await apiClient.post<
+            ApiResponse<{ syncedCount?: number; confirmedLocalSeqs?: number[] }>
+          >(`/events/${encodeURIComponent(targetEventId)}/offline-scans/sync`, {
+            batchId,
+            lastServerSyncAtEpochMs: bundle?.lastServerSyncAt ?? Date.now(),
+            clockOffsetMs: effectiveOffset,
+            scans: records.map((p) => ({
+              sessionId: p.sessionId,
+              ticketId: p.ticketId ?? null,
+              studentCode: p.studentCode ?? null,
+              adjustedScanAtEpochMs: p.adjustedScanAt,
+              localSeq: p.localSeq ?? 0
+            }))
+          });
+
+          if (!res.data.success) {
+            throw new Error(res.data.detail);
+          }
+
+          const confirmedKeys =
+            Array.isArray(res.data.data?.confirmedLocalSeqs) && res.data.data.confirmedLocalSeqs.length > 0
+              ? res.data.data.confirmedLocalSeqs.filter((seq) => keys.includes(seq))
+              : keys;
+
+          if (confirmedKeys.length > 0) {
+            await offlineDb.offlineScanQueue.where("localSeq").anyOf(confirmedKeys).modify({ synced: 1 });
+            totalConfirmed += confirmedKeys.length;
+          }
+        } catch (err) {
+          failedEvents.push(`${targetEventId}: ${extractApiErrorMessage(err, "Đồng bộ thất bại")}`);
+        }
+      }
+
+      if (totalConfirmed > 0) {
+        setStatusMessage(`Đã đồng bộ an toàn ${totalConfirmed} lượt quét lên máy chủ.`);
+      }
+      if (failedEvents.length > 0) {
+        setScanError(
+          `Chưa thể đồng bộ (dữ liệu vẫn được giữ nguyên trong hàng đợi ngoại tuyến): ${failedEvents.join(" · ")}`
+        );
+      }
       await reloadQueue();
     } finally {
       setIsSyncing(false);
@@ -153,60 +273,60 @@ export function OfflineScannerPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <section className="liquid-glass relative overflow-hidden rounded-[26px] p-5 sm:p-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl space-y-2">
-            <h1 className="font-display text-2xl font-medium leading-[1.15] tracking-tight text-foreground sm:text-4xl">
-              Máy Soát vé Ngoại tuyến &amp; Mã vạch Thẻ SV
-            </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Hỗ trợ súng quét mã vạch USB/Bluetooth, nhập nhanh MSSV 8 số và lưu hàng đợi ngoại tuyến an toàn khi mất kết nối mạng.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:flex-wrap sm:items-center">
-            <Button
-              variant={hidEnabled ? "default" : "outline"}
-              className={
-                hidEnabled
-                  ? "liquid-glass-btn-cobalt col-span-2 h-11 rounded-full sm:col-span-1 sm:h-10"
-                  : "col-span-2 h-11 rounded-full sm:col-span-1 sm:h-10"
-              }
-              onClick={() => setHidEnabled((v) => !v)}
-            >
-              <Barcode className="h-4 w-4" />
-              {hidEnabled ? "Súng quét: Đang bật" : "Súng quét: Đang tắt"}
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11 rounded-full sm:h-10"
-              disabled={isSyncing}
-              onClick={() => void handleSyncPendingScans()}
-            >
-              <CloudUpload className="h-4 w-4" />
-              <span className="truncate">{isSyncing ? "Đang đồng bộ..." : "Đồng bộ"}</span>
-              {pendingCount > 0 && (
-                <span className="tabular-mono ml-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
-                  {pendingCount}
-                </span>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11 rounded-full sm:h-10"
-              disabled={syncedCount === 0}
-              onClick={() => void handleClearSyncedOnly()}
-            >
-              <Trash2 className="h-4 w-4" />
-              <span className="truncate">Dọn đã gửi</span>
-            </Button>
-          </div>
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="font-display text-2xl font-medium text-foreground">
+            Máy Soát vé Ngoại tuyến &amp; Mã vạch Thẻ SV
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Hỗ trợ súng quét mã vạch USB/Bluetooth, nhập nhanh MSSV 8 số và lưu hàng đợi ngoại tuyến an toàn khi mất kết nối mạng.
+          </p>
         </div>
-      </section>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={hidEnabled ? "default" : "outline"}
+            className="rounded-full"
+            onClick={() => setHidEnabled((v) => !v)}
+          >
+            <Barcode className="h-4 w-4" />
+            <span>{hidEnabled ? "Súng quét: Đang bật" : "Súng quét: Đang tắt"}</span>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-full"
+            disabled={isSyncing}
+            onClick={() => void handleSyncPendingScans()}
+          >
+            <CloudUpload className="h-4 w-4" />
+            <span>{isSyncing ? "Đang đồng bộ..." : "Đồng bộ"}</span>
+            {pendingCount > 0 && (
+              <span className="tabular-mono ml-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                {pendingCount}
+              </span>
+            )}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-full"
+            disabled={syncedCount === 0}
+            onClick={() => void handleClearSyncedOnly()}
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Dọn đã gửi</span>
+          </Button>
+        </div>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-12">
-        <Card className="rounded-[20px] lg:col-span-6">
+        <Card className="lg:col-span-6">
           <CardHeader className="pb-4">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
@@ -232,14 +352,63 @@ export function OfflineScannerPage() {
           </CardHeader>
 
           <CardContent className="space-y-4">
+            {/* Active Event & Session selectors synced with Event Store */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="scanner-event-select">Sự kiện đang soát vé</Label>
+                <Select
+                  value={selectedEvent.id}
+                  onValueChange={(nextEventId) => {
+                    setEventId(nextEventId);
+                    const matched = eventOptions.find((opt) => opt.id === nextEventId);
+                    if (matched?.sessions[0]) setSessionId(matched.sessions[0].id);
+                  }}
+                >
+                  <SelectTrigger id="scanner-event-select" className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eventOptions.map((opt) => (
+                      <SelectItem key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="scanner-session-select">Buổi / Phiên điểm danh</Label>
+                <Select value={activeSession.id} onValueChange={setSessionId}>
+                  <SelectTrigger id="scanner-session-select" className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedEvent.sessions.map((ses) => (
+                      <SelectItem key={ses.id} value={ses.id}>
+                        {ses.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-muted/40 px-3.5 py-2.5 text-xs text-muted-foreground">
+              <Badge
+                variant={hidEnabled && !inputFocused ? "success" : "warning"}
+                className="gap-1 rounded-full text-[11px]"
+              >
+                <Radio className="h-3 w-3" />
+                {!hidEnabled
+                  ? "Súng quét HID đã tắt"
+                  : inputFocused
+                    ? "Tạm dừng HID (đang nhập liệu)"
+                    : "Đang nghe máy quét HID"}
+              </Badge>
               <span className="inline-flex items-center gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                Phiên mã xác thực động (15s):
-                <strong className="tabular-mono font-semibold text-foreground">{bucket}</strong>
-              </span>
-              <span className="tabular-mono text-[11px] font-medium text-muted-foreground">
-                Đổi sau {secondsLeft}s
+                <span>Xác thực mã động 15s</span>
+                <span className="tabular-mono font-semibold text-foreground">· {secondsLeft}s</span>
               </span>
             </div>
 
@@ -251,17 +420,23 @@ export function OfflineScannerPage() {
                 maxLength={8}
                 value={manualMssv}
                 onChange={(e) => setManualMssv(e.target.value)}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
                 placeholder="Nhập MSSV 8 số (VD: 22110123)"
                 className="tabular-mono h-12 flex-1 rounded-xl text-base sm:h-11 sm:text-sm"
                 aria-label="Mã số sinh viên 8 chữ số"
               />
-              <Button type="submit" className="liquid-glass-btn-cobalt h-12 w-full shrink-0 rounded-full px-6 sm:h-11 sm:w-auto">
+              <Button type="submit" className="h-12 w-full shrink-0 rounded-xl px-6 sm:h-11 sm:w-auto">
                 Ghi nhận
               </Button>
             </form>
 
             {lastScanned && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-status-success/35 bg-status-success/10 px-3.5 py-3 text-sm text-status-success">
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2.5 rounded-xl border border-status-success/35 bg-status-success/10 px-3.5 py-3 text-sm text-status-success"
+              >
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>
                   Đã lưu vào hàng đợi ngoại tuyến cho MSSV:{" "}
@@ -271,14 +446,21 @@ export function OfflineScannerPage() {
             )}
 
             {statusMessage && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-status-info/35 bg-status-info/10 px-3.5 py-3 text-sm text-status-info">
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2.5 rounded-xl border border-status-info/35 bg-status-info/10 px-3.5 py-3 text-sm text-status-info"
+              >
                 <Info className="h-4 w-4 shrink-0" />
                 <span>{statusMessage}</span>
               </div>
             )}
 
             {scanError && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-status-danger/35 bg-status-danger/10 px-3.5 py-3 text-sm text-status-danger">
+              <div
+                role="alert"
+                className="flex items-center gap-2.5 rounded-xl border border-status-danger/35 bg-status-danger/10 px-3.5 py-3 text-sm text-status-danger"
+              >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>{scanError}</span>
               </div>
@@ -286,7 +468,7 @@ export function OfflineScannerPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-[20px] lg:col-span-6">
+        <Card className="lg:col-span-6">
           <CardHeader className="pb-4">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
@@ -335,20 +517,38 @@ export function OfflineScannerPage() {
                       <p className="tabular-mono truncate font-semibold text-foreground">
                         {item.studentCode ?? item.ticketId}
                       </p>
-                      <p className="tabular-mono text-xs text-muted-foreground">
-                        {new Date(item.adjustedScanAt).toLocaleTimeString("vi-VN")}
+                      <p className="tabular-mono truncate text-xs text-muted-foreground">
+                        {new Date(item.adjustedScanAt).toLocaleTimeString("vi-VN")} · {item.eventId}
                       </p>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className={
-                        item.synced === 1
-                          ? "shrink-0 rounded-full border-status-success/35 bg-status-success/10 text-status-success"
-                          : "shrink-0 rounded-full border-status-warning/35 bg-status-warning/10 text-status-warning"
-                      }
-                    >
-                      {item.synced === 1 ? "Đã đồng bộ" : "Chờ đồng bộ"}
-                    </Badge>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Badge
+                        variant="outline"
+                        className={
+                          item.synced === 1
+                            ? "shrink-0 rounded-full border-status-success/35 bg-status-success/10 text-status-success"
+                            : "shrink-0 rounded-full border-status-warning/35 bg-status-warning/10 text-status-warning"
+                        }
+                      >
+                        {item.synced === 1 ? "Đã đồng bộ" : "Chờ đồng bộ"}
+                      </Badge>
+                      {item.synced === 0 && typeof item.localSeq === "number" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Xóa lượt quét ${item.studentCode ?? item.ticketId}`}
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-status-danger"
+                          onClick={() => {
+                            void offlineDb.offlineScanQueue
+                              .delete(item.localSeq!)
+                              .then(() => reloadQueue());
+                          }}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>

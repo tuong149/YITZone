@@ -61,25 +61,13 @@ interface CartState {
   setSelectedBucket: (bucket: string) => void;
   setAppliedVoucher: (voucher: AppliedVoucher | null) => void;
   clearBucket: (bucket: string) => void;
+  clearAll: () => void;
 }
 
 export const useCartStore = create<CartState>()(
   persist(
     (set) => ({
-      items: [
-        {
-          key: "prd-hoodie-L",
-          productId: "prd-hoodie",
-          campaignId: null,
-          campaignLabel: "Vật phẩm Khoa (Thường trực)",
-          name: "Áo khoác Hoodie FIT HCM-UTE 2026",
-          size: "L",
-          color: "Xanh Navy FIT",
-          unitPrice: 320_000,
-          weightKg: 0.75,
-          qty: 1
-        }
-      ],
+      items: [],
       selectedBucket: "FACULTY_MERCH",
       appliedVoucher: null,
 
@@ -91,9 +79,9 @@ export const useCartStore = create<CartState>()(
           const bucket = campaignBucketKey(product.campaignId);
           const existing = state.items.find((i) => i.key === key);
           const nextItems = existing
-            ? state.items.map((i) => (i.key === key ? {...i, qty: i.qty + 1 }: i))
-: [
-...state.items,
+            ? state.items.map((i) => (i.key === key ? { ...i, qty: i.qty + 1 } : i))
+            : [
+                ...state.items,
                 {
                   key,
                   productId: product.id,
@@ -109,15 +97,15 @@ export const useCartStore = create<CartState>()(
               ];
           return {
             items: nextItems,
-            selectedBucket: state.items.length === 0 ? bucket: state.selectedBucket
+            selectedBucket: state.items.length === 0 ? bucket : state.selectedBucket
           };
         }),
 
       updateQty: (key, delta) =>
         set((state) => ({
           items: state.items
-.map((i) => (i.key === key ? {...i, qty: i.qty + delta }: i))
-.filter((i) => i.qty > 0)
+            .map((i) => (i.key === key ? { ...i, qty: i.qty + delta } : i))
+            .filter((i) => i.qty > 0)
         })),
 
       removeItem: (key) =>
@@ -125,8 +113,7 @@ export const useCartStore = create<CartState>()(
           items: state.items.filter((i) => i.key !== key)
         })),
 
-      setSelectedBucket: (bucket) =>
-        set({ selectedBucket: bucket, appliedVoucher: null }),
+      setSelectedBucket: (bucket) => set({ selectedBucket: bucket, appliedVoucher: null }),
 
       setAppliedVoucher: (voucher) => set({ appliedVoucher: voucher }),
 
@@ -134,7 +121,14 @@ export const useCartStore = create<CartState>()(
         set((state) => ({
           items: state.items.filter((i) => campaignBucketKey(i.campaignId) !== bucket),
           appliedVoucher: null
-        }))
+        })),
+
+      clearAll: () =>
+        set({
+          items: [],
+          selectedBucket: "FACULTY_MERCH",
+          appliedVoucher: null
+        })
     }),
     {
       name: "yitzone-store-cart-v1"

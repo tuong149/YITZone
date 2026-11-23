@@ -26,8 +26,17 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        globPatterns: ["**/*.{js,css,html,ico,svg}"],
         runtimeCaching: [
+          {
+            // Cache large static images at runtime instead of precaching >2MB on first PWA install
+            urlPattern: ({ request }) => request.destination === "image",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "yitzone-images-cache",
+              expiration: { maxEntries: 60, maxAgeSeconds: 30 * 24 * 3600 }
+            }
+          },
           {
             // Only cache unauthenticated public GET /api/v1/events requests without custom scope header
             // to prevent leaking internal events across users on shared BTC devices
@@ -60,7 +69,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
             if (id.includes("@radix-ui") || id.includes("lucide-react")) return "vendor-ui";
             if (id.includes("react-router") || id.includes("@tanstack")) return "vendor-data";
             return "vendor";

@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { qk } from "@/lib/query-keys";
+import { useAuthStore } from "@/stores/auth-store";
 
 export interface CertificateSummaryDto {
   certificateId: string;
@@ -40,13 +42,11 @@ export async function verifyCertificateCode(code: string): Promise<CertificateVe
   return res.data.data;
 }
 
-function makeIdempotencyKey(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-: `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-export async function revokeCertificate(id: string, reason: string) {
+export async function revokeCertificate(
+  id: string,
+  reason: string,
+  idempotencyKey: string = crypto.randomUUID()
+) {
   const res = await apiClient.post<
     ApiResponse<{
       certificateId: string;
@@ -59,13 +59,17 @@ export async function revokeCertificate(id: string, reason: string) {
   >(
     `/certificates/${encodeURIComponent(id)}/revoke`,
     { reason },
-    { headers: { "Idempotency-Key": makeIdempotencyKey() } }
+    { headers: { "Idempotency-Key": idempotencyKey } }
   );
   if (!res.data.success) throw new Error(res.data.detail);
   return res.data.data;
 }
 
-export async function reissueCertificate(id: string, reason: string) {
+export async function reissueCertificate(
+  id: string,
+  reason: string,
+  idempotencyKey: string = crypto.randomUUID()
+) {
   const res = await apiClient.post<
     ApiResponse<{
       previousCertificateId: string;
@@ -78,16 +82,19 @@ export async function reissueCertificate(id: string, reason: string) {
   >(
     `/certificates/${encodeURIComponent(id)}/reissue`,
     { reason },
-    { headers: { "Idempotency-Key": makeIdempotencyKey() } }
+    { headers: { "Idempotency-Key": idempotencyKey } }
   );
   if (!res.data.success) throw new Error(res.data.detail);
   return res.data.data;
 }
 
-export function useMyCertificates(){
+export function useMyCertificates() {
+  const userId = useAuthStore((s) => s.userId);
+  const activeScopeId = useAuthStore((s) => s.activeScopeId);
   return useQuery({
-    queryKey: ["certificates", "me"],
+    queryKey: qk.private(userId, activeScopeId, "certificates", "me"),
     queryFn: fetchMyCertificates,
+    enabled: Boolean(userId),
     retry: false
   });
 }

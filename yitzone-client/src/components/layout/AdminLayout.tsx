@@ -285,14 +285,21 @@ export function AdminLayout() {
   }, []);
 
   const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const normalizeVi = (text: string) =>
+      text
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/đ/g, "d");
+
+    const q = normalizeVi(searchQuery.trim());
     if (!q) return flatSearchItems.slice(0, 6);
     return flatSearchItems
       .filter(
         (item) =>
-          item.label.toLowerCase().includes(q) ||
-          item.group.toLowerCase().includes(q) ||
-          item.keywords.includes(q)
+          normalizeVi(item.label).includes(q) ||
+          normalizeVi(item.group).includes(q) ||
+          normalizeVi(item.keywords).includes(q)
       )
       .slice(0, 8);
   }, [searchQuery, flatSearchItems]);

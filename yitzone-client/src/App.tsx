@@ -1,93 +1,107 @@
-import { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
 import { AdminLayout } from "@/components/layout/AdminLayout";
+import { AppErrorBoundary } from "@/components/layout/AppErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { StageLayout } from "@/components/layout/StageLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArtsAdminPage } from "@/features/arts/ArtsAdminPage";
-import { ArtsPortalPage } from "@/features/arts/ArtsPortalPage";
-import { AttendanceReviewPage } from "@/features/attendance/AttendanceReviewPage";
-import { OfflineScannerPage } from "@/features/attendance/OfflineScannerPage";
-import { StudentCheckinPage } from "@/features/attendance/StudentCheckinPage";
-import { LoginPage } from "@/features/auth/LoginPage";
-import { OAuth2CallbackPage } from "@/features/auth/OAuth2CallbackPage";
-import { CalendarPage } from "@/features/calendar/CalendarPage";
-import { CertificateAdminPage } from "@/features/certificates/CertificateAdminPage";
-import { CertificateVerifyPage } from "@/features/certificates/CertificateVerifyPage";
-import { MyCertificatesPage } from "@/features/certificates/MyCertificatesPage";
-import { YitBotAdminPage } from "@/features/chatbot/YitBotAdminPage";
-import { YitBotPage } from "@/features/chatbot/YitBotPage";
-import { CmsAdminPage } from "@/features/cms/CmsAdminPage";
-import { NewsComposePage } from "@/features/cms/NewsComposePage";
-import { NewsDetailPage } from "@/features/cms/NewsDetailPage";
-import { NewsPage } from "@/features/cms/NewsPage";
-import { DesignSystemPage } from "@/features/design-system/DesignSystemPage";
-import { EventAdminPage } from "@/features/events/EventAdminPage";
-import { EventCreatePage } from "@/features/events/EventCreatePage";
-import { EventDetailPage } from "@/features/events/EventDetailPage";
-import { EventManagePage } from "@/features/events/EventManagePage";
-import { EventsCatalogPage } from "@/features/events/EventsCatalogPage";
 import { EventsPage } from "@/features/events/EventsPage";
-import { ExamAdminPage } from "@/features/exam/ExamAdminPage";
-import { ExamTakePage } from "@/features/exam/ExamTakePage";
-import { OrgRbacAdminPage } from "@/features/iam/OrgRbacAdminPage";
-import { PrivacyCenterPage } from "@/features/iam/PrivacyCenterPage";
-import { ProfileSecurityPage } from "@/features/iam/ProfileSecurityPage";
-import { RestructuringPage } from "@/features/iam/RestructuringPage";
-import { RosterMajorAdminPage } from "@/features/iam/RosterMajorAdminPage";
-import { UnitHrPage } from "@/features/iam/UnitHrPage";
-import { LiveQaAdminPage } from "@/features/liveqa/LiveQaAdminPage";
-import { LiveQaAudiencePage } from "@/features/liveqa/LiveQaAudiencePage";
-import { LiveQaStagePage } from "@/features/liveqa/LiveQaStagePage";
-import { MinigamePlayerPage } from "@/features/minigame/MinigamePlayerPage";
-import { MinigameStagePage } from "@/features/minigame/MinigameStagePage";
-import { ModuleDirectoryPage } from "@/features/modules/ModuleDirectoryPage";
-import { OfficeAdminPage } from "@/features/office/OfficeAdminPage";
-import { OfficeDutyPage } from "@/features/office/OfficeDutyPage";
-import { OjAdminPage } from "@/features/oj/OjAdminPage";
-import { OjHomePage } from "@/features/oj/OjHomePage";
-import { OjProblemDetailPage } from "@/features/oj/OjProblemDetailPage";
-import { PortfolioEditorPage } from "@/features/portfolio/PortfolioEditorPage";
-import { PublicPortfolioPage } from "@/features/portfolio/PublicPortfolioPage";
-import { PublicPortalPage } from "@/features/public/PublicPortalPage";
-import { PwaSettingsPage } from "@/features/pwa/PwaSettingsPage";
-import { InboxAdminPage } from "@/features/qachat/InboxAdminPage";
-import { MessengerPage } from "@/features/qachat/MessengerPage";
-import { StoreAdminPage } from "@/features/store/StoreAdminPage";
-import { StoreCartPage } from "@/features/store/StoreCartPage";
-import { StoreCheckoutPage } from "@/features/store/StoreCheckoutPage";
-import { StoreOrdersPage } from "@/features/store/StoreOrdersPage";
-import { StorePage } from "@/features/store/StorePage";
-import { SurveyAdminPage } from "@/features/surveys/SurveyAdminPage";
-import { SurveyTakePage } from "@/features/surveys/SurveyTakePage";
-import { HonorRollPage } from "@/features/sv5t/HonorRollPage";
-import { Sv5tAdminPage } from "@/features/sv5t/Sv5tAdminPage";
-import { Sv5tPortalPage } from "@/features/sv5t/Sv5tPortalPage";
-import { AuditLogAdminPage } from "@/features/system/AuditLogAdminPage";
-import { NotificationsPage } from "@/features/system/NotificationsPage";
-import { VotingAdminPage } from "@/features/voting/VotingAdminPage";
-import { VotingKioskPage } from "@/features/voting/VotingKioskPage";
-import { VotingPage } from "@/features/voting/VotingPage";
-import { VotingStagePage } from "@/features/voting/VotingStagePage";
+import { ForbiddenPage } from "@/features/system/ForbiddenPage";
+import { NotFoundPage } from "@/features/system/NotFoundPage";
 import { apiClient, type ApiResponse } from "@/lib/api-client";
-import { PERMISSIONS } from "@/lib/permissions";
+import { ALL_ADMIN_AUTHORITIES, PERMISSIONS } from "@/lib/permissions";
+import { queryClient } from "@/lib/query-client";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore } from "@/stores/theme-store";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false
-    }
-  }
-});
+// Lazy-loaded pages (route-level code splitting for mobile PWA performance)
+const ArtsAdminPage = lazy(() => import("@/features/arts/ArtsAdminPage").then((m) => ({ default: m.ArtsAdminPage })));
+const ArtsPortalPage = lazy(() => import("@/features/arts/ArtsPortalPage").then((m) => ({ default: m.ArtsPortalPage })));
+const AttendanceReviewPage = lazy(() => import("@/features/attendance/AttendanceReviewPage").then((m) => ({ default: m.AttendanceReviewPage })));
+const OfflineScannerPage = lazy(() => import("@/features/attendance/OfflineScannerPage").then((m) => ({ default: m.OfflineScannerPage })));
+const StudentCheckinPage = lazy(() => import("@/features/attendance/StudentCheckinPage").then((m) => ({ default: m.StudentCheckinPage })));
+const LoginPage = lazy(() => import("@/features/auth/LoginPage").then((m) => ({ default: m.LoginPage })));
+const OAuth2CallbackPage = lazy(() => import("@/features/auth/OAuth2CallbackPage").then((m) => ({ default: m.OAuth2CallbackPage })));
+const CalendarPage = lazy(() => import("@/features/calendar/CalendarPage").then((m) => ({ default: m.CalendarPage })));
+const CertificateAdminPage = lazy(() => import("@/features/certificates/CertificateAdminPage").then((m) => ({ default: m.CertificateAdminPage })));
+const CertificateVerifyPage = lazy(() => import("@/features/certificates/CertificateVerifyPage").then((m) => ({ default: m.CertificateVerifyPage })));
+const MyCertificatesPage = lazy(() => import("@/features/certificates/MyCertificatesPage").then((m) => ({ default: m.MyCertificatesPage })));
+const YitBotAdminPage = lazy(() => import("@/features/chatbot/YitBotAdminPage").then((m) => ({ default: m.YitBotAdminPage })));
+const YitBotPage = lazy(() => import("@/features/chatbot/YitBotPage").then((m) => ({ default: m.YitBotPage })));
+const CmsAdminPage = lazy(() => import("@/features/cms/CmsAdminPage").then((m) => ({ default: m.CmsAdminPage })));
+const NewsComposePage = lazy(() => import("@/features/cms/NewsComposePage").then((m) => ({ default: m.NewsComposePage })));
+const NewsDetailPage = lazy(() => import("@/features/cms/NewsDetailPage").then((m) => ({ default: m.NewsDetailPage })));
+const NewsPage = lazy(() => import("@/features/cms/NewsPage").then((m) => ({ default: m.NewsPage })));
+const DesignSystemPage = lazy(() => import("@/features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
+const EventAdminPage = lazy(() => import("@/features/events/EventAdminPage").then((m) => ({ default: m.EventAdminPage })));
+const EventCreatePage = lazy(() => import("@/features/events/EventCreatePage").then((m) => ({ default: m.EventCreatePage })));
+const EventDetailPage = lazy(() => import("@/features/events/EventDetailPage").then((m) => ({ default: m.EventDetailPage })));
+const EventManagePage = lazy(() => import("@/features/events/EventManagePage").then((m) => ({ default: m.EventManagePage })));
+const EventsCatalogPage = lazy(() => import("@/features/events/EventsCatalogPage").then((m) => ({ default: m.EventsCatalogPage })));
+const ExamAdminPage = lazy(() => import("@/features/exam/ExamAdminPage").then((m) => ({ default: m.ExamAdminPage })));
+const ExamTakePage = lazy(() => import("@/features/exam/ExamTakePage").then((m) => ({ default: m.ExamTakePage })));
+const OrgRbacAdminPage = lazy(() => import("@/features/iam/OrgRbacAdminPage").then((m) => ({ default: m.OrgRbacAdminPage })));
+const PrivacyCenterPage = lazy(() => import("@/features/iam/PrivacyCenterPage").then((m) => ({ default: m.PrivacyCenterPage })));
+const ProfileSecurityPage = lazy(() => import("@/features/iam/ProfileSecurityPage").then((m) => ({ default: m.ProfileSecurityPage })));
+const RestructuringPage = lazy(() => import("@/features/iam/RestructuringPage").then((m) => ({ default: m.RestructuringPage })));
+const RosterMajorAdminPage = lazy(() => import("@/features/iam/RosterMajorAdminPage").then((m) => ({ default: m.RosterMajorAdminPage })));
+const UnitHrPage = lazy(() => import("@/features/iam/UnitHrPage").then((m) => ({ default: m.UnitHrPage })));
+const LiveQaAdminPage = lazy(() => import("@/features/liveqa/LiveQaAdminPage").then((m) => ({ default: m.LiveQaAdminPage })));
+const LiveQaAudiencePage = lazy(() => import("@/features/liveqa/LiveQaAudiencePage").then((m) => ({ default: m.LiveQaAudiencePage })));
+const LiveQaStagePage = lazy(() => import("@/features/liveqa/LiveQaStagePage").then((m) => ({ default: m.LiveQaStagePage })));
+const MinigamePlayerPage = lazy(() => import("@/features/minigame/MinigamePlayerPage").then((m) => ({ default: m.MinigamePlayerPage })));
+const MinigameStagePage = lazy(() => import("@/features/minigame/MinigameStagePage").then((m) => ({ default: m.MinigameStagePage })));
+const ModuleDirectoryPage = lazy(() => import("@/features/modules/ModuleDirectoryPage").then((m) => ({ default: m.ModuleDirectoryPage })));
+const OfficeAdminPage = lazy(() => import("@/features/office/OfficeAdminPage").then((m) => ({ default: m.OfficeAdminPage })));
+const OfficeDutyPage = lazy(() => import("@/features/office/OfficeDutyPage").then((m) => ({ default: m.OfficeDutyPage })));
+const OjAdminPage = lazy(() => import("@/features/oj/OjAdminPage").then((m) => ({ default: m.OjAdminPage })));
+const OjHomePage = lazy(() => import("@/features/oj/OjHomePage").then((m) => ({ default: m.OjHomePage })));
+const OjProblemDetailPage = lazy(() => import("@/features/oj/OjProblemDetailPage").then((m) => ({ default: m.OjProblemDetailPage })));
+const PortfolioEditorPage = lazy(() => import("@/features/portfolio/PortfolioEditorPage").then((m) => ({ default: m.PortfolioEditorPage })));
+const PublicPortfolioPage = lazy(() => import("@/features/portfolio/PublicPortfolioPage").then((m) => ({ default: m.PublicPortfolioPage })));
+const PublicPortalPage = lazy(() => import("@/features/public/PublicPortalPage").then((m) => ({ default: m.PublicPortalPage })));
+const PwaSettingsPage = lazy(() => import("@/features/pwa/PwaSettingsPage").then((m) => ({ default: m.PwaSettingsPage })));
+const InboxAdminPage = lazy(() => import("@/features/qachat/InboxAdminPage").then((m) => ({ default: m.InboxAdminPage })));
+const MessengerPage = lazy(() => import("@/features/qachat/MessengerPage").then((m) => ({ default: m.MessengerPage })));
+const StoreAdminPage = lazy(() => import("@/features/store/StoreAdminPage").then((m) => ({ default: m.StoreAdminPage })));
+const StoreCartPage = lazy(() => import("@/features/store/StoreCartPage").then((m) => ({ default: m.StoreCartPage })));
+const StoreCheckoutPage = lazy(() => import("@/features/store/StoreCheckoutPage").then((m) => ({ default: m.StoreCheckoutPage })));
+const StoreOrdersPage = lazy(() => import("@/features/store/StoreOrdersPage").then((m) => ({ default: m.StoreOrdersPage })));
+const StorePage = lazy(() => import("@/features/store/StorePage").then((m) => ({ default: m.StorePage })));
+const SurveyAdminPage = lazy(() => import("@/features/surveys/SurveyAdminPage").then((m) => ({ default: m.SurveyAdminPage })));
+const SurveyTakePage = lazy(() => import("@/features/surveys/SurveyTakePage").then((m) => ({ default: m.SurveyTakePage })));
+const HonorRollPage = lazy(() => import("@/features/sv5t/HonorRollPage").then((m) => ({ default: m.HonorRollPage })));
+const Sv5tAdminPage = lazy(() => import("@/features/sv5t/Sv5tAdminPage").then((m) => ({ default: m.Sv5tAdminPage })));
+const Sv5tPortalPage = lazy(() => import("@/features/sv5t/Sv5tPortalPage").then((m) => ({ default: m.Sv5tPortalPage })));
+const AuditLogAdminPage = lazy(() => import("@/features/system/AuditLogAdminPage").then((m) => ({ default: m.AuditLogAdminPage })));
+const NotificationsPage = lazy(() => import("@/features/system/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const VotingAdminPage = lazy(() => import("@/features/voting/VotingAdminPage").then((m) => ({ default: m.VotingAdminPage })));
+const VotingKioskPage = lazy(() => import("@/features/voting/VotingKioskPage").then((m) => ({ default: m.VotingKioskPage })));
+const VotingPage = lazy(() => import("@/features/voting/VotingPage").then((m) => ({ default: m.VotingPage })));
+const VotingStagePage = lazy(() => import("@/features/voting/VotingStagePage").then((m) => ({ default: m.VotingStagePage })));
 
-function AdminOverviewPage(){
+function RouteLoadingFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mx-auto w-full max-w-5xl space-y-4 py-8"
+    >
+      <div className="h-24 w-full animate-pulse rounded-panel border border-border/60 bg-card/70" />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="h-44 animate-pulse rounded-card border border-border/60 bg-card/70" />
+        <div className="h-44 animate-pulse rounded-card border border-border/60 bg-card/70" />
+      </div>
+      <span className="sr-only">Đang tải nội dung trang...</span>
+    </div>
+  );
+}
+
+function AdminOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
@@ -121,23 +135,25 @@ function AdminOverviewPage(){
             </Button>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>UI Kit &amp; Audit Dialog</CardTitle>
-            <CardDescription>Kiểm thử bảng dữ liệu và thành phần kiểm toán</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="sm">
-              <Link to="/design-system">Mở UI Kit</Link>
-            </Button>
-          </CardContent>
-        </Card>
+        {import.meta.env.DEV && (
+          <Card>
+            <CardHeader>
+              <CardTitle>UI Kit &amp; Audit Dialog</CardTitle>
+              <CardDescription>Kiểm thử bảng dữ liệu và thành phần kiểm toán (Dev)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild size="sm">
+                <Link to="/design-system">Mở UI Kit</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
 }
 
-function StagePreviewPage(){
+function StagePreviewPage() {
   return (
     <div className="grid gap-8 lg:grid-cols-12">
       <div className="flex flex-col justify-between rounded-xl border border-white/15 bg-[#0e1529] p-8 lg:col-span-8">
@@ -194,116 +210,185 @@ function ScrollToTop() {
   return null;
 }
 
-export function App(){
+export function App() {
   const accessToken = useAuthStore((s) => s.accessToken);
+  const syncFromMe = useAuthStore((s) => s.syncFromMe);
 
   useEffect(() => {
     if (!accessToken || accessToken === "demo-local-offline-token") {
       return;
     }
+    let active = true;
     void apiClient
-.get<ApiResponse<{ userId: string; activeScopeId: string; authorities: string[] }>>("/iam/me")
-.catch(() => {
+      .get<ApiResponse<{ userId: string; activeScopeId: string; authorities: string[] }>>("/iam/me")
+      .then((res) => {
+        if (!active || !res.data.success) return;
+        syncFromMe({
+          activeScopeId: res.data.data.activeScopeId,
+          authorities: res.data.data.authorities
+        });
+      })
+      .catch(() => {
         // 401 is handled by apiClient response interceptor
       });
-  }, [accessToken]);
+    return () => {
+      active = false;
+    };
+  }, [accessToken, syncFromMe]);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ScrollToTop />
-        <Routes>
-          <Route element={<PublicLayout />}>
-            <Route path="/public" element={<PublicPortalPage />} />
-            <Route path="/verify/:certCode" element={<CertificateVerifyPage />} />
-            <Route path="/p/:username" element={<PublicPortfolioPage />} />
-          </Route>
+      <AppErrorBoundary>
+        <BrowserRouter>
+          <ScrollToTop />
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <Routes>
+              <Route element={<PublicLayout />}>
+                <Route path="/public" element={<PublicPortalPage />} />
+                <Route path="/verify/:certCode" element={<CertificateVerifyPage />} />
+                <Route path="/p/:username" element={<PublicPortfolioPage />} />
+              </Route>
 
-          <Route element={<AdminLayout />}>
-            <Route path="/admin" element={<AdminOverviewPage />} />
-            <Route path="/admin/iam/roster" element={<RosterMajorAdminPage />} />
-            <Route path="/admin/iam/rbac" element={<OrgRbacAdminPage />} />
-            <Route path="/admin/iam/unit-hr" element={<UnitHrPage />} />
-            <Route path="/admin/iam/restructuring" element={<RestructuringPage />} />
-            <Route path="/admin/events" element={<EventAdminPage />} />
-            <Route path="/admin/events/new" element={<EventCreatePage />} />
-            <Route path="/admin/events/:eventId/edit" element={<EventCreatePage />} />
-            <Route path="/admin/events/:eventId" element={<EventManagePage />} />
-            <Route path="/admin/attendance" element={<AttendanceReviewPage />} />
-            <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_ATTENDANCE} />}>
-              <Route path="/admin/scanner" element={<OfflineScannerPage />} />
-            </Route>
-            <Route path="/admin/certificates" element={<CertificateAdminPage />} />
-            <Route path="/admin/audit" element={<AuditLogAdminPage />} />
-            <Route path="/admin/cms" element={<CmsAdminPage />} />
-            <Route path="/admin/sv5t" element={<Sv5tAdminPage />} />
-            <Route path="/admin/surveys" element={<SurveyAdminPage />} />
-            <Route path="/admin/live-qa" element={<LiveQaAdminPage />} />
-            <Route path="/admin/voting" element={<VotingAdminPage />} />
-            <Route path="/admin/office" element={<OfficeAdminPage />} />
-            <Route path="/admin/store" element={<StoreAdminPage />} />
-            <Route path="/admin/exams" element={<ExamAdminPage />} />
-            <Route path="/admin/yitbot" element={<YitBotAdminPage />} />
-            <Route path="/admin/arts" element={<ArtsAdminPage />} />
-            <Route path="/admin/inbox" element={<InboxAdminPage />} />
-            <Route path="/admin/oj" element={<OjAdminPage />} />
-          </Route>
+              {/* Protected Admin Workspace — every route enforces auth + module permissions */}
+              <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={ALL_ADMIN_AUTHORITIES} />}>
+                <Route element={<AdminLayout />}>
+                  <Route path="/admin" element={<AdminOverviewPage />} />
 
-          <Route element={<StageLayout />}>
-            <Route path="/stage" element={<StagePreviewPage />} />
-            <Route path="/stage/qa" element={<LiveQaStagePage />} />
-            <Route path="/stage/voting" element={<VotingStagePage />} />
-            <Route path="/stage/minigame" element={<MinigameStagePage />} />
-          </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_IAM_ROSTER} />}>
+                    <Route path="/admin/iam/roster" element={<RosterMajorAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_IAM_RBAC} />}>
+                    <Route path="/admin/iam/rbac" element={<OrgRbacAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_IAM_UNIT_HR} />}>
+                    <Route path="/admin/iam/unit-hr" element={<UnitHrPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_IAM_RESTRUCTURING} />}>
+                    <Route path="/admin/iam/restructuring" element={<RestructuringPage />} />
+                  </Route>
 
-          <Route element={<SharedSurfaceLayout />}>
-            <Route path="/news" element={<NewsPage />} />
-            <Route path="/news/:slug" element={<NewsDetailPage />} />
-            <Route path="/public/honor-roll" element={<HonorRollPage />} />
-            <Route path="/store" element={<StorePage />} />
-            <Route path="/store/cart" element={<StoreCartPage />} />
-            <Route path="/store/checkout" element={<StoreCheckoutPage />} />
-            <Route path="/store/orders" element={<StoreOrdersPage />} />
-          </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_EVENTS} />}>
+                    <Route path="/admin/events" element={<EventAdminPage />} />
+                    <Route path="/admin/events/new" element={<EventCreatePage />} />
+                    <Route path="/admin/events/:eventId/edit" element={<EventCreatePage />} />
+                    <Route path="/admin/events/:eventId" element={<EventManagePage />} />
+                  </Route>
 
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<EventsPage />} />
-            <Route path="/events" element={<EventsCatalogPage />} />
-            <Route path="/events/:eventId" element={<EventDetailPage />} />
-            <Route path="/news/compose" element={<NewsComposePage />} />
-            <Route path="/sv5t" element={<Sv5tPortalPage />} />
-            <Route path="/surveys/:id" element={<SurveyTakePage />} />
-            <Route path="/live-qa/:pin" element={<LiveQaAudiencePage />} />
-            <Route path="/kiosk/voting" element={<VotingKioskPage />} />
-            <Route path="/minigame" element={<MinigamePlayerPage />} />
-            <Route path="/exam/:id" element={<ExamTakePage />} />
-            <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ARTS_LEAD_PORTAL} />}>
-              <Route path="/arts" element={<ArtsPortalPage />} />
-            </Route>
-            <Route path="/messenger" element={<MessengerPage />} />
-            <Route path="/oj" element={<OjHomePage />} />
-            <Route path="/oj/problems/:id" element={<OjProblemDetailPage />} />
-            <Route path="/portfolio" element={<PortfolioEditorPage />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/office-duty" element={<OfficeDutyPage />} />
-            <Route path="/certificates" element={<MyCertificatesPage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/pwa-settings" element={<PwaSettingsPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/auth/callback" element={<OAuth2CallbackPage />} />
-            <Route path="/profile" element={<ProfileSecurityPage />} />
-            <Route path="/privacy" element={<PrivacyCenterPage />} />
-            <Route path="/scanner" element={<StudentCheckinPage />} />
-            <Route path="/voting" element={<VotingPage />} />
-            <Route path="/yitbot" element={<YitBotPage />} />
-            <Route path="/modules" element={<ModuleDirectoryPage />} />
-            <Route path="/design-system" element={<DesignSystemPage />} />
-            <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_ATTENDANCE} />}>
-              <Route path="/protected-scanner" element={<OfflineScannerPage />} />
-            </Route>
-          </Route>
-        </Routes>
-      </BrowserRouter>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_ATTENDANCE} />}>
+                    <Route path="/admin/attendance" element={<AttendanceReviewPage />} />
+                    <Route path="/admin/scanner" element={<OfflineScannerPage />} />
+                  </Route>
+
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_CERTIFICATES} />}>
+                    <Route path="/admin/certificates" element={<CertificateAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_AUDIT} />}>
+                    <Route path="/admin/audit" element={<AuditLogAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_CMS} />}>
+                    <Route path="/admin/cms" element={<CmsAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_SV5T} />}>
+                    <Route path="/admin/sv5t" element={<Sv5tAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_SURVEYS} />}>
+                    <Route path="/admin/surveys" element={<SurveyAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_LIVEQA} />}>
+                    <Route path="/admin/live-qa" element={<LiveQaAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_VOTING} />}>
+                    <Route path="/admin/voting" element={<VotingAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_OFFICE} />}>
+                    <Route path="/admin/office" element={<OfficeAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_STORE} />}>
+                    <Route path="/admin/store" element={<StoreAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_EXAMS_MINIGAME} />}>
+                    <Route path="/admin/exams" element={<ExamAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_YITBOT} />}>
+                    <Route path="/admin/yitbot" element={<YitBotAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_ARTS} />}>
+                    <Route path="/admin/arts" element={<ArtsAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_INBOX} />}>
+                    <Route path="/admin/inbox" element={<InboxAdminPage />} />
+                  </Route>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_OJ} />}>
+                    <Route path="/admin/oj" element={<OjAdminPage />} />
+                  </Route>
+                </Route>
+              </Route>
+
+              <Route element={<StageLayout />}>
+                <Route path="/stage" element={<StagePreviewPage />} />
+                <Route path="/stage/qa" element={<LiveQaStagePage />} />
+                <Route path="/stage/voting" element={<VotingStagePage />} />
+                <Route path="/stage/minigame" element={<MinigameStagePage />} />
+              </Route>
+
+              <Route element={<SharedSurfaceLayout />}>
+                <Route path="/news" element={<NewsPage />} />
+                <Route path="/news/:slug" element={<NewsDetailPage />} />
+                <Route path="/public/honor-roll" element={<HonorRollPage />} />
+                <Route path="/store" element={<StorePage />} />
+                <Route path="/store/cart" element={<StoreCartPage />} />
+                <Route path="/store/checkout" element={<StoreCheckoutPage />} />
+                <Route path="/store/orders" element={<StoreOrdersPage />} />
+              </Route>
+
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<EventsPage />} />
+                <Route path="/events" element={<EventsCatalogPage />} />
+                <Route path="/events/:eventId" element={<EventDetailPage />} />
+                <Route path="/sv5t" element={<Sv5tPortalPage />} />
+                <Route path="/surveys/:id" element={<SurveyTakePage />} />
+                <Route path="/live-qa/:pin" element={<LiveQaAudiencePage />} />
+                <Route path="/kiosk/voting" element={<VotingKioskPage />} />
+                <Route path="/minigame" element={<MinigamePlayerPage />} />
+                <Route path="/exam/:id" element={<ExamTakePage />} />
+                <Route path="/oj" element={<OjHomePage />} />
+                <Route path="/oj/problems/:id" element={<OjProblemDetailPage />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/pwa-settings" element={<PwaSettingsPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/auth/callback" element={<OAuth2CallbackPage />} />
+                <Route path="/scanner" element={<StudentCheckinPage />} />
+                <Route path="/voting" element={<VotingPage />} />
+                <Route path="/yitbot" element={<YitBotPage />} />
+                <Route path="/modules" element={<ModuleDirectoryPage />} />
+                {import.meta.env.DEV && <Route path="/design-system" element={<DesignSystemPage />} />}
+
+                {/* Authenticated Personal & Contributor Routes */}
+                <Route element={<ProtectedRoute requireAuth={true} />}>
+                  <Route path="/news/compose" element={<NewsComposePage />} />
+                  <Route path="/messenger" element={<MessengerPage />} />
+                  <Route path="/portfolio" element={<PortfolioEditorPage />} />
+                  <Route path="/office-duty" element={<OfficeDutyPage />} />
+                  <Route path="/certificates" element={<MyCertificatesPage />} />
+                  <Route path="/notifications" element={<NotificationsPage />} />
+                  <Route path="/profile" element={<ProfileSecurityPage />} />
+                  <Route path="/privacy" element={<PrivacyCenterPage />} />
+                </Route>
+
+                <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ARTS_LEAD_PORTAL} />}>
+                  <Route path="/arts" element={<ArtsPortalPage />} />
+                </Route>
+                <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_ATTENDANCE} />}>
+                  <Route path="/protected-scanner" element={<OfflineScannerPage />} />
+                </Route>
+
+                <Route path="/403" element={<ForbiddenPage />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </AppErrorBoundary>
     </QueryClientProvider>
   );
 }

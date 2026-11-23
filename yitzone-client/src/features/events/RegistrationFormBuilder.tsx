@@ -207,7 +207,7 @@ export function RegistrationFormBuilder({
       LINK_OR_FILE: "Đường dẫn sản phẩm / Tệp minh chứng"
     };
     const nextField: RegistrationFormField = {
-      id: `fld-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `fld-${crypto.randomUUID().slice(0, 8)}`,
       type,
       label: defaultLabelMap[type],
       placeholder: type === "LINK_OR_FILE" ? "https://..." : "",
@@ -226,7 +226,7 @@ export function RegistrationFormBuilder({
       {
         ...preset,
         scope: isTeamEvent ? preset.scope : "PARTICIPANT",
-        id: `fld-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+        id: `fld-${crypto.randomUUID().slice(0, 8)}`
       }
     ]);
   };
@@ -288,7 +288,7 @@ export function RegistrationFormBuilder({
     const copy = [...fields];
     copy.splice(idx + 1, 0, {
       ...field,
-      id: `fld-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `fld-${crypto.randomUUID().slice(0, 8)}`,
       label: `${field.label} (bản sao)`,
       options: [...field.options],
       visibleWhen: field.visibleWhen ? { ...field.visibleWhen } : undefined

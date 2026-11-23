@@ -96,7 +96,7 @@ export function CertTemplatesTab({ onNotify }: { onNotify: (msg: string) => void
   const openCreate = () => {
     setEditing(null);
     setName("");
-    setCode(`TPL-FIT-${Math.floor(100 + Math.random() * 900)}`);
+    setCode(`TPL-FIT-${crypto.randomUUID().slice(0, 6).toUpperCase()}`);
     setCategory("EVENT_ATTENDEE");
     setDialogOpen(true);
   };

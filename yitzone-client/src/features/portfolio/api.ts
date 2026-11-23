@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { qk } from "@/lib/query-keys";
+import { useAuthStore } from "@/stores/auth-store";
 
 export interface PortfolioSummaryDto {
   sv5tProgress: number;
@@ -37,8 +39,15 @@ export async function verifyPortfolioToken(token: string): Promise<PortfolioVeri
   return res.data.data;
 }
 
-export function useMyPortfolio(){
-  return useQuery({ queryKey: ["portfolio", "me"], queryFn: fetchMyPortfolio, retry: false });
+export function useMyPortfolio() {
+  const userId = useAuthStore((s) => s.userId);
+  const activeScopeId = useAuthStore((s) => s.activeScopeId);
+  return useQuery({
+    queryKey: qk.private(userId, activeScopeId, "portfolio", "me"),
+    queryFn: fetchMyPortfolio,
+    enabled: Boolean(userId),
+    retry: false
+  });
 }
 
 export function useVerifyPortfolioToken(token: string) {

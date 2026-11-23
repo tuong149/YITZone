@@ -56,12 +56,20 @@ export interface CanonicalDevicePopProof {
   signature: string;
 }
 
+export async function revokeDeviceKeyPair(): Promise<void> {
+  try {
+    await offlineDb.deviceKeys.delete(DEVICE_KEY_ID);
+  } catch {
+    // Ignore cleanup errors if IndexedDB is unavailable
+  }
+}
+
 export async function sha256HexBrowser(input: string): Promise<string> {
   const encoded = new TextEncoder().encode(input);
   const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
   return Array.from(new Uint8Array(hashBuffer))
-.map((b) => b.toString(16).padStart(2, "0"))
-.join("");
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export async function signDevicePop(payload: string): Promise<string> {

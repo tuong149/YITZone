@@ -99,7 +99,7 @@ export function OjProblemDetailPage(){
     window.setTimeout(() => {
       const verdict: Verdict = code.includes("while(true)") ? "TLE": "AC";
       const entry: Submission = {
-        id: `SUB-${Math.floor(8850 + Math.random() * 100)}`,
+        id: `SUB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         time: new Date().toLocaleTimeString("vi-VN"),
         lang,
         verdict,

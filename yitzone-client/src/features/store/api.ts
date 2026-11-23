@@ -7,22 +7,28 @@ export interface StoreOrderDto {
   deliveryMethod: string;
   status: string;
   idempotencyKey: string;
+  totalAmount?: number;
 }
 
-function makeIdempotencyKey(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-: `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+export function createIdempotencyKey(): string {
+  return crypto.randomUUID();
 }
 
-export async function createStoreOrder(payload: {
-  items: Record<string, unknown>[];
-  deliveryMethod: string;
-  paymentMethod: string;
-  voucherCode?: string;
-}): Promise<StoreOrderDto> {
+export async function createStoreOrder(
+  payload: {
+    items: Record<string, unknown>[];
+    deliveryMethod: string;
+    paymentMethod: string;
+    voucherCode?: string;
+    campus?: string;
+    building?: string;
+    roomCode?: string;
+    classShift?: string;
+  },
+  idempotencyKey: string = createIdempotencyKey()
+): Promise<StoreOrderDto> {
   const res = await apiClient.post<ApiResponse<StoreOrderDto>>("/store/orders", payload, {
-    headers: { "Idempotency-Key": makeIdempotencyKey() }
+    headers: { "Idempotency-Key": idempotencyKey }
   });
   if (!res.data.success) throw new Error(res.data.detail);
   return res.data.data;
@@ -36,13 +42,16 @@ export async function lookupStoreOrdersByBarcode(studentCode: string, hardwareTy
   return res.data.data;
 }
 
-export async function fulfillStoreOrder(orderId: string) {
+export async function fulfillStoreOrder(
+  orderId: string,
+  idempotencyKey: string = createIdempotencyKey()
+) {
   const res = await apiClient.post<
     ApiResponse<{ orderId: string; status: string; fulfilledBy: string; idempotencyKey: string }>
   >(
     `/store/orders/${encodeURIComponent(orderId)}/fulfill`,
     {},
-    { headers: { "Idempotency-Key": makeIdempotencyKey() } }
+    { headers: { "Idempotency-Key": idempotencyKey } }
   );
   if (!res.data.success) throw new Error(res.data.detail);
   return res.data.data;

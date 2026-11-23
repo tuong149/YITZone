@@ -1,4 +1,4 @@
-import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { apiClient, resolveApiPath, type ApiResponse } from "@/lib/api-client";
 import { createCanonicalDevicePop } from "@/lib/webcrypto";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -17,7 +17,8 @@ export async function castVotingBallot(
   const userId = useAuthStore.getState().userId ?? "anonymous";
   const sorted = [...selectedCandidateIds].sort();
   const canonicalActionFields = `${campaignId}|${sorted.join(",")}|${resolutionChoice ?? ""}`;
-  const path = `/api/v1/voting/campaigns/${encodeURIComponent(campaignId)}/cast-ballot`;
+  const relativePath = `/voting/campaigns/${encodeURIComponent(campaignId)}/cast-ballot`;
+  const path = resolveApiPath(relativePath);
   const devicePop = await createCanonicalDevicePop({
     method: "POST",
     path,
@@ -25,10 +26,11 @@ export async function castVotingBallot(
     canonicalActionFields
   });
 
-  const res = await apiClient.post<ApiResponse<CastBallotResultDto>>(
-    `/voting/campaigns/${encodeURIComponent(campaignId)}/cast-ballot`,
-    { selectedCandidateIds, resolutionChoice: resolutionChoice ?? null, devicePop }
-  );
+  const res = await apiClient.post<ApiResponse<CastBallotResultDto>>(relativePath, {
+    selectedCandidateIds,
+    resolutionChoice: resolutionChoice ?? null,
+    devicePop
+  });
   if (!res.data.success) throw new Error(res.data.detail);
   return res.data.data;
 }

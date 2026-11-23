@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   computeQualifyingStandings,
@@ -500,30 +501,36 @@ export function CompetitionAdminPage({ embedded = false }: { embedded?: boolean 
             <CardContent className="grid gap-4 pt-4 md:grid-cols-4">
               <div className="space-y-1.5">
                 <Label htmlFor="scoring-mode">Công thức gộp điểm đội</Label>
-                <select
-                  id="scoring-mode"
+                <Select
                   value={scoringMode}
-                  onChange={(e) => setScoringMode(e.target.value as TeamScoringMode)}
+                  onValueChange={(v) => setScoringMode(v as TeamScoringMode)}
                   disabled={qualFinalized}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="SUM_OF_MEMBERS">Tổng điểm 5 thành viên (SUM)</option>
-                  <option value="AVG_OF_MEMBERS">Điểm trung bình đội (AVG)</option>
-                </select>
+                  <SelectTrigger id="scoring-mode" className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SUM_OF_MEMBERS">Tổng điểm 5 thành viên (SUM)</SelectItem>
+                    <SelectItem value="AVG_OF_MEMBERS">Điểm trung bình đội (AVG)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="cheating-policy">Chính sách vi phạm quy chế (Edge 46)</Label>
-                <select
-                  id="cheating-policy"
+                <Select
                   value={cheatingPolicy}
-                  onChange={(e) => setCheatingPolicy(e.target.value as CheatingPolicy)}
+                  onValueChange={(v) => setCheatingPolicy(v as CheatingPolicy)}
                   disabled={qualFinalized}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="ZERO_MEMBER_SCORE">Tính 0đ thành viên vi phạm</option>
-                  <option value="DISQUALIFY_TEAM">Loại cả đội (Cần BTV duyệt)</option>
-                </select>
+                  <SelectTrigger id="cheating-policy" className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ZERO_MEMBER_SCORE">Tính 0đ thành viên vi phạm</SelectItem>
+                    <SelectItem value="DISQUALIFY_TEAM">Loại cả đội (Cần BTV duyệt)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">

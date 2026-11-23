@@ -25,6 +25,8 @@ export interface OfflineScanRecord {
   studentCode?: string;
   physicalCardVerified?: boolean;
   adjustedScanAt: number;
+  /** Stable batch identifier assigned on first sync attempt so retries remain idempotent */
+  batchId?: string;
   /** 0 = pending sync, 1 = synced (numeric index for IndexedDB / Dexie compatibility) */
   synced: 0 | 1;
 }
@@ -41,10 +43,16 @@ export class YitZoneOfflineDatabase extends Dexie {
       offlineBundles: "eventId, expiresAt",
       offlineScanQueue: "++localSeq, eventId, synced, adjustedScanAt"
     });
+    this.version(3).stores({
+      deviceKeys: "id, createdAt",
+      offlineBundles: "eventId, expiresAt",
+      offlineScanQueue:
+        "++localSeq, eventId, synced, adjustedScanAt, batchId, [eventId+sessionId+studentCode]"
+    });
   }
 }
 
-export const offlineDb = new YitZoneOfflineDatabase;
+export const offlineDb = new YitZoneOfflineDatabase();
 
 export async function wipeExpiredOfflineBundles(nowMs: number = Date.now()): Promise<number> {
   const expired = await offlineDb.offlineBundles.where("expiresAt").belowOrEqual(nowMs).toArray();
@@ -58,4 +66,19 @@ export async function wipeExpiredOfflineBundles(nowMs: number = Date.now()): Pro
  */
 export async function clearSyncedScansOnly(): Promise<number> {
   return offlineDb.offlineScanQueue.where("synced").equals(1).delete();
+}
+
+/**
+ * Clears cached bundles, scan queue, and device keys on logout to protect shared BTC devices.
+ */
+export async function clearSensitiveOfflineVault(): Promise<void> {
+  try {
+    await Promise.all([
+      offlineDb.offlineBundles.clear(),
+      offlineDb.offlineScanQueue.clear(),
+      offlineDb.deviceKeys.clear()
+    ]);
+  } catch {
+    // Ignore IndexedDB unavailability in restricted browser contexts
+  }
 }

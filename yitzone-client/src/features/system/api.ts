@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { qk } from "@/lib/query-keys";
+import { useAuthStore } from "@/stores/auth-store";
 
 export interface AuditLogItemDto {
   id?: string;
@@ -42,9 +44,12 @@ export async function verifyAuditChain(): Promise<AuditChainVerifyDto> {
 }
 
 export function useAuditLogs(limit = 50) {
+  const userId = useAuthStore((s) => s.userId);
+  const activeScopeId = useAuthStore((s) => s.activeScopeId);
   return useQuery({
-    queryKey: ["audit", "logs", limit],
+    queryKey: qk.private(userId, activeScopeId, "audit", "logs", limit),
     queryFn: () => fetchAuditLogs(undefined, limit),
+    enabled: Boolean(userId),
     retry: false
   });
 }

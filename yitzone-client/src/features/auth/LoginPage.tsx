@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   CheckCircle2,
@@ -18,9 +18,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiClient, type ApiResponse } from "@/lib/api-client";
+import { apiClient, extractApiErrorMessage, type ApiResponse } from "@/lib/api-client";
 import { getOrCreateDeviceKeyPair } from "@/lib/webcrypto";
 import { useAuthStore, type RoleScopeItem } from "@/stores/auth-store";
+
+const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
 interface DevTokenPayload {
   accessToken: string;
@@ -40,9 +42,12 @@ function evaluatePasswordStrength(pw: string): { score: number; label: string; c
   return { score: 100, label: "Mạnh (Đạt chuẩn Argon2id/BCrypt)", colorClass: "bg-status-success" };
 }
 
-export function LoginPage(){
+export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const setSession = useAuthStore((s) => s.setSession);
+  const redirectTarget =
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? null;
 
   // Login state (UC-IAM-02, UC-IAM-03)
   const [loginEmail, setLoginEmail] = useState("22110123@student.hcmute.edu.vn");
@@ -166,17 +171,27 @@ export function LoginPage(){
         // Non-blocking
       }
 
-      void navigate(rolePreset === "STUDENT" ? "/": "/admin");
-    } catch {
-      setSession({
-        userId: chosen.userId,
-        email: loginEmail.trim(),
-        fullName: chosen.fullName,
-        accessToken: "demo-local-offline-token",
-        authorities: chosen.authorities,
-        roleScopes: chosen.roleScopes
-      });
-      void navigate(rolePreset === "STUDENT" ? "/": "/admin");
+      void navigate(redirectTarget ?? (rolePreset === "STUDENT" ? "/" : "/admin"), { replace: true });
+    } catch (err) {
+      if (IS_DEMO_MODE) {
+        setSession({
+          userId: chosen.userId,
+          email: loginEmail.trim(),
+          fullName: chosen.fullName,
+          accessToken: "demo-local-offline-token",
+          authorities: chosen.authorities,
+          roleScopes: chosen.roleScopes
+        });
+        void navigate(redirectTarget ?? (rolePreset === "STUDENT" ? "/" : "/admin"), { replace: true });
+      } else {
+        setFailedAttempts((c) => c + 1);
+        setErrorMsg(
+          extractApiErrorMessage(
+            err,
+            "Đăng nhập thất bại. Máy chủ xác thực không phản hồi hoặc thông tin chưa chính xác."
+          )
+        );
+      }
     } finally {
       setLoading(false);
     }

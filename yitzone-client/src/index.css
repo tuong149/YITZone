@@ -368,9 +368,34 @@
 @media (prefers-reduced-transparency: reduce) {
   .liquid-glass,
   .liquid-glass-card,
-  .liquid-glass-pill {
+  .liquid-glass-pill,
+  .liquid-glass-on-dark {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     background: hsl(var(--card));
+  }
+}
+
+/* LED Stage surface does not need GPU-heavy backdrop-filter */
+.stage-dark .liquid-glass,
+.stage-dark .liquid-glass-card,
+.stage-dark .liquid-glass-pill,
+.stage-dark .liquid-glass-on-dark {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

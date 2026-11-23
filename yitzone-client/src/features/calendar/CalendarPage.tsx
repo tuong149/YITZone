@@ -299,7 +299,7 @@ function triggerIcsDownload(filename: string, items: CalendarActivity[]) {
   link.href = url;
   link.download = filename;
   document.body.appendChild(link);
-  link.click;
+  link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }

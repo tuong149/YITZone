@@ -555,7 +555,7 @@ export function StoreCatalogCrudTab({ onNotify }: { onNotify: (msg: string) => v
         actionCode={auditAction?.actionCode ?? "STORE_CRUD"}
         destructive={auditAction?.destructive ?? true}
         onConfirm={() => {
-          auditAction?.onConfirm;
+          auditAction?.onConfirm();
           setAuditAction(null);
         }}
       />

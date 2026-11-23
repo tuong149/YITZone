@@ -80,7 +80,7 @@ export const PERMISSIONS = {
   ADMIN_OJ: ["MOD_OJ_MANAGER", "oj:manage"]
 } as const;
 
-const ALL_ADMIN_AUTHORITIES: readonly string[] = Array.from(
+export const ALL_ADMIN_AUTHORITIES: readonly string[] = Array.from(
   new Set([
     ...PERMISSIONS.ADMIN_IAM_ROSTER,
     ...PERMISSIONS.ADMIN_IAM_RBAC,
@@ -143,7 +143,7 @@ const INTERNAL_CTV_AUTHORITIES: readonly string[] = [
   "ROLE_CTV",
   "ROLE_COLLABORATOR",
   "ROLE_BCH",
-  "ROLE_ADMIN"
+  "ROLE_SYSTEM_ADMIN"
 ];
 
 export function canViewInternalCtvEvents(

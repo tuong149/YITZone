@@ -76,6 +76,9 @@ export default {
         }
       },
       borderRadius: {
+        hero: "1.625rem",
+        panel: "1.375rem",
+        card: "1.25rem",
         xl: "1.25rem",
         lg: "0.875rem",
         md: "0.625rem",
