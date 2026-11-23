@@ -1,8 +1,8 @@
 # TÀI LIỆU THIẾT KẾ CHI TIẾT KỸ THUẬT (LOW-LEVEL DESIGN - LLD)
 
 **Tên dự án:** YITZone — Hệ thống Quản lý Hoạt động Đoàn - Hội & Học thuật Khoa Công nghệ Thông tin  
-**Phiên bản:** 2.2.1 (Căn cứ trực tiếp theo `SRS_YITZone.md` 2.2.1 & `HLD_YITZone.md` 2.2.1 — Hoàn thiện theo `report03.md`)  
-**Ngày lập:** 19/11/2026  
+**Phiên bản:** 2.3.0 (Căn cứ trực tiếp theo `SRS_YITZone.md` 2.3.0 & `HLD_YITZone.md` 2.3.0 — Mở rộng Phân hệ `4.2` hỗ trợ Sự kiện Đăng ký theo Đội & Đa vòng `FR-EVT-07..12`, Edge Cases `43–46`)  
+**Ngày lập:** 22/11/2026  
 **Tài liệu liên kết:**  
 - [Đặc tả Yêu cầu Phần mềm (SRS_YITZone.md)](./SRS_YITZone.md)  
 - [Thiết kế Kiến trúc Mức cao (HLD_YITZone.md)](./HLD_YITZone.md)  
@@ -15,7 +15,7 @@
 3. [Mô hình Dữ liệu MongoDB Cốt lõi (ERD & Document Schemas)](#3-mô-hình-dữ-liệu-mongodb-cốt-lõi-erd--document-schemas)
 4. [Đặc tả Chỉ mục Cơ sở Dữ liệu Bắt buộc (Mandatory MongoDB Indexes)](#4-đặc-tả-chỉ-mục-cơ-sở-dữ-liệu-bắt-buộc-mandatory-mongodb-indexes)
 5. [Thiết kế Chi tiết Luồng Tương tác Kỹ thuật (API, STOMP, Redis, Scheduler/Queue)](#5-thiết-kế-chi-tiết-luồng-tương-tác-kỹ-thuật-api-stomp-redis-schedulerqueue)
-6. [Công thức Thuật toán & Quy chuẩn Xử lý Kỹ thuật 42 Trường hợp Biên (Edge Cases)](#6-công-thức-thuật-toán--quy-chuẩn-xử-lý-kỹ-thuật-42-trường-hợp-biên-edge-cases)
+6. [Công thức Thuật toán & Quy chuẩn Xử lý Kỹ thuật 46 Trường hợp Biên (Edge Cases)](#6-công-thức-thuật-toán--quy-chuẩn-xử-lý-kỹ-thuật-46-trường-hợp-biên-edge-cases)
 
 ---
 
@@ -27,6 +27,7 @@ Tài liệu Thiết kế Chi tiết Kỹ thuật (**LLD**) này cung cấp đặ
 - Toàn bộ hệ thống MongoDB Collections (bao gồm `OFFICIAL_DIRECTORY_ROSTER`, các bảng tuân thủ `NFR-PRIV`, `Device Token ECDSA P-256 PoP`, `Offline Scanner 15s`, `Quét mã vạch thẻ SV 1D & Hậu kiểm Walk-in`, `Chấm điểm rủi ro trọng số`, `Tách bảng khảo sát ẩn danh`, `Hệ thống Bình chọn Live Voting với VOTING_BALLOT_OUTBOX & VOTING_JUDGE_SCORES`, `Phiếu bàn giao tiền mặt COD_CASH_HANDOVERS`, `AUDIT_CHAIN_STATE`) kèm cấu trúc `Embedded` / `GeoJSON` / `Vector` và bảng **Mandatory Indexes**.
 - Biểu đồ tuần tự kỹ thuật ở mức Endpoint REST, WebSocket STOMP topics (có kiểm tra quyền SUBSCRIBE kênh `.admin`), Redis data structures và Scheduler/RabbitMQ queues.
 - Công thức toán học, quy chuẩn chống gian lận phù hợp giới hạn trình duyệt và cách triển khai kỹ thuật cho toàn bộ **42 trường hợp biên (Edge Cases)**.
+- Quy ước tầng giao diện `yitzone-client`: xây dựng trên **Tailwind CSS 3 + Shadcn/UI (Radix UI Primitives) + Lucide Icons + Recharts** tùy biến theo bộ Design Token trong [DESIGN.md](../DESIGN.md) (hỗ trợ Light/Dark theo hệ thống, chế độ **Dark Stage** độ tương phản cao chuẩn WCAG 2.1 AA cho LED Hội trường & Online Judge, và **Context Switcher** thống nhất cho người dùng đa chức vụ theo `UC-IAM-09`).
 
 ---
 
@@ -53,7 +54,7 @@ Mọi thao tác kiểm tra qua `@PreAuthorize` và Custom `PermissionEvaluator` 
 | **`MOD_DEPT_ARTS_LEAD`** | Thẩm quyền Trưởng/Phó Ban Văn nghệ | `performance:approve`, `performance:unlock` | Gán cho Trưởng/Phó Ban `ARTIT` và mặc định thuộc BCH/BTV. |
 | **`MOD_EVENT_OPS`** | Tổ chức & Điều phối Sự kiện Khoa | `event:view`, `event:create`, `event:update`, `attendance:view`, `attendance:host`, `attendance:scan_barcode`, `attendance:review`, `certificate:view` | Mặc định BCH/BTV; gán động cho Trưởng BTC theo `scopeType = EVENT`. **Không chứa `liveqa:*` và không chứa duyệt quyền lợi.** |
 | **`MOD_ATTENDANCE_STAFF`**| Điểm danh, Quét Mã vạch Thẻ SV & Soát vé Hội trường | `attendance:view`, `attendance:host`, `attendance:scan_barcode`, `attendance:review`, `attendance:override` | Mặc định BCH/BTV; gán động cho nhóm Lễ tân/Điều phối theo `EVENT` (cho phép tải gói Offline Scanner, quét Vé QR 2D & Mã vạch thẻ SV 1D). |
-| **`MOD_QUIZ_EXAM_HOST`** | Tổ chức Minigame, Live Q&A, Voting LED & Thi Trắc nghiệm | `minigame:create`, `minigame:update`, `minigame:host`, `liveqa:host`, `liveqa:moderate`, `voting:host`, `exam:create`, `exam:update`, `exam:proctor` | Mặc định BCH/BTV; gán động cho MC/Kỹ thuật/Coi thi theo `EVENT`. **Gói duy nhất sở hữu `liveqa:moderate` và điều khiển màn hình LED `voting:host` (`A17`).** |
+| **`MOD_QUIZ_EXAM_HOST`** | Tổ chức Minigame, Live Q&A, Voting LED & Thi Trắc nghiệm | `minigame:create`, `minigame:update`, `minigame:host`, `liveqa:host`, `liveqa:moderate`, `voting:host`, `exam:create`, `exam:update`, `exam:proctor` | Mặc định BCH/BTV; gán động cho nhân sự BTC phụ trách nội dung / MC / Kỹ thuật / Coi thi theo `EVENT` *(người tạo bộ câu hỏi Minigame không nhất thiết là MC; Trưởng BTC `MOD_EVENT_OPS` cũng có thể soạn bộ đề)*. **Gói duy nhất sở hữu `liveqa:moderate` và điều khiển màn hình LED `voting:host` (`A17`).** |
 | **`MOD_CMS_EDITORIAL`** | Biên tập & Xuất bản Truyền thông | `blog:view`, `blog:create`, `blog:update`, `blog:approve`, `blog:publish` | Mặc định BCH/BTV; gán động cho biên tập viên (`Tổ Truyền thông`). |
 | **`MOD_STORE_MANAGER`** | Quản lý Bán hàng & Gây quỹ | `store:view`, `store:create`, `store:update`, `store:fulfill`, `store:scan_barcode`, `store:support`, `store:reconcile` | Mặc định BCH/BTV; gán động theo `CAMPAIGN` hoặc `FACULTY` (Thủ quỹ — bao gồm ký nhận bàn giao tiền mặt COD cuối ca). |
 | **`MOD_STORE_BOOTH`** | Trực bàn Giao hàng Vật phẩm (QR / Mã vạch Thẻ SV) | `store:view`, `store:fulfill`, `store:scan_barcode` | Mặc định BCH/BTV; tự động kích hoạt trong khung giờ ca trực VP khi `attendanceStatus IN {ON_TIME, LATE}`. |
@@ -119,6 +120,7 @@ erDiagram
 
     USERS ||--o{ BLOG_POSTS : "viết bài (authorId)"
     ORG_UNITS ||--o{ BLOG_POSTS : "thuộc ban biên soạn (unitId)"
+    BLOG_CATEGORIES ||--o{ BLOG_POSTS : "phân loại chuyên mục (categoryId)"
 
     EVENTS ||--o{ MINIGAME_ROOMS : "tổ chức (eventId)"
     QUIZZES ||--o{ MINIGAME_ROOMS : "sử dụng bộ đề (quizId)"
@@ -196,7 +198,7 @@ erDiagram
         string lifecycleStatus "ACTIVE_STUDY | GRADUATED | ARCHIVED"
         string memberStatus "Nullable (CTV): ACTIVE | ON_LEAVE | LEFT"
         long permissionVersion "Tăng mỗi khi đổi/thu hồi quyền để so khớp JWT/Redis <= 5s"
-        array roleScopes "Embedded: [{roleCode, unitId, scopeType, scopeId, termYear, startAt, endAt, expiresAt}]"
+        array roleScopes "Embedded: [{roleCode, positionTitle, unitId, scopeType, scopeId, termYear, startAt, endAt, expiresAt}]"
         array assignedModules "Embedded: [{moduleCode, scopeType, scopeId, expiresAt}]"
         array termHistory "Embedded: [{termYear, unitName, positionTitle, startAt, endAt}]"
         date tempGuestExpiresAt "Nullable: Hạn tài khoản tạm của khách mời sự kiện"
@@ -252,9 +254,9 @@ erDiagram
 
     ORG_UNITS {
         ObjectId _id PK
-        string unitCode UK "VD: FIT, EMFIT, SV5T, OFIT, ARTIT, EMFIT_TIEP_UNG..."
-        string name "Tên Khoa / Ban / Tổ"
-        string unitType "FACULTY | COMMITTEE | TEAM | SUBGROUP"
+        string unitCode UK "VD: FIT, BCH_DOAN, BCH_HOI, EMFIT, SV5T, OFIT, ARTIT, EMFIT_TU..."
+        string name "Tên Khoa / Khối BCH / Ban / Tổ"
+        string unitType "FACULTY_UNION | EXECUTIVE_BODY | COMMITTEE | TEAM | SUBGROUP"
         ObjectId parentId FK "Đệ quy trỏ lên đơn vị Cha trực tiếp"
         ObjectId_array ancestors "Mảng tổ tiên [rootId, ..., parentId] hỗ trợ kiểm tra Scope O(1)"
         string_array defaultDeptModules "Module chuyên môn mặc định của Ban (VD: EMFIT -> [MOD_DEPT_EVENT_MEDIA])"
@@ -293,7 +295,7 @@ erDiagram
         date listLockAt "Giờ khóa danh sách (mặc định startTime - 60 phút)"
         string academicYear "Năm học (VD: 2026-2027)"
         string semester "Học kỳ (VD: HK1 | HK2 | HK_SUMMER)"
-        string sv5tCriterion "NONE | ETHICS | STUDY | FITNESS | VOLUNTEER | INTEGRATION"
+        string sv5tCriterion "Nullable (Không bắt buộc): ETHICS | STUDY | FITNESS | VOLUNTEER | INTEGRATION"
         boolean requireCheckout "Yêu cầu điểm danh 2 chiều (Mặc định true nếu hội trường kín có quyền lợi - A1)"
         int minPresencePercent "Tỷ lệ thời gian hiện diện tối thiểu (VD: 70%)"
         string qrCheckinMode "DYNAMIC_ROTATING_QR (Mặc định) | STATIC_QR (Ngoài trời)"
@@ -310,12 +312,13 @@ erDiagram
         object noShowPolicy "Embedded: {enabled: boolean, thresholdCount: 3, lockDurationDays: 14}"
         int maxAttendees "Số lượng sinh viên tham dự tối đa"
         string organizerRecruitmentScope "INTERNAL_CTV_ONLY | FACULTY_WIDE"
-        array organizerPositions "Embedded: [{role: MC|RECEPTIONIST|LOGISTICS|COORDINATOR|MEDIA|PERFORMANCE|TECHNICAL, isEnabled: boolean, description}]"
+        array organizerPositions "Embedded (CRUD động theo sự kiện): [{positionId, code, name, isEnabled, slots, description}] (gợi ý mẫu 7 vị trí chuẩn)"
         object registrationFormConfig "Embedded: {attendeeMode: ONE_CLICK|CUSTOM_FORM, attendeeCustomFields[], organizerCustomFields[]}"
         ObjectId surveyId FK "Nullable: Biểu mẫu khảo sát gắn kèm sau sự kiện"
         boolean requireSurveyForCert "Bắt buộc hoàn thành khảo sát mới cấp E-Cert"
         boolean exemptOrganizersFromSurvey "Miễn trừ khảo sát cho thành viên BTC"
-        array benefitTypes "Embedded định lượng: [{type: DRL|CTXH|CDDN, value: double, unit: string}]"
+        string_array benefitTypes "Mảng nhãn quyền lợi cộng thêm (không lưu điểm): [DRL, CTXH, CDDN]"
+        string_array cddnEligibleMajorCodes "Danh sách mã ngành được cộng CĐDN cho sự kiện (mặc định khởi tạo từ các ngành fitFaculty, cho phép chọn lại khi chốt kết quả)"
         string status "DRAFT | PENDING_APPROVAL | REVISION_REQUESTED | REJECTED | PUBLISHED | REGISTRATION_CLOSED | ONGOING | POSTPONED | COMPLETED | FINALIZED | CANCELLED"
     }
 
@@ -324,8 +327,8 @@ erDiagram
         ObjectId eventId FK
         ObjectId userId FK
         string registrationType "ATTENDEE | ORGANIZER"
-        string organizerPosition "NV1 (Chính thức): MC | RECEPTIONIST | LOGISTICS | COORDINATOR | MEDIA | PERFORMANCE | TECHNICAL"
-        string secondaryOrganizerPosition "Nullable (NV2 dự phòng khi ứng tuyển BTC)"
+        string organizerPosition "NV1 (Chính thức): positionId/tên vị trí thuộc EVENTS.organizerPositions[]"
+        string secondaryOrganizerPosition "Nullable (NV2 dự phòng khi ứng tuyển BTC, thuộc EVENTS.organizerPositions[])"
         string_array secondaryRoles "Mảng vai trò phụ kiêm nhiệm (VD: [PERFORMANCE])"
         string note "Ghi chú kinh nghiệm khi đăng ký BTC"
         array formAnswers "Embedded: [{fieldId, labelSnapshot, fieldType: SHORT_TEXT|LONG_TEXT|SINGLE_CHOICE|CONSENT_CHECKBOX, answerValue: string|boolean}]"
@@ -355,7 +358,7 @@ erDiagram
         double gpsAccuracyMeters
         GeoJSON checkoutLocation "Nullable GeoJSON Point"
         double checkoutGpsAccuracyMeters
-        string_array riskFlags "Mạnh (+2đ): DEVICE_TOKEN_COLLISION | GPS_FAR_OUT_OF_RANGE | IMPOSSIBLE_VELOCITY | DUPLICATE_OFFLINE_TICKET_SCAN | BARCODE_WALKIN_UNVERIFIED ; Yếu (+1đ): GPS_MODERATE_DRIFT | GPS_UNAVAILABLE | ABNORMAL_ACCURACY | NEW_EPHEMERAL_DEVICE (A1, A3, A10)"
+        string_array riskFlags "Mạnh (+2đ): DEVICE_TOKEN_COLLISION | GPS_FAR_OUT_OF_RANGE | IMPOSSIBLE_VELOCITY | BARCODE_WALKIN_UNVERIFIED ; Yếu (+1đ): GPS_MODERATE_DRIFT | GPS_UNAVAILABLE | ABNORMAL_ACCURACY | NEW_EPHEMERAL_DEVICE (A1, A3)"
         int riskScore "Tổng ĐIỂM TRỌNG SỐ rủi ro (Weighted Risk Score - A1)"
         string reviewStatus "AUTO_ACCEPTED | ACCEPTED_LOW_RISK | PENDING_REVIEW | REVIEW_APPROVED | REVIEW_REJECTED"
         string scannerDeviceId "Nullable: ID máy BTC quét vé/mã vạch (nếu quét offline/online bởi BTC)"
@@ -417,12 +420,12 @@ erDiagram
         string eventTitleSnapshot "Lưu snapshot tên sự kiện"
         string academicYear "Năm học (VD: 2026-2027)"
         string semester "Học kỳ (VD: HK1 | HK2 | HK_SUMMER)"
-        array benefits "Embedded định lượng: [{type: DRL|CTXH|CDDN, value: double, unit: string}]"
+        string_array benefits "Mảng nhãn quyền lợi được cộng (không lưu điểm): [DRL, CTXH, CDDN]"
         boolean isBenefitOverridden "Cờ can thiệp thủ công quyền lợi (CDDN...)"
         ObjectId overrideBy FK "Người can thiệp thủ công"
         string overrideReason "Lý do can thiệp thủ công"
         string participationRole "ATTENDEE | ORGANIZER"
-        string organizerPosition "MC | RECEPTIONIST | LOGISTICS | COORDINATOR | MEDIA | PERFORMANCE | TECHNICAL"
+        string organizerPosition "Snapshot tên/mã vị trí BTC chính thức từ EVENTS.organizerPositions[]"
         string_array secondaryRoles "Mảng vai trò phụ kiêm nhiệm (VD: [PERFORMANCE])"
         string certificateCode UK "Mã serial tra cứu E-Certificate"
         int certVersion "Phiên bản chứng nhận (bắt đầu từ 1, tăng khi cấp lại)"
@@ -435,10 +438,21 @@ erDiagram
         date issuedAt
     }
 
+    BLOG_CATEGORIES {
+        ObjectId _id PK
+        string name "Tên chuyên mục (VD: Bản tin Đoàn - Hội, Góc Học thuật CNTT)"
+        string slug UK "Đường dẫn SEO duy nhất"
+        string description "Mô tả ngắn chuyên mục"
+        int displayOrder "Thứ tự hiển thị trên thanh lọc"
+        boolean isActive "true: Đang hiển thị | false: Tạm ẩn"
+        date updatedAt
+    }
+
     BLOG_POSTS {
         ObjectId _id PK
         string title "Tiêu đề bài viết"
         string slug UK "Đường dẫn SEO"
+        ObjectId categoryId FK "Chuyên mục bản tin (BLOG_CATEGORIES)"
         string content "Nội dung bài viết định dạng Markdown/Rich-text"
         string coverImageUrl "Ảnh bìa đại diện"
         ObjectId authorId FK "Tác giả bài viết"
@@ -458,7 +472,6 @@ erDiagram
         date startDate "Ngày mở chiến dịch"
         date endDate "Hạn chót chiến dịch"
         ObjectId organizerUnitId FK "Ban/Đội phụ trách"
-        long targetAmountVnd "Mục tiêu lợi nhuận gây quỹ (VNĐ)"
         long totalRevenueVnd "Tổng doanh thu tiền hàng thực thu (cộng khi đơn PAID hoặc COD_CONFIRMED)"
         long totalCostOfGoodsVnd "Tổng giá vốn của hàng ĐÃ GIAO / CHỐT XUẤT (cộng tại thời điểm fulfill - A13)"
         long totalRefundedVnd "Tổng số tiền đã hoàn lại qua hỗ trợ đơn hàng"
@@ -764,7 +777,7 @@ erDiagram
         string title
         string academicYear
         string awardLevel "FACULTY | UNIVERSITY | CITY"
-        array criteriaTree "Embedded: [{code, name, ruleType: AND|OR, subCriteria[]}]"
+        array criteriaTree "Embedded (CRUD động): [{criterionId, code, name, mandatorySubCriteria: [{subId, title, description, sourceType: SYSTEM_EVENT|EXTERNAL_PROOF, linkedEventTag}], optionalSubCriteria: [{subId, title, description, sourceType, linkedEventTag}], minOptionalRequired: int}]"
         date startDate
         date endDate
         date appealDeadlineAt "3 ngày sau sơ khảo"
@@ -1075,7 +1088,71 @@ erDiagram
         date createdAt
         date lastNotifiedAt
     }
+
+    EVENT_TEAMS {
+        ObjectId _id PK
+        ObjectId eventId FK "FK -> EVENTS._id (khi EVENTS.teamCompetitionConfig.enabled = true)"
+        string teamCode UK "Mã đội duy nhất trong sự kiện (VD: MIT-012)"
+        string teamName "Tên đội thi"
+        string joinCode UK "Mã mời 8 ký tự để thành viên tự nhập và xác nhận vào đội"
+        ObjectId leaderUserId FK "FK -> USERS._id"
+        array members "Embedded: [{userId, role: LEADER|MEMBER, isExternal, schoolName, externalStudentCode, joinStatus: CONFIRMED, confirmedAt}]"
+        string status "DRAFT | SUBMITTED | WAITLISTED | APPROVED | REJECTED | DISQUALIFIED | INCOMPLETE_EXPIRED"
+        int waitlistPosition "Nullable"
+        array awardTitles "Mảng danh hiệu giải (hỗ trợ đồng thời Giải chính + Giải bình chọn độc lập, VD: [Giải Nhì, Đội thi được Yêu thích nhất])"
+        ObjectId approvedBy FK
+        date approvedAt
+        long version "Optimistic Lock (@Version)"
+    }
+
+    EVENT_ROUNDS {
+        ObjectId _id PK
+        ObjectId eventId FK "FK -> EVENTS._id"
+        int roundOrder "1, 2, ... (1 = Vòng loại, 2 = Chung kết)"
+        string name "VD: Vòng loại Trắc nghiệm | Đêm Chung kết Sân khấu"
+        string engineType "MCQ_EXAM | OJ_CONTEST | FILE_SUBMISSION | STAGE_FINALS"
+        ObjectId linkedExamId FK "Nullable -> EXAMS._id (4.6.2)"
+        ObjectId linkedOjContestId FK "Nullable -> OJ_CONTESTS._id (4.8)"
+        ObjectId linkedVotingCampaignId FK "Nullable -> VOTING_CAMPAIGNS._id (4.20)"
+        string audienceVotingMode "NONE | WEIGHTED_INTO_MAIN | SEPARATE_AWARD"
+        string separateAwardTitle "Nullable: Tên giải phụ độc lập (VD: Video Giới thiệu Ấn tượng)"
+        int separateAwardJudgeWeight "Trọng số % BGK riêng cho giải phụ (0..100; VD: 0 = 100% Vote, 50 = 50% BGK Video + 50% Vote)"
+        boolean requireRoundSubmission "Bật cổng nộp sản phẩm/Video cho Top X đội vào vòng này"
+        ObjectId linkedSessionId FK "Nullable -> EVENT_SESSIONS._id (4.3 Điểm danh vòng)"
+        string teamScoringMode "SUM_OF_MEMBERS | AVG_OF_MEMBERS | STAGE_RUBRIC"
+        int minParticipatedMembers "Số thành viên tối thiểu phải dự thi để đội hợp lệ (VD: 5 hoặc 3)"
+        string cheatingPolicy "ZERO_MEMBER_SCORE | DISQUALIFY_TEAM"
+        int qualifyTopN "Số đội đi tiếp vào vòng sau (VD: 5; 0 ở vòng Chung kết)"
+        date confirmDeadline "Hạn đội Top n xác nhận tham dự vòng kế tiếp"
+        array tieBreakerRules "VD: [SCORE_DESC, DURATION_ASC, VIOLATIONS_ASC]"
+        array stageSegments "Embedded cho Chung kết: [{segmentCode, title, weightPercent, maxScore, criteria: [{code, label, maxScore}]}]"
+        array judgeUserIds "Danh sách BGK chấm vòng này"
+        string status "UPCOMING | IN_PROGRESS | SCORING_REVIEW | FINALIZED"
+    }
+
+    EVENT_ROUND_RESULTS {
+        ObjectId _id PK
+        ObjectId eventId FK "FK -> EVENTS._id"
+        ObjectId roundId FK "FK -> EVENT_ROUNDS._id"
+        ObjectId teamId FK "FK -> EVENT_TEAMS._id"
+        double aggregatedScore "Điểm tổng/trung bình đội ở vòng này"
+        long totalDurationSec "Tổng thời gian làm bài (tie-breaker)"
+        int totalViolations "Tổng cảnh báo vi phạm của đội"
+        array memberBreakdowns "Embedded: [{userId, attemptId, rawScore, durationSec, violations, disqualified}]"
+        array stageSegmentScores "Embedded cho Chung kết: [{segmentCode, judgeUserId, criteriaScores, segmentTotal, updatedAt}]"
+        object roundSubmission "Nullable cho Top X: {url, fileKey, submittedAt, reviewStatus: PENDING|APPROVED|REJECTED, separateAwardBgkScore}"
+        int rank "Hạng chính thức sau khi tính tie-breaker"
+        string advancementStatus "PENDING | QUALIFIED | STANDBY | ELIMINATED | CONFIRMED | WITHDRAWN | DISQUALIFIED"
+        string note "Lý do đôn đội dự bị / xử lý đồng điểm biên / loại đội"
+        date confirmedAt
+    }
 ```
+
+> [!NOTE]
+> **Mở rộng tương thích ngược (Nullable) trên các Collection hiện hữu cho `FR-EVT-07..12`:**
+> - `EVENTS`: bổ sung embedded `teamCompetitionConfig: { enabled, minTeamSize, maxTeamSize, maxTeams, allowExternalStudents, maxExternalPerTeam, rosterLockAt }` (nullable; mặc định `enabled = false` với sự kiện thông thường).
+> - `USERS`: bổ sung `externalProfile: { schoolName, externalStudentCode, facultyMajor, phone }` (nullable, chỉ điền cho `TEMP_GUEST` tham gia sự kiện theo đội).
+> - `PARTICIPATION_HISTORIES`: bổ sung `teamId`, `teamName`, `awardTitle` (nullable) để in E-Certificate theo đội & giải thưởng.
 
 ---
 
@@ -1101,12 +1178,14 @@ erDiagram
 | **`EVENT_ATTENDANCES`** | `{ studentCodeSnapshot: 1, ssoLinkStatus: 1 }`, `{ orphanExpiresAt: 1 }` | Compound / Single | **Tự động liên kết (`Auto-Link`) khi đăng nhập SSO lần đầu (`FR-ATT-09`)** và dọn dẹp bản ghi `PENDING_SSO_LINK` mồ côi quá hạn 1 học kỳ (`A3`, `B9`). |
 | **`EVENT_ATTENDANCES`** | `{ eventId: 1, sessionId: 1, checkinDeviceTokenId: 1 }` | Compound | Phát hiện **Trùng Device Token (`DEVICE_TOKEN_COLLISION = +2đ`)** trong cùng buổi sự kiện (`FR-ATT-04`, `FR-ATT-08`, `A1`). |
 | **`ATTENDANCE_REVIEW_QUEUE`** | `{ attendanceId: 1 }`, `{ eventId: 1, status: 1, reviewDeadlineAt: 1 }` | Unique / Compound | Quản lý hàng chờ hậu kiểm theo điểm trọng số và nhắc hạn 48 giờ (`FR-ATT-08`). |
-| **`OFFLINE_SCAN_BATCHES`** | `{ batchId: 1 }`, `{ eventId: 1, uploadedAt: -1 }` | Unique / Compound | Chống đồng bộ trùng gói quét từ máy BTC ngoại tuyến (`FR-ATT-07`). |
+| **`OFFLINE_SCAN_BATCHES`** | `{ batchId: 1 }`, `{ eventId: 1, uploadedAt: -1 }` | Unique / Compound | Chống đồng bộ trùng lô quét Mã vạch 1D Thẻ SV từ máy BTC khi mất mạng (`FR-ATT-09`). |
 | **`NO_SHOW_PENALTIES`** | `{ userId: 1, academicYear: 1, semester: 1 }` | Compound Unique | Theo dõi số lần vắng không phép và khóa đăng ký ưu tiên 14 ngày (`FR-EVT-06`). |
 | **`PARTICIPATION_HISTORIES`** | `{ userId: 1, eventId: 1 }` | Compound Unique | **Bảo toàn dữ liệu:** 1 sinh viên chỉ có 1 hồ sơ tham gia chính cho 1 sự kiện (cập nhật `certVersion` khi cấp lại). |
 | **`PARTICIPATION_HISTORIES`** | `{ certificateCode: 1 }` | Unique | Trang xác thực QR công khai E-Cert hoạt động độc lập, tra cứu $O(1)$. |
 | **`PARTICIPATION_HISTORIES`** | `{ userId: 1, academicYear: 1, semester: 1 }` | Compound | Tối ưu hóa truy vấn tra cứu Lịch sử Hoạt động & Tool Calling của `YITBot`. |
+| **`BLOG_CATEGORIES`** | `{ slug: 1 }` | Unique | Định danh duy nhất đường dẫn SEO chuyên mục bản tin (`FR-CMS-04`). |
 | **`BLOG_POSTS`** | `{ status: 1, scheduledPublishAt: 1 }` | Compound | Scheduler quét và xuất bản tự động bài viết hẹn giờ đăng. |
+| **`BLOG_POSTS`** | `{ categoryId: 1, status: 1 }` | Compound | Lọc nhanh bài viết theo chuyên mục & kiểm tra ràng buộc chặn xóa chuyên mục. |
 | **`BLOG_POSTS`** | `{ title: "text", tags: "text" }` | Text Index | Tìm kiếm toàn văn bài viết truyền thông theo tiêu đề và thẻ phân loại. |
 | **`EXAM_ATTEMPTS`** | `{ examId: 1, userId: 1 }` | Compound Unique | **Chống gian lận thi cử:** Mỗi sinh viên chỉ được phép có 1 lượt thi duy nhất (khi `maxAttemptsAllowed = 1`). |
 | **`OJ_SUBMISSIONS`** | `{ contestId: 1, userId: 1, problemId: 1 }` | Compound | Tính toán nhanh bảng xếp hạng ICPC/IOI và thời gian phạt. |
@@ -1148,6 +1227,10 @@ erDiagram
 | **`KNOWLEDGE_DOCUMENTS`** | `{ embedding: "vector" }` | Atlas Vector Search | Tìm kiếm ngữ nghĩa RAG cho `YITBot` (Dimensions: 768 / 1536, Cosine Similarity). |
 | **`AI_USAGE_LEDGER`** | `{ monthKey: 1, userId: 1, createdAt: -1 }`, `{ createdAt: 1 }` | Compound / Single | Theo dõi token & ngân sách AI hàng tháng và hỗ trợ Retention Job xóa `userId` sau 90 ngày (`NFR-AI-BUDGET-01`, `B9`). |
 | **`AUDIT_LOGS`** | `{ seq: -1 }`, `{ timestamp: -1, targetCollection: 1 }` | Unique / Compound | Kiểm tra tính liên tục chuỗi hash-chain (`seq` cấp từ `AUDIT_CHAIN_STATE`) và truy vết bảo mật (`Append-only`, `A20`). |
+| **`EVENT_TEAMS`** | `{ eventId: 1, teamCode: 1 }`, `{ eventId: 1, joinCode: 1 }` | Compound Unique | Định danh duy nhất mã đội và tra cứu $O(1)$ khi thành viên nhập mã mời `joinCode` (`FR-EVT-08`). |
+| **`EVENT_TEAMS`** | **`{ eventId: 1, "members.userId": 1 }`** | **Partial Unique** | **Chống 1 sinh viên vào 2 đội cùng sự kiện (Edge 43):** `partialFilterExpression: { status: { $in: ["DRAFT", "SUBMITTED", "WAITLISTED", "APPROVED"] } }`. |
+| **`EVENT_ROUNDS`** | `{ eventId: 1, roundOrder: 1 }` | Compound Unique | Đảm bảo thứ tự chuỗi vòng đấu tuần tự trong sự kiện (`FR-EVT-07`). |
+| **`EVENT_ROUND_RESULTS`** | `{ roundId: 1, teamId: 1 }`, `{ roundId: 1, advancementStatus: 1, rank: 1 }` | Compound Unique / Compound | Mỗi đội 1 kết quả/vòng; truy vấn nhanh Top $n$ (`QUALIFIED`) và hàng chờ đội dự bị (`STANDBY` — `FR-EVT-10`). |
 
 > [!IMPORTANT]
 > **Quy chuẩn Không dùng MongoDB TTL Index để Xóa Đơn Hàng (`STORE_ORDERS`):** Không dùng TTL Index để tự động xóa `STORE_ORDERS` quá hạn vì TTL chỉ xóa cứng document mà không chạy được logic hoàn trả `stockQuantity` và `usedCount` của Voucher. Quá trình hết hạn đơn hàng chạy qua **Spring Scheduler (MVP)** hoặc **RabbitMQ Delayed Message Exchange (Mở rộng)** kết hợp **MongoDB Multi-Document ACID Transaction**.
@@ -1194,17 +1277,11 @@ sequenceDiagram
     end
 ```
 
-#### B. Luồng Vé Ký số `ECDSA P-256` (Bucket 15s), Bảo vệ Gói Offline (`AES-GCM` & Auto-Wipe) & Máy Soát vé BTC Ngoại tuyến (`FR-ATT-07`)
-1. **Chuẩn bị trước giờ G (Có mạng — `A9`, `A14`, `A34`):**
-   * Thiết bị Sinh viên sinh cặp khóa **WebCrypto `ECDSA P-256` (`extractable: false`)** lưu vào `IndexedDB` và đăng ký `publicKeyJwk` vào `DEVICE_TOKENS` (tương thích 100% với **iOS Safari $\ge 16.4$ và Android Chrome $\ge 110$** — `A9`). Server ký vé ngoại tuyến bằng **Server `ECDSA P-256` Private Key**: `ticket = sign({ ticketId, userId, eventId, sessionId, devicePublicKey, issuedAt, expiresAt })`. Hệ thống gửi thông báo nhắc sinh viên mở ứng dụng kiểm tra/kích hoạt lại vé trước sự kiện `24 giờ` (`A9b`).
-   * Máy BTC (`MOD_ATTENDANCE_STAFF` / `MOD_EVENT_OPS`) gọi **`GET /api/v1/events/{id}/offline-bundle?sinceRevision={rev}`** (hỗ trợ **Delta Sync** và HTTP `If-None-Match` / `ETag`): tải danh sách đăng ký tối thiểu dạng JSON siêu nhẹ (MSSV, Họ tên, `avatarThumbHash`, URL tải nền ảnh thẻ thumbnail WebP $160 \times 160\text{px}$ $\le 8\text{ KB}$ có consent), **Server Public Key (`ECDSA P-256`)**, `bundleEncryptionKey` (khóa phiên `AES-GCM 256-bit` chỉ giữ trong phiên đăng nhập) và `serverTime` để tính **`clockOffsetMs = serverTime - deviceTime`** + **`lastServerSyncAt`**. Dữ liệu sinh viên lưu trong `IndexedDB` của máy BTC được **mã hóa bằng `AES-GCM`** và chỉ hợp lệ nếu tuổi gói dữ liệu **`now - lastServerSyncAt <= 12 giờ`** (`A14`, `A34`).
-2. **Quét tại hội trường mất mạng (`<= 0.5s` — `A10`):**
-   * Điện thoại Sinh viên ký **`bucket = floor(unixTime / 15)` (bước nhảy `15 giây`)** bằng khóa riêng `ECDSA P-256` cục bộ và hiển thị QR `{ ticket, ticketServerSig, bucket, deviceSig }`.
-   * Máy BTC dùng `SubtleCrypto.verify("ECDSA", ...)` với **Server Public Key** xác thực `ticketServerSig`, dùng `ticket.devicePublicKey` xác thực `deviceSig`, và kiểm tra `bucket` 15 giây theo đồng hồ đã hiệu chỉnh `clockOffsetMs` (**chỉ chấp nhận bucket 15 giây hiện tại cộng biên lệch đồng hồ $\le 5\text{s}$** — thu hẹp cửa sổ phát lại ảnh chụp xuống `15–20 giây` — `A10`). Máy BTC **bắt buộc hiển thị ảnh thẻ chân dung** để Lễ tân đối chiếu trực tiếp, rồi lưu vào hàng đợi cục bộ theo `localSeq` và `adjustedScanAt = deviceScannedAt + clockOffsetMs`.
-3. **Đồng bộ Xung đột, Phát hiện Quét Trùng Đa Máy & Tự xóa Gói Offline (`A10`, `A14`):**
-   * **`POST /api/v1/events/{id}/offline-scans/sync`:** Đẩy `OFFLINE_SCAN_BATCHES` (`batchId`, `lastServerSyncAt`, `clockOffsetMs`, `scans[]`). Nếu cùng 1 `ticketId` bị quét trên **$\ge 2$ máy BTC khác nhau**, Server giữ bản ghi có `adjustedScanAt` sớm nhất nhưng đồng thời gắn cờ **`DUPLICATE_OFFLINE_TICKET_SCAN (+2 điểm trọng số)`** và đưa vào `ATTENDANCE_REVIEW_QUEUE` (`A10`).
-   * **Tự động xóa gói dữ liệu (`Auto-Wipe`) & Thu hồi máy BTC từ xa (`A14`):** Ngay sau khi `POST /offline-scans/sync` trả về `200 OK` (khi sự kiện đã kết thúc) hoặc chậm nhất tại **`endTime + 24 giờ`**, ứng dụng máy BTC tự động xóa sạch toàn bộ gói dữ liệu sinh viên và ảnh thẻ trong `IndexedDB` và báo `bundleWipedConfirmedAt`. Nếu Lễ tân mất điện thoại, `Trưởng BTC`/`BTV` gọi **`POST /api/v1/events/{id}/offline-scanners/{scannerDeviceId}/revoke`** để thu hồi quyền, chặn đồng bộ và gửi cờ xóa `IndexedDB` từ xa.
-   * **`POST /api/v1/attendance/review-queue/bulk-action`:** Cho phép `MOD_EVENT_OPS` / `MOD_ATTENDANCE_STAFF` duyệt/từ chối hàng loạt nhóm tín hiệu yếu cùng ngữ cảnh (**cấm gộp duyệt hàng loạt với bất kỳ ca Tín hiệu Mạnh `+2đ` nào như `DEVICE_TOKEN_COLLISION`, `GPS_FAR_OUT_OF_RANGE`, `BARCODE_WALKIN_UNVERIFIED`, `DUPLICATE_OFFLINE_TICKET_SCAN`**), bắt buộc nhập `reason` và ghi `AUDIT_LOGS`.
+#### B. Luồng Đồng bộ Quét Mã vạch 1D Thẻ SV Khi Mất Mạng trên Máy BTC & Duyệt Hàng chờ Hậu kiểm (`FR-ATT-08`, `FR-ATT-09`)
+*(Lưu ý: Đã loại bỏ luồng Vé QR Ký số Ngoại tuyến `ECDSA P-256` 15s phía sinh viên theo PA1 để tối giản kiến trúc Web thuần.)*
+1. **Chuẩn bị trước giờ G (Có mạng):** Máy BTC (`MOD_ATTENDANCE_STAFF` / `MOD_EVENT_OPS`) gọi **`GET /api/v1/events/{id}/offline-bundle`** để tải danh sách sinh viên đã đăng ký dạng JSON nhẹ (MSSV, Họ tên, Ngành, ảnh thẻ có Consent) lưu tạm cục bộ phục vụ tra cứu khi hội trường mất/nghẽn mạng.
+2. **Quét & Đồng bộ khi có mạng lại:** Lễ tân quét mã vạch `Code 128`/`Code 39` trên thẻ SV vật lý, đối chiếu khuôn mặt và lưu tạm hàng đợi cục bộ; khi có mạng trở lại, máy BTC gọi **`POST /api/v1/events/{id}/offline-scans/sync`** (Idempotent theo `batchId`) để đẩy dữ liệu lên Server và xóa dữ liệu lưu tạm sau khi hoàn tất sự kiện.
+3. **Duyệt Hàng chờ Hậu kiểm (`POST /api/v1/attendance/review-queue/bulk-action`):** Cho phép `MOD_EVENT_OPS` / `MOD_ATTENDANCE_STAFF` duyệt/từ chối hàng loạt nhóm tín hiệu yếu cùng ngữ cảnh (**cấm gộp duyệt hàng loạt với bất kỳ ca Tín hiệu Mạnh `+2đ` nào như `DEVICE_TOKEN_COLLISION`, `GPS_FAR_OUT_OF_RANGE`, `BARCODE_WALKIN_UNVERIFIED`**), bắt buộc nhập `reason` và ghi `AUDIT_LOGS`.
 
 #### C. Luồng Quét Mã vạch Thẻ Sinh viên Nhựa Vật lý 1D (`Camera` & `USB/Bluetooth HID`) & Hậu kiểm Vãng lai `Auto-Link SSO` (`FR-ATT-09`, `A3`, `A24`)
 
@@ -1462,9 +1539,43 @@ sequenceDiagram
     end
 ```
 
+### 5.9. Luồng Sự kiện Đăng ký Theo Đội & Đa vòng (`FR-EVT-07..12` — VD: Mastering IT)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Leader as Đội trưởng & 4 Thành viên (UTE + Ngoài trường)
+    actor BTC as BTC / BGK (MOD_EVENT_OPS / judgeUserIds / BTV)
+    participant API as Event Module (/api/v1/events/{eventId}/*)
+    participant ExamVote as Exam (4.6.2) / Voting (4.20) / Cert (4.4)
+    participant DB as MongoDB Replica Set
+
+    Note over Leader,DB: Bước 1: Mở đăng ký vòng loại (Mọi thành viên tự tạo tài khoản Email+OTP & xác nhận vào đội)
+    Leader->>API: POST /api/v1/events/{eventId}/teams (Tạo đội DRAFT -> sinh joinCode)
+    Leader->>API: 4 thành viên đăng nhập & POST .../teams/join {joinCode, externalProfile?}
+    API->>DB: Kiểm tra Partial Unique Index {eventId, members.userId} (Chặn Edge 43) -> Thêm thành viên CONFIRMED
+    Leader->>API: POST .../teams/{teamId}/submit (Kiểm tra đủ 5/5 CONFIRMED) -> BTC duyệt APPROVED
+
+    Note over Leader,ExamVote: Bước 2 & 3: 5 thành viên thi cá nhân -> Tổng hợp điểm đội -> Chốt Top n
+    Leader->>ExamVote: 5 thành viên dự thi độc lập trên 4.6.2 (linkedExamId)
+    BTC->>API: POST .../rounds/{roundId}/compute-ranking (Đọc EXAM_ATTEMPTS của 5 thành viên)
+    API->>DB: Tính SUM/AVG theo cheatingPolicy -> Lưu EVENT_ROUND_RESULTS & kiểm tra đồng điểm biên hạng n
+    BTC->>API: POST .../rounds/{roundId}/finalize (Gán Top n = QUALIFIED, hạng n+1.. = STANDBY + gửi thông báo)
+    opt Đội Top n xác nhận hoặc rút lui (Edge 45)
+        Leader->>API: POST .../rounds/{roundId}/teams/{teamId}/confirm (CONFIRMED / WITHDRAWN)
+        BTC->>API: POST .../rounds/{roundId}/promote-standby (Đôn đội n+1 -> QUALIFIED + Audit Log)
+    end
+
+    Note over BTC,ExamVote: Bước 4: Đêm Chung kết Sân khấu, Rubric BGK & Chốt Giải E-Cert
+    BTC->>API: POST .../rounds/{finalRoundId}/sync-voting (Đẩy Top n đội CONFIRMED sang VOTING_CANDIDATES 4.20)
+    BTC->>API: POST .../rounds/{finalRoundId}/stage-scores (BGK chấm nhiều chặng/Rubric -> Quy đổi thang 100 sang 4.20)
+    BTC->>API: POST /api/v1/events/{eventId}/finalize-awards (BTV chốt giải)
+    API->>ExamVote: Cấp E-Cert (4.4) cho cả 5 thành viên; chỉ cộng ĐRL/CTXH/CĐDN cho SV UTE (Edge 44)
+```
+
 ---
 
-## 6. Công thức Thuật toán & Quy chuẩn Xử lý Kỹ thuật 42 Trường hợp Biên (Edge Cases)
+## 6. Công thức Thuật toán & Quy chuẩn Xử lý Kỹ thuật 46 Trường hợp Biên (Edge Cases)
 
 ### 6.1. Tổng hợp Công thức Toán học & Logic Cốt lõi
 
@@ -1498,7 +1609,11 @@ sequenceDiagram
 8. **Nhận diện Luồng Súng Quét Mã vạch Cầm tay Có Phạm vi (`Scoped USB / Bluetooth HID Keystroke Wedge` — `FR-ATT-09`, `A24`):**
    $$\text{isScannerScreenActive} \;\land\; \big(\forall k \in [1, L-1]:\; t_{k+1} - t_k < \tau_{\text{HID}} \in [30, 50]\text{ ms}\big) \;\land\; \text{key}_L == \texttt{Enter} \;\land\; \text{buffer} \sim \texttt{/^[0-9]\{8\}\$/} \implies \texttt{preventDefault()} \;\land\; \text{Trigger 1D Barcode Scan}$$
 
-### 6.2. Bảng Đặc tả Kỹ thuật Xử lý 42 Trường hợp Biên (Edge Cases Technical Spec)
+9. **Tổng hợp Điểm Đội Vòng loại (`SUM_OF_MEMBERS` / `AVG_OF_MEMBERS` — `FR-EVT-09`) & Điểm Rubric Nhiều Chặng Chung kết (`FR-EVT-11`):**
+   $$S_{\text{team,qual}} = \begin{cases} \displaystyle\sum_{m \in M_{\text{valid}}} s_m & \text{nếu } \texttt{SUM\_OF\_MEMBERS} \\ \displaystyle\frac{1}{|M_{\text{denom}}|} \sum_{m \in M_{\text{valid}}} s_m & \text{nếu } \texttt{AVG\_OF\_MEMBERS} \end{cases}, \qquad S_{\text{BGK,final}}(i) = \sum_{p \in \text{Segments}} \frac{w_p}{100} \times \left(\frac{\overline{S}_{p,i}}{S_{p,\max}} \times 100\right)$$
+   *(trong đó $M_{\text{valid}}$ loại bỏ thành viên bị hủy bài nếu `cheatingPolicy == ZERO_MEMBER_SCORE`; đội không đạt `minParticipatedMembers` hoặc bị áp `DISQUALIFY_TEAM` bị loại khỏi xếp hạng `QUALIFIED`; $S_{\text{BGK,final}}(i)$ thang 100 được đẩy sang `FR-VOTE-04` khi đêm Chung kết có kết hợp bình chọn khán giả).*
+
+### 6.2. Bảng Đặc tả Kỹ thuật Xử lý 46 Trường hợp Biên (Edge Cases Technical Spec)
 
 | STT | Tình huống Biên (Edge Case Scenario) | Cơ chế Kỹ thuật Xử lý Chuẩn hóa trên Hệ thống |
 | :---: | :--- | :--- |
@@ -1512,7 +1627,7 @@ sequenceDiagram
 | **8** | **Kiểm kê văn phòng phát hiện dư tài sản (`actualQty > systemQty`)** | Ghi `discrepancy > 0`, cộng phần dư vào `OFFICE_ASSETS.surplusUnregisteredQty` và đặt flag `SURPLUS_UNREGISTERED` (không cộng vào `availableQuantity`). |
 | **9** | **Hủy slot sự kiện phút chót khi `WAITLIST` còn người** | Chạy trước `listLockAt`: cập nhật top 1 `WAITLIST` sang `PROMOTED_HOLD` với `holdExpiresAt = now + T` (`30p`, tự rút `10p` nếu `< 2h` trước giờ G), không mở slot public. |
 | **10** | **Livestream/Gửi ảnh màn hình QR qua Zalo cho bạn ở nhà quét, hoặc 1 điện thoại điểm danh hộ cả nhóm trong hội trường** | Client bắt buộc `getUserMedia` + ký bằng chứng sở hữu khóa thiết bị **`ECDSA P-256 PoP`** (`A2`); Server kiểm tra `serverReceivedAt - qrIssuedAt <= 10s + N` (`N = 8s`) và chấm điểm rủi ro **theo trọng số (`A1`)**: chỉ cần trùng thiết bị (`DEVICE_TOKEN_COLLISION = +2đ`), có GPS cách xa $> 1\text{km}$ (`GPS_FAR_OUT_OF_RANGE = +2đ`), hoặc tắt GPS ở sự kiện 1 chiều (`+2đ`) là một mình đủ đạt ngưỡng $\ge 2$ đẩy thẳng vào `ATTENDANCE_REVIEW_QUEUE` (hạn 48h). |
-| **11** | **SV ngoài Khoa tham gia sự kiện chỉ gắn nhãn `CDDN`** | Filter loại bỏ `CDDN`, insert `PARTICIPATION_HISTORIES` với `benefits = []`, render template E-Cert ghi chú *"Tham dự viên hoàn thành Chuyên đề (Không tích lũy chuẩn CĐDN Khoa CNTT)"*. |
+| **11** | **SV thuộc ngành không nằm trong danh sách ngành được chọn cộng `CDDN` của sự kiện** | Filter loại bỏ `"CDDN"` theo `EVENTS.cddnEligibleMajorCodes[]`, insert `PARTICIPATION_HISTORIES` với `benefits = []` (hoặc giữ các nhãn `DRL`/`CTXH` nếu có), render template E-Cert ghi chú *"Tham dự viên hoàn thành Chuyên đề (Không tích lũy chuẩn CĐDN)"*. |
 | **12** | **Cán bộ kiêm nhiệm nhiều chức danh khác nhau** | Client gửi Header `X-Active-Scope-Id`. Custom `PermissionEvaluator` validate cặp `(activeScopeId, targetResourceScope)` theo `EffectiveGrant[]` (đã lọc `expiresAt`) trên Redis Cache. |
 | **13** | **Auto-Sync Diễn viên Văn nghệ trùng BTC đã duyệt** | Upsert kiểm tra trùng `{eventId, userId}`: giữ `organizerPosition`, `$addToSet: { secondaryRoles: "PERFORMANCE" }`, không throw `DuplicateKeyException`. |
 | **14** | **Check-out tại địa điểm khác (Sự kiện di chuyển)** | Mỗi buổi trong `EVENTS.attendanceSessions[]` dùng `checkoutLocation` (`2dsphere`) và `checkoutRadiusMeters` nếu khác `null`, ngược lại fallback về `checkinLocation`. |
@@ -1527,14 +1642,14 @@ sequenceDiagram
 | **23** | **Tạm dừng trực văn phòng trong ngày lễ / tuần thi cử** | Bulk update các `OFFICE_DUTY_SHIFTS` trong khoảng `[startDate, endDate]` sang `shiftStatus = SUSPENDED` (bỏ qua cron phạt vắng), **giữ nguyên `OFFICE_DUTY_SCHEDULES.status = PUBLISHED`** để chu kỳ tiếp tục sau lễ; đóng chu kỳ là thao tác riêng của `OFIT` Lead (`FR-DUTY-10`). |
 | **24** | **Giỏ hàng có nhiều sản phẩm có `allowedDeliveryMethods` không giao nhau** | Tính tập giao $\bigcap \text{item.allowedDeliveryMethods}$ trong `{OFFICE_PICKUP, CLASSROOM_DELIVERY}` (hoặc kiểm tra `totalWeightGrams > 5000g` với giao phòng học). Nếu không hợp lệ, trả lỗi validation yêu cầu tách đơn. |
 | **25** | **Đơn hàng VietQR quá 20 phút chưa thanh toán, hoặc đơn `PENDING_COD` quá hạn nhận hàng 03 ngày (`codDueAt`)** | Khi đặt đơn, khóa Redis dùng `SET ... NX EX 30` (TTL 30s, giải phóng trong `finally`) kèm đếm đơn trong Transaction (`A32`). Khi đơn `PENDING_PAYMENT` quá 20 phút hoặc đơn `PENDING_COD` quá `codDueAt` (3 ngày làm việc — `A12`, `B3`), Scheduler mở MongoDB ACID Transaction: chuyển `CANCELLED`, `$inc` hoàn trả `variants.$.stockQuantity` và `$inc: { usedCount: -1 }` trên `STORE_VOUCHERS`. |
-| **26** | **Cả điện thoại SV và máy quét BTC mất sạch sóng trong hội trường 500 người** | Sinh viên mở **Vé QR ký số `ECDSA P-256` (chu kỳ bucket `15s` — `A9`, `A10`)** (hoặc đưa **Thẻ SV nhựa vật lý in Mã vạch 1D**); **Máy soát vé BTC Ngoại tuyến (`FR-ATT-07`, `FR-ATT-09`)** dùng `SubtleCrypto.verify("ECDSA", ...)` xác thực trong bucket 15s hiện tại ($\pm 5\text{s}$), đối chiếu ảnh thẻ từ gói dữ liệu mã hóa `AES-GCM`, xếp hàng đợi `localSeq` + `adjustedScanAt`, đồng bộ qua `POST /offline-scans/sync` (gắn cờ `DUPLICATE_OFFLINE_TICKET_SCAN` nếu vé quét trên $\ge 2$ máy) và tự xóa sạch gói dữ liệu sau sự kiện (`A14`). |
+| **26** | **Cả điện thoại SV và máy quét BTC mất sạch sóng trong hội trường 500 người** | Sinh viên xuất trình **Thẻ SV nhựa vật lý in Mã vạch 1D (`Code 128`/`Code 39`)**; BTC dùng màn hình quét mã vạch (`FR-ATT-09`) đã tải trước danh sách đăng ký (`GET /offline-bundle`), đối chiếu khuôn mặt, lưu hàng đợi cục bộ và đồng bộ qua `POST /offline-scans/sync` khi có mạng lại (hoặc điểm danh bù bằng tay `FR-ATT-05`). |
 | **27** | **Lợi dụng "Hỏi Ẩn danh sân khấu" Live Q&A để quấy rối** | Lưu `authorUserId` trong `LIVE_QA_QUESTIONS`, mask `authorDisplayName` ở DTO công khai; chỉ người giữ **`MOD_LIVEQA_UNMASK`** (`BTV` / Trưởng BTC ủy quyền, **không cấp `SystemAdmin`**) mới gọi được API tra danh tính kèm lý do bắt buộc ghi `AUDIT_LOGS`. |
 | **28** | **HR quét QR trên CV PDF khi SV chuyển Portfolio sang `PRIVATE`** | Endpoint `/api/v1/portfolio/verify/{verificationToken}` vẫn xác thực hợp lệ danh sách chứng nhận/danh hiệu đã cấp in trên bản CV đó (hoạt động độc lập cả khi đã tốt nghiệp), ẩn bio/dự án riêng tư. |
 | **29** | **Chuyển giao Nhiệm kỳ Mới (Term Rollover Wizard)** | Batch job đẩy `USERS.roleScopes[]` vào `termHistory[]`, thiết lập nhân sự nhiệm kỳ mới, tăng `permissionVersion` và phát **Redis Pub/Sub `rbac:invalidate`** xóa toàn bộ cache quyền cũ. |
 | **30** | **Thu hồi quyền hoặc hết hạn gói quyền khi Cán bộ đang đăng nhập** | Kiểm tra `grant.expiresAt > Instant.now()` tại mỗi lần đánh giá quyền (hết hạn tự động tức thì), đồng thời tăng `permissionVersion` + xóa Redis + phát Pub/Sub `rbac:invalidate` đảm bảo hiệu lực **`≤ 5 giây`** trên mọi replica. |
 | **31** | **Sự kiện bị `CANCELLED` hoặc dời giờ sau khi đã có người đăng ký (kể cả khi máy BTC đang ngoại tuyến)** | Event Listener: (1) Cập nhật Calendar & Sync lại PWA Offline Vault, (2) Đẩy batch Web Push + Email (`SMTP`), (3) Đưa Event ID vào danh sách thu hồi vé ngoại tuyến. Trên máy BTC đang offline: ứng dụng **bắt buộc kiểm tra tuổi gói dữ liệu `now - lastServerSyncAt <= 12 giờ`** và từ chối dùng gói cũ hơn 12h hoặc sự kiện đã `CANCELLED` ở lần đồng bộ gần nhất (`A34`). |
 | **32** | **Chuyển khoản VietQR ở giây cuối (Late Webhook Arrival)** | Sau khi vượt qua Bước 0 xác thực chữ ký HMAC-SHA256 (`A11`), Webhook thấy đơn đã `CANCELLED`: thử atomic `$inc` trừ lại kho nếu còn hàng để khôi phục `PAID`; nếu hết hàng, gán `PAID_REFUND_PENDING` + `LATE_AFTER_CANCELLED` để Thủ quỹ xử lý qua `ORDER_SUPPORT_REQUESTS`. |
-| **33** | **BTV bật `facultyOverride` cho SV chuyển ngành vào giữa năm** | Trigger Async Background Job quét `PARTICIPATION_HISTORIES` **từ `facultyOverride.effectiveDate` trở về sau**: bổ sung `(CDDN, ...)` vào `benefits[]`, đánh dấu bản chứng nhận cũ `certStatus = SUPERSEDED` và phát hành `certVersion + 1` trên **Silo**. |
+| **33** | **BTV bật `facultyOverride` cho SV chuyển ngành vào giữa năm** | Trigger Async Background Job quét `PARTICIPATION_HISTORIES` **từ `facultyOverride.effectiveDate` trở về sau**: bổ sung `"CDDN"` vào `benefits[]`, đánh dấu bản chứng nhận cũ `certStatus = SUPERSEDED` và phát hành `certVersion + 1` trên **Silo**. |
 | **34** | **CTV chuyển `memberStatus = LEFT` khi đang mượn đồ VP hoặc còn ca trực** | Pre-check query `OFFICE_ASSETS.borrowLogs` có `status == BORROWED` thì chặn chuyển sang `LEFT` cho đến khi trả/bàn giao; thu hồi các `assignedModules` Ban/Tổ, `$pull` khỏi các `OFFICE_DUTY_SHIFTS` tương lai và báo ca trống cho `OFIT`. |
 | **35** | **PWA `Background Sync Queue` đẩy Q&A hoặc Survey sau khi phiên đóng** | Nếu `LIVE_QA_SESSIONS.status == CLOSED`, lưu status `ARCHIVED_POST_EVENT`. Với `SURVEY_RESPONSES`, cho phép ân hạn nhận bài thêm $24\text{h}$ sau `endTime`. |
 | **36** | **Gộp câu hỏi trùng (`Merge`) trên Live Q&A đã có Upvote** | Chạy `SUNIONSTORE` trên Redis Set `upvoters` của 2 câu hỏi $A, B$ và cập nhật `upvoteCount = SCARD` để chống tính trùng lượt Upvote của cùng 1 sinh viên. |
@@ -1544,3 +1659,7 @@ sequenceDiagram
 | **40** | **Tân sinh viên chưa từng đăng nhập YITZone mang thẻ SV nhựa vật lý đến quét mã vạch 1D tại cổng hội trường** | Mặc định `allowBarcodeWalkIn = false` với sự kiện có quyền lợi (`A3`). Khi được bật: kiểm tra regex MSSV 8 số `^[0-9]{8}$` & mã ngành `BBB` hợp lệ, bắt buộc `physicalCardVerifiedByStaff = true`, insert `EVENT_ATTENDANCES` với `attendeeKey = "SV:"+scannedCode`, `userId = null`, `ssoLinkStatus = PENDING_SSO_LINK`, **`riskFlags = [BARCODE_WALKIN_UNVERIFIED]`, `riskScore = 2`, `reviewStatus = PENDING_REVIEW`** và đẩy vào `ATTENDANCE_REVIEW_QUEUE`. Khi sinh viên đăng nhập SSO lần đầu, `OidcLoginSuccessHandler` ghép `userId`; đối với sự kiện có cộng `ĐRL/CTXH/CĐDN`, **chỉ cấp E-Cert sau khi BTC duyệt `REVIEW_APPROVED` trong Hàng chờ Hậu kiểm** (`A3`). |
 | **41** | **Một sinh viên cầm xấp nhiều thẻ SV vật lý của bạn (hoặc mở ảnh mã vạch trên màn hình điện thoại) đến bàn Lễ tân quét hộ** | Endpoint `POST /attendance/barcode-scan` bắt buộc `@PreAuthorize("hasPermission(#eventId, 'EVENT', 'attendance:scan_barcode')")` (`MOD_ATTENDANCE_STAFF` / `MOD_EVENT_OPS`). Quy chế cấm quét màn hình điện thoại; UI máy BTC hiển thị `portraitPhotoUrl` (nếu có Consent) + Họ tên + MSSV kèm cảnh báo âm thanh nếu trùng `attendeeKey` trong cùng `sessionId`. |
 | **42** | **Chia sẻ link `Live Voting` ra ngoài hội trường để kéo phiếu ảo, hoặc 2 ứng viên bằng điểm tổng hợp** | Service kiểm tra `eligibilityRule == CHECKED_IN_EVENT_ONLY` bằng truy vấn `EVENT_ATTENDANCES.exists({ eventId, userId, reviewStatus: { $in: [AUTO_ACCEPTED, ACCEPTED_LOW_RISK, REVIEW_APPROVED] } })` + xác minh chữ ký **`ECDSA P-256 PoP`** chống trùng `verifiedDeviceTokenId` (riêng quầy Kiosk dùng token 1 lần 60s qua `POST /kiosk-sessions` và bị khóa khi `isSecretBallot == true` — `A7`). Khi đồng điểm `finalWeightedScore`, comparator ưu tiên `judgeAvgScore DESC` trước; nếu vẫn bằng nhau thì xét `lastVoteReachedAt ASC` đối với bình chọn định danh, hoặc gán `isTiedRequiringRunoff = true` đối với bỏ phiếu kín (`A26b`). |
+| **43** | **Một sinh viên (trong hoặc ngoài trường) cố tham gia 2 đội khác nhau trong cùng sự kiện** | Partial Unique Index `{ eventId: 1, "members.userId": 1 }` với `partialFilterExpression: { status: { $in: ["DRAFT", "SUBMITTED", "WAITLISTED", "APPROVED"] } }` chặn triệt để ở tầng MongoDB và trả `409 Conflict` (`USER_ALREADY_IN_EVENT_TEAM`). |
+| **44** | **Đội thi hỗn hợp (SV HCM-UTE + SV ngoài trường) đạt giải thưởng và chốt E-Cert / quyền lợi** | Job `finalize-awards` tạo `PARTICIPATION_HISTORIES` + E-Cert (ghi `teamName`, `awardTitle`) cho cả 5 thành viên trong `EVENT_TEAMS.members[]`; chỉ gán mảng `benefits[]` (`DRL/CTXH/CDDN`) khi `user.userType == STUDENT && user.studentCode != null`, bỏ qua an toàn với `TEMP_GUEST`. |
+| **45** | **Đồng điểm ở biên hạng $n$ trên BXH Vòng loại, hoặc đội Top $n$ rút lui sát ngày Chung kết** | `compute-ranking` phát hiện `rank(n) == rank(n+1)` và gán cờ `boundaryTieDetected = true`, chặn `finalize` cho tới khi BTC truyền `tieBreakDecision`. Khi đội Top $n$ chuyển `WITHDRAWN`, endpoint `POST .../promote-standby` mở Transaction chuyển đội `STANDBY` có `rank` nhỏ nhất sang `QUALIFIED`, gửi Push/Email và ghi `AUDIT_LOGS`. |
+| **46** | **Một thành viên trong đội 5 người bị hủy bài gian lận hoặc bỏ thi ở Vòng loại gộp điểm** | `EventRoundAdvancementService` đọc `EXAM_ATTEMPTS` của từng thành viên: nếu `disqualified == true`, áp `cheatingPolicy` (`ZERO_MEMBER_SCORE` gán `rawScore = 0`; `DISQUALIFY_TEAM` chuyển `advancementStatus = DISQUALIFIED` khi có xác nhận `BTV` + `@AuditLog`); nếu số thành viên có bài hợp lệ `< minParticipatedMembers`, đánh dấu đội không đủ điều kiện xếp hạng `QUALIFIED`. |

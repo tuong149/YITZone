@@ -3,18 +3,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const MODULES = [
   { code: "iam", name: "Định danh SSO & Scoped Dynamic RBAC" },
   { code: "event", name: "Quản lý Sự kiện Khoa & Nội bộ CTV" },
-  { code: "attendance", name: "Điểm danh QR ECDSA, Barcode 1D & Offline Scanner" },
+  { code: "attendance", name: "Điểm danh QR, Mã vạch Thẻ SV & Soát vé Ngoại tuyến" },
   { code: "certificate", name: "Chứng nhận E-Cert & Verified PDF" },
   { code: "cms", name: "Biên tập & Xuất bản Truyền thông" },
   { code: "minigame", name: "Minigame Thời gian thực (ZSET)" },
   { code: "exam", name: "Thi Trắc nghiệm Giám sát Trình duyệt" },
   { code: "award", name: "Xét chọn & Bình duyệt Giải thưởng" },
-  { code: "oj", name: "Online Judge Cô lập (P3)" },
+  { code: "oj", name: "Online Judge Cô lập" },
   { code: "store", name: "Cửa hàng Gây quỹ, VietQR & COD Handover" },
   { code: "chatbot", name: "YITBot AI Gateway (SSE + PII Redactor)" },
   { code: "office", name: "Trực Văn phòng & Kiểm kê Tài sản" },
   { code: "arts", name: "Quản lý Tiết mục Văn nghệ & Source" },
-  { code: "calendar", name: "Lịch Tổng hợp 6 Màu" },
+  { code: "calendar", name: "Lịch Hoạt động Tổng hợp" },
   { code: "survey", name: "Khảo sát Tách bảng Ẩn danh" },
   { code: "voting", name: "Bình chọn LED & Bỏ phiếu Kín Outbox" },
   { code: "portfolio", name: "Hồ sơ Năng lực & Tiến độ SV5T" },
@@ -25,7 +25,7 @@ const MODULES = [
   { code: "audit", name: "Nhật ký Kiểm toán Hash-chain" }
 ];
 
-export function ModuleDirectoryPage() {
+export function ModuleDirectoryPage(){
   return (
     <div className="space-y-4">
       <div>

@@ -40,6 +40,12 @@ public class RbacCacheInvalidationService {
         }
     }
 
+    public void applyRemoteInvalidation(String userId, long newPermissionVersion) {
+        if (userId != null) {
+            localMinPermVersions.merge(userId, newPermissionVersion, Math::max);
+        }
+    }
+
     public boolean isTokenVersionValid(String userId, long tokenPermVersion) {
         Long localMin = localMinPermVersions.get(userId);
         if (localMin != null && tokenPermVersion < localMin) {

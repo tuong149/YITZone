@@ -1,6 +1,7 @@
 package vn.edu.fit.yitzone.iam.domain;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -11,6 +12,7 @@ import java.util.Map;
  * Stores WebCrypto ECDSA P-256 non-extractable publicKeyJwk for Proof-of-Possession (A2, A9).
  */
 @Document(collection = "DEVICE_TOKENS")
+@CompoundIndex(name = "idx_device_tokens_user_revoked", def = "{'userId': 1, 'revoked': 1}")
 public class DeviceToken {
     @Id
     private String id;
@@ -21,7 +23,9 @@ public class DeviceToken {
     @Indexed(unique = true)
     private String tokenHash;
 
+    private String deviceLabel;
     private Map<String, Object> publicKeyJwk;
+    private boolean registeredKiosk = false;
     private String userAgent;
     private Instant createdAt = Instant.now();
     private Instant lastUsedAt = Instant.now();
@@ -33,8 +37,12 @@ public class DeviceToken {
     public void setUserId(String userId) { this.userId = userId; }
     public String getTokenHash() { return tokenHash; }
     public void setTokenHash(String tokenHash) { this.tokenHash = tokenHash; }
+    public String getDeviceLabel() { return deviceLabel; }
+    public void setDeviceLabel(String deviceLabel) { this.deviceLabel = deviceLabel; }
     public Map<String, Object> getPublicKeyJwk() { return publicKeyJwk; }
     public void setPublicKeyJwk(Map<String, Object> publicKeyJwk) { this.publicKeyJwk = publicKeyJwk; }
+    public boolean isRegisteredKiosk() { return registeredKiosk; }
+    public void setRegisteredKiosk(boolean registeredKiosk) { this.registeredKiosk = registeredKiosk; }
     public String getUserAgent() { return userAgent; }
     public void setUserAgent(String userAgent) { this.userAgent = userAgent; }
     public Instant getCreatedAt() { return createdAt; }

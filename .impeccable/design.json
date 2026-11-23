@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-20T23:20:00+07:00",
+  "title": "Design System: YITZone",
+  "extensions": {
+    "colorMeta": {
+      "yit-cobalt": {
+        "role": "primary",
+        "displayName": "YIT Cobalt",
+        "canonical": "oklch(54% 0.23 265)",
+        "tonalRamp": ["#11194A", "#1E2E85", "#2D4AE6", "#3B5BFF", "#6C82FF", "#9AA8FF", "#CBD3FF", "#EEF1FF"]
+      },
+      "indigo-node": {
+        "role": "primary",
+        "displayName": "Indigo Node",
+        "canonical": "oklch(48% 0.27 288)",
+        "tonalRamp": ["#1C074D", "#330D8A", "#4813BF", "#5B1AE6", "#7E4BF0", "#A682F7", "#D1BEFB", "#F2ECFE"]
+      },
+      "fit-navy": {
+        "role": "secondary",
+        "displayName": "FIT Academic Navy",
+        "canonical": "oklch(36% 0.12 260)",
+        "tonalRamp": ["#0B1733", "#132652", "#1E3A7B", "#2D52A6", "#4D72C4", "#82A0DE", "#BCCEF0", "#EBF1FA"]
+      },
+      "orbital-cyan": {
+        "role": "tertiary",
+        "displayName": "Orbital Cyan",
+        "canonical": "oklch(60% 0.15 236)",
+        "tonalRamp": ["#062B42", "#074B73", "#0369A1", "#0288D1", "#29B6F6", "#67CEFA", "#BAE6FD", "#F0F9FF"]
+      },
+      "ute-crimson": {
+        "role": "danger",
+        "displayName": "UTE Crimson",
+        "canonical": "oklch(49% 0.19 23)",
+        "tonalRamp": ["#450A0D", "#7F141A", "#99171E", "#B91C24", "#DC2626", "#F87171", "#FECACA", "#FEF2F2"]
+      },
+      "canvas-light": {
+        "role": "neutral",
+        "displayName": "Cool Architectural Slate",
+        "canonical": "oklch(98% 0.005 250)",
+        "tonalRamp": ["#050814", "#090D16", "#111827", "#334155", "#64748B", "#CBD5E1", "#F1F5F9", "#F8FAFC"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Trang chủ công khai, Bảng vàng SV5T, tiêu đề lớn sân khấu LED." },
+      "headline": { "displayName": "Headline", "purpose": "Tiêu đề trang phân hệ và chi tiết sự kiện." },
+      "title": { "displayName": "Title", "purpose": "Tiêu đề thẻ, nhóm biểu mẫu và hộp thoại." },
+      "body": { "displayName": "Body", "purpose": "Nội dung tác nghiệp, bảng dữ liệu, hội thoại YITBot & Q&A." },
+      "label": { "displayName": "Label", "purpose": "Nhãn biểu mẫu, tiêu đề cột bảng, badge trạng thái." },
+      "mono": { "displayName": "Mono Technical", "purpose": "MSSV 8 số, mã PIN 6 số, mã biên nhận VOTE, VNĐ, Hash Audit Log, Code OJ." }
+    },
+    "shadows": [
+      { "name": "floating-control", "value": "0 1px 2px rgba(15, 23, 42, 0.06)", "purpose": "Nút bấm quan trọng và thẻ tương tác khi hover." },
+      { "name": "popover", "value": "0 8px 24px -4px rgba(15, 23, 42, 0.12)", "purpose": "Context Switcher, Dropdown, Date Picker." },
+      { "name": "modal", "value": "0 20px 48px -12px rgba(15, 23, 42, 0.24)", "purpose": "Dialog xác nhận Audit Log và Command Palette." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.2, 0, 0, 1)", "purpose": "Chuyển trạng thái UI tiêu chuẩn (150ms–200ms)." },
+      { "name": "ease-stage", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Cập nhật biểu đồ đua top Voting và chuyển câu Minigame trên LED." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Hành động chính trong biểu mẫu, đăng ký sự kiện và phê duyệt.",
+      "html": "<button class=\"ds-btn-primary\">Đăng ký tham dự</button>",
+      "css": ".ds-btn-primary { background: #3B5BFF; color: #FFFFFF; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; height: 40px; padding: 0 16px; border: none; border-radius: 10px; cursor: pointer; transition: background 150ms cubic-bezier(0.2, 0, 0, 1); } .ds-btn-primary:hover { background: #2D4AE6; } .ds-btn-primary:focus-visible { outline: 2px solid #3B5BFF; outline-offset: 2px; }"
+    },
+    {
+      "name": "Destructive Audit Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Thao tác thu hồi/từ chối nghiêm trọng bắt buộc mở Audit Action Dialog.",
+      "html": "<button class=\"ds-btn-destructive\">Thu hồi E-Certificate</button>",
+      "css": ".ds-btn-destructive { background: #B91C24; color: #FFFFFF; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; height: 40px; padding: 0 16px; border: none; border-radius: 10px; cursor: pointer; transition: background 150ms cubic-bezier(0.2, 0, 0, 1); } .ds-btn-destructive:hover { background: #99171E; } .ds-btn-destructive:focus-visible { outline: 2px solid #B91C24; outline-offset: 2px; }"
+    },
+    {
+      "name": "Verified FIT Badge",
+      "kind": "chip",
+      "refersTo": "badge-verified",
+      "description": "Huy hiệu xác thực chính thức trên E-Cert, E-Portfolio và Q&A Messenger.",
+      "html": "<span class=\"ds-badge-verified\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/><path d=\"m9 12 2 2 4-4\"/></svg>Đã xác thực bởi Đoàn - Hội Khoa CNTT</span>",
+      "css": ".ds-badge-verified { display: inline-flex; align-items: center; gap: 6px; background: #1E3A7B; color: #FFFFFF; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 9999px; }"
+    },
+    {
+      "name": "Unit Context Switcher",
+      "kind": "nav",
+      "refersTo": "card-surface",
+      "description": "Bộ chuyển vai trò và đơn vị Ban/Tổ cố định trên đầu Sidebar.",
+      "html": "<button class=\"ds-ctx-switcher\"><span class=\"ds-ctx-dot\"></span><span class=\"ds-ctx-meta\"><strong>Ban Văn phòng (OFIT)</strong><small>Chế độ Quản trị · 4 gói quyền</small></span></button>",
+      "css": ".ds-ctx-switcher { display: flex; align-items: center; gap: 10px; width: 100%; background: #FFFFFF; color: #0F172A; border: 1px solid #E2E8F0; border-radius: 10px; padding: 8px 12px; text-align: left; cursor: pointer; transition: border-color 150ms; } .ds-ctx-switcher:hover { border-color: #3B5BFF; } .ds-ctx-dot { width: 10px; height: 10px; border-radius: 9999px; background: #EA580C; flex-shrink: 0; } .ds-ctx-meta { display: flex; flex-direction: column; font-family: 'Inter', sans-serif; } .ds-ctx-meta strong { font-size: 13px; font-weight: 600; } .ds-ctx-meta small { font-size: 11px; color: #64748B; }"
+    },
+    {
+      "name": "Text Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Ô nhập chuẩn trên biểu mẫu đăng ký, tìm kiếm MSSV và lý do Audit Log.",
+      "html": "<input class=\"ds-input\" placeholder=\"Nhập MSSV 8 chữ số (VD: 22110345)...\" />",
+      "css": ".ds-input { width: 100%; height: 40px; padding: 8px 12px; background: #FFFFFF; color: #0F172A; border: 1px solid #E2E8F0; border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 14px; transition: border-color 150ms, box-shadow 150ms; } .ds-input:focus { outline: none; border-color: #3B5BFF; box-shadow: 0 0 0 3px rgba(59, 91, 255, 0.18); }"
+    },
+    {
+      "name": "Internal BCH Note",
+      "kind": "custom",
+      "refersTo": "card-surface",
+      "description": "Ghi chú nội bộ màu vàng ẩn với sinh viên trong Q&A Messenger (4.19).",
+      "html": "<div class=\"ds-internal-note\"><strong>Ghi chú nội bộ BCH (ẩn với SV)</strong><p>Đã kiểm tra log điểm danh: sinh viên bị cờ GPS lệch nhẹ, đề xuất duyệt bù.</p></div>",
+      "css": ".ds-internal-note { background: #FEF9C3; color: #713F12; border: 1px solid #FACC15; border-radius: 10px; padding: 10px 14px; font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.5; } .ds-internal-note strong { display: block; font-size: 12px; margin-bottom: 4px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Connected Campus Grid",
+    "overview": "YITZone được xây dựng trực tiếp từ hình hài đồ thị kết nối (node-and-edge constellation) trong biểu trưng YITZoneLogo@4x.png và YITZoneTextlogo@4x.png: mỗi sinh viên, sự kiện, ca trực, chứng nhận và đơn vị Ban/Tổ là một nút dữ liệu sắc nét, liên kết mạch lạc trên một hệ lưới kỹ thuật sạch sẽ.",
+    "keyCharacteristics": [
+      "Bảng màu neo trực tiếp vào dải chuyển sắc YIT Cobalt -> Indigo Node của logo và FIT Academic Navy của Khoa CNTT HCM-UTE.",
+      "Tối giản đường viền sắc nét (1px crisp hairline) thay vì đổ bóng nặng; phân lớp bằng sắc độ nền lạnh (Cool Slate).",
+      "Chữ tiếng Việt sắc nét với Zee Display Medium (self-hosted) cho tiêu đề, Inter cho nội dung tác nghiệp và JetBrains Mono cho mã định danh (MSSV, PIN, Hash, Code).",
+      "Màu ngữ nghĩa từ SRS (6 màu Lịch tổng hợp + Ghi chú nội bộ màu vàng) được bảo toàn tuyệt đối và không xung đột với màu thương hiệu."
+    ],
+    "rules": [
+      { "name": "The Gradient Discipline Rule", "body": "Dải chuyển sắc YIT Cobalt -> Indigo Node chỉ được dùng cho dấu ấn thương hiệu (logo, banner công khai, thanh tiêu đề sân khấu LED, thanh tiến độ quỹ). Tuyệt đối không dùng nền gradient cho nút bấm quản trị, bảng dữ liệu hay thẻ biểu mẫu.", "section": "colors" },
+      { "name": "The Dual-Cue Status Rule", "body": "Không bao giờ dùng màu sắc đơn độc để báo trạng thái; mọi màu lịch 6 loại, mức rủi ro điểm danh (+1đ / +2đ) và trạng thái duyệt phải luôn đi kèm nhãn chữ hoặc biểu tượng phân biệt.", "section": "colors" },
+      { "name": "The Tabular Digits Rule", "body": "Mọi con số có thể thay đổi theo thời gian thực hoặc xếp thành cột (MSSV, đồng hồ đếm ngược QR/thi/kiosk, điểm Minigame/Voting, tiền VNĐ, phần trăm tiến độ SV5T) bắt buộc áp dụng tabular-nums.", "section": "typography" },
+      { "name": "The Vietnamese Line-Height Rule", "body": "Không bao giờ nén line-height dưới 1.15 cho Display và 1.4 cho văn bản thường tiếng Việt để tránh cắt dấu mũ và dấu thanh.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Mọi thẻ nội dung, bảng dữ liệu và thanh bên đều phẳng ở trạng thái nghỉ; chỉ lớp phủ (Popover, Dialog, Toast) mới mang bóng đổ.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do bo tròn hoàn toàn (rounded-full) cho mọi thanh chuyển Tab / Segmented Control (TabsList và TabsTrigger) để đồng nhất với ngôn ngữ Liquid Glass.",
+      "Do giữ nguyên 6 màu Lịch tổng hợp (Xanh dương, Tím, Cam, Hồng, Xanh lá, Đỏ) và Ghi chú nội bộ màu vàng của Q&A Messenger đúng như SRS.",
+      "Do luôn hiển thị rõ đơn vị/vai trò đang thao tác trên Context Switcher và yêu cầu nhập lý do rõ ràng cho mọi thao tác có ghi Audit Log.",
+      "Do dùng JetBrains Mono + tabular-nums cho mọi MSSV, mã PIN, mã biên nhận bỏ phiếu kín, tiền VNĐ và đồng hồ đếm ngược.",
+      "Do áp dụng nền tối Stage Obsidian (#050814) với tỷ lệ tương phản >= 7:1 cho toàn bộ màn hình LED Hội trường.",
+      "Do hiển thị nhãn rõ ràng \"Chờ minh chứng ngoài\" cho tiêu chí SV5T ngoài hệ thống và chỉ hiển thị nhãn quyền lợi (Cộng ĐRL, Cộng CTXH, Cộng CĐDN), không hiển thị số điểm."
+    ],
+    "donts": [
+      "Don't dùng gradient cầu vồng hay hiệu ứng kính mờ lòe loẹt đè lên bảng dữ liệu quản trị hoặc biểu mẫu nghiệp vụ.",
+      "Don't hiển thị biểu đồ kiểm phiếu thời gian thực khi chiến dịch bình chọn đang ở chế độ Bỏ phiếu Kín (isSecretBallot = true).",
+      "Don't để lộ 5 chữ số đầu của MSSV trên màn hình LED Minigame (chỉ hiển thị Họ tên + 3 số cuối MSSV).",
+      "Don't cho phép nút \"Duyệt hàng loạt\" hoạt động trên các bản ghi điểm danh mang cờ Tín hiệu Mạnh (+2đ).",
+      "Don't dùng ảnh nền trang trí phức tạp hoặc độ tương phản thấp phía sau mã QR quét (vùng quiet zone trắng sạch tối thiểu 16px)."
+    ]
+  }
+}

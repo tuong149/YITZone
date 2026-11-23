@@ -32,7 +32,7 @@ export type ApiResponse<T> = ApiSuccess<T> | ApiProblem;
 
 export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
   const { accessToken, activeScopeId } = useAuthStore.getState();
-  const headers: Record<string, string> = { ...extraHeaders };
+  const headers: Record<string, string> = {...extraHeaders };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
@@ -60,7 +60,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
-      useAuthStore.getState().clearSession();
+      useAuthStore.getState().clearSession;
     }
     return Promise.reject(error);
   }

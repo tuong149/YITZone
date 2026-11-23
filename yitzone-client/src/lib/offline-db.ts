@@ -44,7 +44,7 @@ export class YitZoneOfflineDatabase extends Dexie {
   }
 }
 
-export const offlineDb = new YitZoneOfflineDatabase();
+export const offlineDb = new YitZoneOfflineDatabase;
 
 export async function wipeExpiredOfflineBundles(nowMs: number = Date.now()): Promise<number> {
   const expired = await offlineDb.offlineBundles.where("expiresAt").belowOrEqual(nowMs).toArray();

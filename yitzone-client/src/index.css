@@ -2,21 +2,375 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Zee Display";
+  src: url("/fonts/ZEE%20Display.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
+    /* Core Brand Tokens (from YITZoneLogo & YITZoneTextlogo) */
+    --yit-cobalt: 230 100% 62%;
+    --yit-cobalt-hover: 231 79% 54%;
+    --indigo-node: 259 83% 50%;
+    --fit-navy: 222 61% 30%;
+    --orbital-cyan: 201 98% 41%;
+    --ute-crimson: 357 74% 42%;
+
+    /* Light Mode Neutral Surfaces */
+    --background: 218 55% 96%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 217.2 91.2% 52.8%;
-    --primary-foreground: 210 40% 98%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --border: 214.3 31.8% 91.4%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 230 100% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 35% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 214 35% 94%;
+    --muted-foreground: 215 18% 42%;
+    --accent: 230 100% 96%;
+    --accent-foreground: 230 100% 52%;
+    --destructive: 357 74% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 89%;
+    --input: 214 30% 86%;
+    --ring: 230 100% 62%;
+
+    /* System Status Tokens */
+    --status-success: 142 76% 36%;
+    --status-warning: 32 95% 44%;
+    --status-danger: 0 72% 51%;
+    --status-info: 200 98% 39%;
+
+    /* SRS-Locked 6-Color Calendar Tokens (Module 4.13) */
+    --cal-faculty-event: 221 83% 53%;
+    --cal-dept-internal: 262 83% 58%;
+    --cal-office-duty: 21 90% 48%;
+    --cal-arts-rehearsal: 333 71% 51%;
+    --cal-exam-oj: 142 76% 36%;
+    --cal-deadline-fund: 0 72% 51%;
+
+    /* SRS-Locked Internal BCH Note Tokens (Module 4.19) */
+    --internal-note-bg: 55 97% 88%;
+    --internal-note-border: 48 96% 53%;
+    --internal-note-ink: 32 81% 25%;
+
+    /* Auditorium LED Stage Tokens */
+    --stage-obsidian: 228 60% 5%;
+    --stage-panel: 224 49% 11%;
+  }
+
+  .dark {
+    --yit-cobalt: 231 100% 71%;
+    --yit-cobalt-hover: 231 100% 66%;
+    --indigo-node: 259 88% 64%;
+    --fit-navy: 222 55% 44%;
+    --orbital-cyan: 199 95% 60%;
+    --ute-crimson: 357 82% 56%;
+
+    --background: 223 48% 5%;
+    --foreground: 210 40% 98%;
+    --card: 222 39% 10%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 36% 13%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 231 100% 71%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 222 33% 14%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 33% 14%;
+    --muted-foreground: 215 20% 66%;
+    --accent: 230 45% 18%;
+    --accent-foreground: 231 100% 82%;
+    --destructive: 357 82% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 24% 18%;
+    --input: 217 24% 20%;
+    --ring: 231 100% 71%;
+
+    --internal-note-bg: 32 81% 14%;
+    --internal-note-border: 45 93% 40%;
+    --internal-note-ink: 53 98% 77%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    @apply bg-background text-foreground antialiased font-sans;
+    caret-color: hsl(var(--primary));
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* Higher specificity (0,1,2) beats react-remove-scroll's runtime body[data-scroll-locked] (0,1,1) to eliminate horizontal jitter */
+  html body[data-scroll-locked] {
+    overflow: visible !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+    --removed-body-scroll-bar-size: 0px !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: "Zee Display", system-ui, sans-serif;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: hsl(var(--primary) / 0.22);
+    color: hsl(var(--foreground));
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.28);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.45);
+  }
+}
+
+@layer utilities {
+  .tabular-mono {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .yit-brand-gradient {
+    background-image: linear-gradient(135deg, #1e3a7b 0%, #2d4ae6 52%, #3b5bff 100%);
+  }
+
+  /* Rich chromatic atmospheric wash so Liquid Glass genuinely refracts visible light & color */
+  .yit-ambient-canvas {
+    background-color: #eef4fc;
+    background-image:
+      radial-gradient(54% 40% at 58% -4%, rgba(56, 189, 248, 0.42) 0%, rgba(59, 91, 255, 0.2) 38%, transparent 72%),
+      radial-gradient(42% 38% at 8% 12%, rgba(91, 26, 230, 0.18) 0%, rgba(59, 91, 255, 0.08) 45%, transparent 74%),
+      radial-gradient(48% 42% at 92% 48%, rgba(56, 189, 248, 0.22) 0%, transparent 70%),
+      radial-gradient(45% 40% at 22% 88%, rgba(59, 91, 255, 0.12) 0%, transparent 72%);
+    background-attachment: fixed;
+  }
+
+  .dark .yit-ambient-canvas {
+    background-color: #060a14;
+    background-image:
+      radial-gradient(56% 42% at 62% -6%, rgba(56, 189, 248, 0.32) 0%, rgba(59, 91, 255, 0.22) 38%, transparent 74%),
+      radial-gradient(46% 38% at 10% 16%, rgba(91, 26, 230, 0.28) 0%, transparent 72%),
+      radial-gradient(44% 38% at 92% 62%, rgba(2, 136, 209, 0.18) 0%, transparent 72%);
+    background-attachment: fixed;
+  }
+
+  /* True iOS 26/27 Liquid Glass — Floating Chrome & Navigation */
+  .liquid-glass {
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.62) 0%,
+      rgba(255, 255, 255, 0.34) 55%,
+      rgba(235, 245, 255, 0.48) 100%
+    );
+    backdrop-filter: blur(28px) saturate(215%) brightness(1.04);
+    -webkit-backdrop-filter: blur(28px) saturate(215%) brightness(1.04);
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    box-shadow:
+      inset 0 1.5px 1px rgba(255, 255, 255, 0.96),
+      inset 0 -1px 1px rgba(59, 91, 255, 0.12),
+      inset 1px 0 1px rgba(255, 255, 255, 0.55),
+      0 14px 36px -10px rgba(30, 58, 123, 0.18),
+      0 2px 8px rgba(15, 23, 42, 0.05);
+  }
+
+  .dark .liquid-glass {
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(15, 23, 42, 0.46) 48%,
+      rgba(56, 189, 248, 0.08) 100%
+    );
+    backdrop-filter: blur(30px) saturate(210%);
+    -webkit-backdrop-filter: blur(30px) saturate(210%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow:
+      inset 0 1.5px 1px rgba(255, 255, 255, 0.28),
+      inset 0 -1px 1px rgba(0, 0, 0, 0.45),
+      inset 1px 0 1px rgba(255, 255, 255, 0.12),
+      0 20px 48px -12px rgba(0, 0, 0, 0.7);
+  }
+
+  /* Liquid Glass Surface Card (for showcase widgets like Weekly Schedule & Featured Cards) */
+  .liquid-glass-card {
+    background: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.72) 0%,
+      rgba(255, 255, 255, 0.48) 100%
+    );
+    backdrop-filter: blur(24px) saturate(195%);
+    -webkit-backdrop-filter: blur(24px) saturate(195%);
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+      inset 0 -1px 0 rgba(30, 58, 123, 0.06),
+      0 12px 32px -12px rgba(30, 58, 123, 0.14);
+  }
+
+  .dark .liquid-glass-card {
+    background: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      rgba(15, 23, 42, 0.56) 100%
+    );
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 16px 40px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Compact Liquid Glass Pill (Over photos, Floating YITBot, Active nav pill) */
+  .liquid-glass-pill {
+    background: linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.72) 0%,
+      rgba(255, 255, 255, 0.44) 100%
+    );
+    backdrop-filter: blur(18px) saturate(210%);
+    -webkit-backdrop-filter: blur(18px) saturate(210%);
+    border: 1px solid rgba(255, 255, 255, 0.88);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.96),
+      0 8px 22px -6px rgba(15, 23, 42, 0.18);
+  }
+
+  .dark .liquid-glass-pill {
+    background: linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(15, 23, 42, 0.62) 100%
+    );
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 10px 26px -6px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Liquid Glass on Dark Hero / Stage Overlays */
+  .liquid-glass-on-dark {
+    background: linear-gradient(
+      150deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.08) 100%
+    );
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      0 8px 20px -8px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Luminous Cobalt Liquid Glass CTA Button */
+  .liquid-glass-btn-cobalt {
+    background: linear-gradient(180deg, rgba(84, 114, 255, 0.96) 0%, rgba(59, 91, 255, 0.96) 100%);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow:
+      inset 0 1.5px 1px rgba(255, 255, 255, 0.55),
+      inset 0 -1px 1px rgba(17, 25, 74, 0.3),
+      0 10px 26px -6px rgba(59, 91, 255, 0.65);
+  }
+
+  .liquid-glass-btn-cobalt:hover {
+    background: linear-gradient(180deg, rgba(98, 126, 255, 1) 0%, rgba(45, 74, 230, 1) 100%);
+  }
+
+  /* Frosted White Liquid Glass Button on Dark Hero */
+  .liquid-glass-btn-frosted {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(238, 245, 255, 0.88) 100%);
+    color: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    box-shadow:
+      inset 0 1.5px 1px rgba(255, 255, 255, 1),
+      0 10px 28px -6px rgba(7, 11, 20, 0.4);
+  }
+
+  .liquid-glass-btn-frosted:hover {
+    background: #ffffff;
+  }
+
+  .yit-node-grid {
+    background-image: radial-gradient(hsl(var(--primary) / 0.14) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .stage-dark {
+    background-color: #050814;
+    color: #f8fafc;
+  }
+
+  /* Hide native scrollbar on floating Liquid Glass sidebars while preserving smooth wheel/touch scroll */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scroll-x-pills {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scroll-x-pills::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Prevent iOS Safari fixed-background repaint jank & sticky hover states on touch screens */
+@media (max-width: 1024px), (hover: none) {
+  .yit-ambient-canvas,
+  .dark .yit-ambient-canvas {
+    background-attachment: scroll;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-glass,
+  .liquid-glass-card,
+  .liquid-glass-pill {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: hsl(var(--card));
   }
 }

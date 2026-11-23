@@ -1,6 +1,6 @@
 # SƠ ĐỒ & ĐẶC TẢ API TỔNG QUAN DỰ ÁN YITZONE (API OVERVIEW ARCHITECTURE)
 
-**Căn cứ trực tiếp:** [SRS_YITZone.md](./SRS_YITZone.md) (v2.2.1 — Mục 4.1..4.20, Mục 5.3 `NFR-PRIV`, Mục 8.1 `EXT-*`) & [LLD_YITZone.md](./LLD_YITZone.md) (v2.2.1)
+**Căn cứ trực tiếp:** [SRS_YITZone.md](./SRS_YITZone.md) (v2.3.0 — Mục 4.1..4.20 kèm mở rộng `FR-EVT-07..12`, Mục 5.3 `NFR-PRIV`, Mục 8.1 `EXT-*`) & [LLD_YITZone.md](./LLD_YITZone.md) (v2.3.0)
 
 ---
 
@@ -105,7 +105,7 @@ flowchart TB
     end
 
     subgraph StaffScopedEndpoints["Nhóm API Cán bộ BTC / 4 Ban - 9 Tổ (Scoped Dynamic RBAC + X-Active-Scope-Id + Chống Enumeration)"]
-        C1["GET /api/v1/events/{id}/offline-bundle (Delta Sync + ETag) & POST .../offline-scans/sync (Máy soát vé BTC ngoại tuyến)"]
+        C1["GET /api/v1/events/{id}/offline-bundle & POST .../offline-scans/sync (Đồng bộ quét Mã vạch 1D Thẻ SV khi mất mạng)"]
         C2["POST /api/v1/events/{id}/attendance/barcode-scan (Quét mã vạch thẻ SV 1D Camera/HID)"]
         C3["POST /api/v1/store/orders/barcode-lookup & POST .../orders/{id}/fulfill (Trực bàn phát áo — Rate Limit 15 req/m)"]
         C4["POST /api/v1/office/borrowers/barcode-lookup & POST /api/v1/duty/shifts/{id}/check-in"]
@@ -129,7 +129,7 @@ flowchart TB
 | Phương thức & Endpoint | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
 | `GET /oauth2/authorization/{provider}` | `FR-IAM-01`, `EXT-SSO-01` | Đăng nhập OAuth2/OIDC Trường; tự động đối chiếu `OFFICIAL_DIRECTORY_ROSTER` nếu IdP không trả claim MSSV (`B2`) và tự động `Auto-Link` các bản ghi điểm danh mã vạch vãng lai (`Edge 40`). |
-| `POST /api/v1/iam/device-tokens` | `FR-ATT-03`, `FR-PWA-02` | Đăng ký khóa công khai **WebCrypto `ECDSA P-256` (`publicKeyJwk`)** gắn với Cookie `HttpOnly` `yitz_dt`. |
+| `POST /api/v1/iam/device-tokens` | `FR-ATT-04` | Đăng ký khóa công khai **WebCrypto `ECDSA P-256` (`publicKeyJwk`)** gắn với Cookie `HttpOnly` `yitz_dt` phục vụ ký bằng chứng sở hữu thiết bị khi điểm danh online. |
 | `GET /api/v1/iam/me` | `FR-IAM-01..02`, `FR-RBAC-01` | Lấy hồ sơ người dùng, danh sách `roleScopes[]` (4 Ban - 9 Tổ), `assignedModules[]` và quyền hiệu lực theo `X-Active-Scope-Id`. |
 | `POST /api/v1/iam/personal-email/link` & `/verify-otp` | `FR-IAM-02` | Liên kết & xác thực OTP email cá nhân dự phòng để đăng nhập sau khi tốt nghiệp. |
 | `POST /api/v1/iam/roster/import` | `FR-IAM-01` (`B2`) | `BTV` tải lên tệp CSV/Excel danh sách sinh viên & cán bộ chính thức đầu học kỳ vào `OFFICIAL_DIRECTORY_ROSTER`. |
@@ -142,9 +142,9 @@ flowchart TB
 | Phương thức & Endpoint | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
 | `GET /api/v1/events` & `GET /api/v1/events/{id}` | `FR-EVT-01` | Tra cứu danh sách (Cursor/Offset Pagination, `size <= 50`) & chi tiết sự kiện (lọc theo sự kiện toàn Khoa `PUBLIC_FACULTY` hoặc sự kiện nội bộ `INTERNAL_CTV` của đúng Ban). |
-| `POST /api/v1/events` & `PUT /api/v1/events/{id}` | `FR-EVT-01..03`, `FR-EVT-06` | Tạo/cập nhật sự kiện (bắt buộc Optimistic Lock `If-Match`/`version` và khóa sửa `benefitTypes`/`visibility` sau khi đã `PUBLISHED`), cấu hình các ca điểm danh (`attendanceSessions`), bộ tuple quyền lợi `[{benefitType, pointValue}]` (**ĐRL / CTXH / CĐDN**) và vị trí BTC. Ràng buộc cứng `internal_event:*` không được gắn quyền lợi cấp Khoa (`A16`). |
-| `POST /api/v1/events/{id}/approve` | `FR-EVT-01`, `FR-CERT-01` | `BTV`/`BCH` phê duyệt phát hành sự kiện có cộng điểm quyền lợi. |
-| `POST /api/v1/events/{id}/registrations` | `FR-EVT-02`, `FR-EVT-04..05` | Đăng ký tham dự hoặc ứng tuyển 7 vị trí BTC; tự động vào **Danh sách chờ (`Waitlist`)** nếu hết chỗ và kiểm tra kỷ luật `No-show`. |
+| `POST /api/v1/events` & `PUT /api/v1/events/{id}` | `FR-EVT-01..03`, `FR-EVT-06` | Tạo/cập nhật sự kiện (bắt buộc Optimistic Lock `If-Match`/`version` và khóa sửa `benefitTypes`/`visibility` sau khi đã `PUBLISHED`), cấu hình các ca điểm danh (`attendanceSessions`), tiêu chí SV5T tùy chọn (`sv5tCriterion` nullable), danh sách nhãn quyền lợi cộng thêm `benefitTypes[]` (`DRL` / `CTXH` / `CDDN` — chỉ ghi nhận có cộng, không lưu số điểm) và CRUD các vị trí cần tuyển BTC (`organizerPositions[]`). Ràng buộc cứng `internal_event:*` không được gắn quyền lợi cấp Khoa (`A16`). |
+| `POST /api/v1/events/{id}/approve` | `FR-EVT-01`, `FR-CERT-01` | `BTV`/`BCH` phê duyệt phát hành sự kiện có cộng quyền lợi. |
+| `POST /api/v1/events/{id}/registrations` | `FR-EVT-02`, `FR-EVT-04..05` | Đăng ký tham dự hoặc ứng tuyển các vị trí BTC đang mở của sự kiện; tự động vào **Danh sách chờ (`Waitlist`)** nếu hết chỗ và kiểm tra kỷ luật `No-show`. |
 | `DELETE /api/v1/events/{id}/registrations/me` | `FR-EVT-04` | Hủy đăng ký trước hạn và tự động đôn người kế tiếp trong `Waitlist`. |
 
 ### 3.3. Phân hệ 4.3 — Điểm danh Đa lớp, Quét Mã vạch Thẻ SV 1D & Soát vé Ngoại tuyến (`FR-ATT-01..09`)
@@ -153,25 +153,26 @@ flowchart TB
 | `POST /api/v1/events/{id}/attendance/open` | `FR-ATT-01..02` | Mở phiên điểm danh (`DYNAMIC_ROTATING_QR` 10s mặc định hoặc `STATIC_QR` ngoài trời). |
 | `STOMP /topic/attendance.{eventId}.qr` & `.count` | `FR-ATT-01` | Broadcast mã QR ký số `ECDSA P-256` xoay vòng mỗi 10s và cập nhật sĩ số trực tiếp. |
 | `POST /api/v1/attendance/check-in` | `FR-ATT-01..05`, `FR-ATT-08` | Sinh viên tự quét QR bằng camera (`getUserMedia`) kèm **Canonical `devicePop` (`ECDSA P-256` định dạng `IEEE P1363 64-byte raw r||s` mã hóa Base64, ký `method\|path\|userId\|ts\|nonce\|SHA-256(canonicalActionFields)`, chống Replay bằng Redis `pop:nonce:{nonce}`)** và tọa độ GPS; kiểm tra chữ ký Server trên `signedQrPayload` và hạn QR theo `serverReceivedAt` ($10\text{s} + N$, $N=8\text{s}$) và chấm **Điểm rủi ro có trọng số** (`< 2đ`: trả `200 OK`; $\ge 2\text{đ}$: trả `202 Accepted` vào `PENDING_REVIEW`). |
-| `GET /api/v1/events/{id}/offline-ticket` | `FR-ATT-06`, `FR-PWA-02` | Tải vé ngoại tuyến đã ký bởi Server gắn khóa công khai `ECDSA P-256` của thiết bị sinh viên (sinh mã QR bước nhảy `15 giây`). |
-| `GET /api/v1/events/{id}/offline-bundle` | `FR-ATT-07` (`A14`, `A34`) | Máy BTC tải gói dữ liệu soát vé ngoại tuyến hỗ trợ **Delta Sync (`?sinceRevision=`) & `ETag` (`If-None-Match`)**, ảnh thẻ nén thumbnail WebP $\le 8\text{ KB}$ tải nền tách biệt (mã hóa `AES-GCM` trong `IndexedDB`, chỉ hợp lệ khi đồng bộ $\le 12\text{ giờ}$). |
-| `POST /api/v1/events/{id}/offline-scans/sync` | `FR-ATT-07` (`A10`, `A14`) | Đồng bộ lô quét ngoại tuyến (Idempotent theo `batchId`), phát hiện trùng vé đa máy (`DUPLICATE_OFFLINE_TICKET_SCAN +2đ`) và kích hoạt tự xóa gói dữ liệu (`Auto-Wipe`). |
-| `POST /api/v1/events/{id}/offline-scanners/{deviceId}/revoke` | `FR-ATT-07` (`A14`) | Thu hồi quyền máy BTC bị thất lạc và gửi cờ xóa `IndexedDB` từ xa. |
+| `GET /api/v1/events/{id}/offline-bundle` | `FR-ATT-09` | Máy BTC tải trước danh sách sinh viên đã đăng ký (MSSV, Họ tên, Ngành, ảnh thẻ có Consent) để tra cứu quét **Mã vạch 1D Thẻ SV vật lý** ngay cả khi hội trường mất/nghẽn mạng. |
+| `POST /api/v1/events/{id}/offline-scans/sync` | `FR-ATT-09` | Đồng bộ lô quét **Mã vạch 1D Thẻ SV** lưu tạm trên máy BTC khi có mạng trở lại (Idempotent theo `batchId`). |
 | `POST /api/v1/events/{id}/attendance/barcode-scan` | `FR-ATT-09`, `EXT-SCAN-01` | Lễ tân BTC quét **Mã vạch 1D (`Code 128`/`Code 39`) trên Thẻ sinh viên nhựa vật lý** (Camera hoặc súng HID), bắt buộc xác nhận `physicalCardVerified = true`; hỗ trợ hậu kiểm khách vãng lai (`PENDING_SSO_LINK`). |
 | `GET /api/v1/attendance/review-queue` & `POST .../bulk-action` | `FR-ATT-08` | Danh sách chờ BTC hậu kiểm trong 48h (phân trang `size <= 50`, kèm `Idempotency-Key` cho `bulk-action`); cho phép duyệt lô tín hiệu yếu nhưng **cấm gộp duyệt hàng loạt đối với các ca Tín hiệu Mạnh (`+2đ`)**. |
 
-### 3.4. Phân hệ 4.4 — Lịch sử Tham gia & Chứng nhận Điện tử E-Certificate (`FR-CERT-01..05`)
+### 3.4. Phân hệ 4.4 — Lịch sử Tham gia & Chứng nhận Điện tử E-Certificate (`FR-CERT-01..06`)
 | Phương thức & Endpoint | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
-| `GET /api/v1/participations/me` | `FR-CERT-01..02` | Xem lịch sử tham gia, thống kê điểm **ĐRL / CTXH / CĐDN** theo học kỳ (tự động ẩn mục CĐDN đối với SV ngoài Khoa, trừ khi có `facultyOverride` do `BTV` duyệt). |
+| `GET/POST/PUT/DELETE /api/v1/certificates/templates/{id}` | `FR-CERT-06` | CRUD Kho Mẫu Phôi E-Certificate (`CERTIFICATE_TEMPLATES`), chọn mẫu mặc định theo loại; chặn xóa phôi đã phát hành E-Cert (chỉ cho `Archive` + Audit Log). |
+| `POST /api/v1/events/{id}/finalize` | `FR-CERT-01..03` | Chốt kết quả sự kiện, chọn danh sách các mã ngành được cộng `CĐDN` (`cddnEligibleMajorCodes[]` từ `FACULTY_MAJOR_CATALOG`, mặc định chọn sẵn các ngành Khoa CNTT), ghi nhận `PARTICIPATION_HISTORIES` và kích hoạt Worker sinh E-Certificate. |
+| `GET /api/v1/participations/me` | `FR-CERT-01..02` | Xem lịch sử tham gia, thống kê số hoạt động được cộng **ĐRL / CTXH / CĐDN** theo học kỳ (chỉ ghi nhận `CĐDN` đối với SV thuộc danh sách ngành được chọn của sự kiện hoặc có `facultyOverride` do `BTV` duyệt). |
 | `POST /api/v1/users/{id}/faculty-override` | `FR-CERT-02` | Chỉ `BTV` được bật cờ hưởng đặc quyền Khoa CNTT cho sinh viên chuyển ngành có `effectiveDate`. |
 | `GET /api/v1/certificates/me` & `GET /api/v1/certificates/{id}/pdf` | `FR-CERT-03` | Xem danh sách và tải tệp PDF Chứng nhận điện tử (E-Certificate đã được Worker render sẵn lưu trên Silo theo `certVersion`; trả Pre-signed Silo URL / `302 Redirect` kèm `Cache-Control: private, max-age=300`, không render đồng bộ gây nghẽn CPU). |
 | `GET /api/v1/certificates/verify/{code}` | `FR-CERT-04` | Endpoint công khai xác thực hiệu lực E-Certificate (`VALID` / `REVOKED`), áp dụng Rate Limit `20 req/phút/IP` chống vét cạn. |
 | `POST /api/v1/certificates/{id}/revoke` & `POST /api/v1/certificates/{id}/reissue` | `FR-CERT-05` | Tách biệt rõ 2 nghiệp vụ: `revoke` thu hồi vĩnh viễn (`REVOKED`), `reissue` cấp lại phiên bản mới (`certVersion + 1`, bản cũ chuyển `SUPERSEDED`); bắt buộc kèm `Idempotency-Key` và ghi `AUDIT_LOGS`. |
 
-### 3.5. Phân hệ 4.5 — Bản tin Blog & Truyền thông (`FR-CMS-01..03`)
+### 3.5. Phân hệ 4.5 — Bản tin Blog & Truyền thông (`FR-CMS-01..04`)
 | Phương thức & Endpoint | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
+| `GET /api/v1/cms/categories` & `POST/PUT/DELETE /api/v1/cms/categories/{id}` | `FR-CMS-04` | Quản trị danh mục chuyên mục bản tin (`MOD_CMS_EDITORIAL`): tạo/sửa tên, slug, thứ tự hiển thị, bật/tắt hiển thị và xóa (chặn xóa nếu còn bài viết tham chiếu, ghi `Audit Log`). |
 | `GET /api/v1/cms/posts` & `GET /api/v1/cms/posts/{slug}` | `FR-CMS-01` | Xem bản tin hoạt động, học thuật, thông báo Đoàn - Hội (hỗ trợ phân trang & HTTP Cache `ETag`). |
 | `POST /api/v1/cms/posts` & `PUT /api/v1/cms/posts/{id}` | `FR-CMS-01..03` | Sinh viên gửi bài đóng góp vào hàng chờ hoặc CTV Truyền thông soạn bài, hẹn giờ đăng (kiểm tra Optimistic Lock `version` và lọc XSS HTML Sanitizer). |
 | `POST /api/v1/cms/posts/{id}/approve` | `FR-CMS-02` | Biên tập viên (`MOD_CMS_EDITORIAL`) duyệt xuất bản bài viết. |
@@ -190,6 +191,7 @@ flowchart TB
 ### 3.7. Phân hệ 4.7 — Xét duyệt Danh hiệu & Phong trào Sinh viên 5 Tốt (`FR-AWD-01..05`)
 | Phương thức & Endpoint | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
+| `POST / PUT / DELETE /api/v1/awards/campaigns` & `.../campaigns/{id}/criteria` | `FR-AWD-01` | `BTV` tạo/cập nhật đợt xét danh hiệu và **CRUD các nội dung cần đạt (điều kiện phụ)** cho từng tiêu chí, chia rõ 2 nhóm: **Tiêu chí bắt buộc** (`mandatorySubCriteria[]`, đạt 100%) và **Tiêu chí khác** (`optionalSubCriteria[]` kèm ngưỡng `minOptionalRequired = n`). Chặn xóa điều kiện đã có hồ sơ đính kèm. |
 | `GET /api/v1/sv5t/progress/me` | `FR-AWD-01` | Bảng theo dõi tiến độ 5 tiêu chí SV5T (tự động tổng hợp ĐRL/CTXH/Sự kiện từ hệ thống và gắn nhãn rõ các tiêu chí cần nộp minh chứng ngoài). |
 | `POST /api/v1/awards/campaigns/{id}/applications` | `FR-AWD-02..03` | Nộp hồ sơ xét danh hiệu (bắt buộc `Idempotency-Key` + Compound Unique `{campaignId, userId}`) kèm tệp minh chứng (quét ClamAV, lưu Private Silo Bucket, không thu thập CCCD mặc định). |
 | `POST /api/v1/awards/applications/{id}/review` | `FR-AWD-04` | Hội đồng thẩm định chấm duyệt 2 vòng (chặn tự chấm hồ sơ của chính mình — `NFR-SEC-03`). |
@@ -202,9 +204,10 @@ flowchart TB
 | `POST /api/v1/oj/submissions` | `FR-OJ-02..03` | Nộp mã nguồn (`C/C++/Python/Java`) qua hàng đợi sang Host Sandbox cô lập (Judge0 CE / DMOJ). |
 | `STOMP /user/queue/oj.results` | `FR-OJ-03` | Trả kết quả chấm (`AC`, `WA`, `TLE`, `MLE`, `OLE`, `CE`) theo thời gian thực. |
 
-### 3.9. Phân hệ 4.9 — Cửa hàng Vật phẩm Khoa & Gây quỹ Đoàn - Hội (`FR-STR-01..08`)
+### 3.9. Phân hệ 4.9 — Cửa hàng Vật phẩm Khoa & Gây quỹ Đoàn - Hội (`FR-STR-01..09`)
 | Phương thức & Endpoint | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
+| `GET/POST/PUT/DELETE /api/v1/store/categories/{id}`, `/products/{id}`, `/vouchers/{id}`, `/bank-accounts/{id}` | `FR-STR-09` | CRUD Danh mục vật phẩm, Sản phẩm/SKU, Voucher & Tài khoản VietQR tổ chức (`MOD_STORE_MANAGER` / `BTV`); chặn xóa mục đã phát sinh đơn/lượt dùng $\rightarrow$ chuyển `Ngưng bán / Vô hiệu hóa` + Audit Log. |
 | `GET /api/v1/store/products` & `GET /api/v1/store/fundraising` | `FR-STR-01`, `FR-STR-07` | Xem vật phẩm (phân trang `size <= 50`), tồn kho theo biến thể và thanh tiến độ **Lợi nhuận gây quỹ thực tế** ($\sum (\text{Doanh thu thực nhận} - \text{Giá vốn hàng đã giao})$). |
 | `POST /api/v1/store/orders` | `FR-STR-02..04` | Đặt đơn hàng (bắt buộc Header `Idempotency-Key` chống tạo đơn trùng khi rớt mạng; áp dụng giá Combo / Voucher có khóa phân tán Redis `SET NX EX 30` chống vượt `perUserLimit`), giữ tồn kho tạm 15 phút cho VietQR hoặc hạn 3 ngày làm việc cho `PENDING_COD`. |
 | `POST /api/v1/store/webhooks/vietqr` | `FR-STR-04`, `EXT-PAY-01` | Nhận Webhook gạch nợ tự động từ 01 cổng đối soát VietQR; **Bước 0 bắt buộc đọc `rawBodyBytes` trước Jackson parse, kiểm tra `\|now - X-Webhook-Timestamp\| <= 300s` và xác minh chữ ký `X-Webhook-Signature` HMAC-SHA256 hằng thời gian (`A11`)**. |
@@ -217,7 +220,7 @@ flowchart TB
 | Phương thức & Endpoint | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
 | `POST /api/v1/chatbot/stream` *(SSE `POST` duy nhất)* | `FR-BOT-01..03`, `EXT-AI-01` | Luồng trả lời SSE (`Accept: text/event-stream`, dùng `fetch-event-source` gửi JWT trong Header & câu hỏi trong Body; **cấm dùng `GET` SSE** để không lộ PII/Token vào URL log) có trích dẫn nguồn quy chế (`RAG`) và tra cứu dữ liệu cá nhân (`Function Calling`); đi qua `PiiRedactorService` và `AiBudgetCircuitBreaker`. |
-| `POST /api/v1/chatbot/knowledge-docs` | `FR-BOT-04` | Biên soạn tài liệu quy chế/FAQ (`MOD_YITBOT_CURATOR` tạo nháp; chỉ `BTV` có `chatbot:approve` được duyệt nạp vào Vector Index). |
+| `POST/PUT/DELETE /api/v1/chatbot/knowledge-docs/{id}` | `FR-BOT-04` | CRUD Kho tài liệu quy chế/FAQ (`MOD_YITBOT_CURATOR` tạo/cập nhật nháp; chỉ `BTV` có `chatbot:approve` duyệt nạp hoặc gỡ/đánh dấu hết hiệu lực khỏi Vector Index + Audit Log). |
 | `GET /api/v1/chatbot/budget-ledger` | `FR-BOT-05`, `NFR-AI-BUDGET-01` | Theo dõi hạn mức token và trần ngân sách AI hàng tháng. |
 
 ### 3.11. Phân hệ 4.11 — Trực Văn phòng & Kiểm kê Tài sản Ban Văn phòng (`FR-DUTY-01..11`)
@@ -254,7 +257,8 @@ flowchart TB
 ### 3.15. Phân hệ 4.15 — Khảo sát & Lấy ý kiến Sinh viên (`FR-SUR-01..05`)
 | Phương thức & Endpoint | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
-| `POST /api/v1/surveys` & `GET /api/v1/surveys/{id}` | `FR-SUR-01..02` | Tạo biểu mẫu khảo sát gắn sự kiện hoặc lấy ý kiến toàn Khoa. |
+| `GET/POST/PUT/DELETE /api/v1/surveys/templates/{id}` | `FR-SUR-01` | CRUD Kho Mẫu Khảo sát Chuẩn của Khoa (`SURVEY_TEMPLATES`). |
+| `POST /api/v1/surveys` & `GET /api/v1/surveys/{id}` | `FR-SUR-01..02` | Tạo biểu mẫu khảo sát gắn sự kiện hoặc lấy ý kiến toàn Khoa (khóa sửa/xóa câu hỏi khi đã có phản hồi). |
 | `POST /api/v1/surveys/{id}/responses` | `FR-SUR-03` | Nộp khảo sát; với khảo sát ẩn danh, hệ thống tách hoàn toàn bảng `SURVEY_PARTICIPATIONS` (chỉ đánh dấu đã tham gia) và `SURVEY_RESPONSES` (không chứa `userId`, làm tròn mốc thời gian). |
 | `GET /api/v1/surveys/{id}/analytics` & `POST .../ai-summary` | `FR-SUR-04..05` | Thống kê kết quả (chỉ mở khi $N \ge 5$ phiếu) và tóm tắt ý kiến bằng AI sau bước duyệt/ẩn PII thủ công. |
 
@@ -268,6 +272,7 @@ flowchart TB
 ### 3.17. Phân hệ 4.17 — Bức tường Hỏi - Đáp Hội trường Live Q&A (`FR-QA-01..05`)
 | Phương thức & Endpoint / Kênh | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
+| `GET/POST/PUT/DELETE /api/v1/live-qa/profanity-dictionary/{id}` | `FR-QA-04` | CRUD Bộ Từ điển Lọc Từ ngữ Nhạy cảm dùng chung cho Live Q&A & Minigame (`BCH`/`BTV`, ghi `AUDIT_LOGS`). |
 | `POST /api/v1/live-qa/sessions/{id}/questions` | `FR-QA-01..02` | Gửi câu hỏi cho diễn giả (qua bộ lọc từ khóa nhạy cảm & giới hạn tần suất). |
 | `STOMP /app/liveqa.{sessionId}.upvote` & `/topic/liveqa.{sessionId}` | `FR-QA-03..04` | Bình chọn (Upvote) câu hỏi theo thời gian thực trên `Redis ZSET` và chiếu lên màn hình sân khấu. |
 | `POST /api/v1/live-qa/questions/{id}/merge` | `FR-QA-03` (`Edge 36`) | Gộp câu hỏi trùng bằng phép hợp tập hợp người bình chọn (`SUNIONSTORE`). |
@@ -282,6 +287,7 @@ flowchart TB
 ### 3.19. Phân hệ 4.19 — Hộp thư Hỏi - Đáp & Nhắn tin Hỗ trợ BCH (`FR-QACHAT-01..05`)
 | Phương thức & Endpoint / Kênh | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
 | :--- | :--- | :--- |
+| `GET/POST/PUT/DELETE /api/v1/qa/canned-responses/{id}` & `/api/v1/qa/category-tags/{id}` | `FR-QACHAT-04` | CRUD Kho Câu trả lời Mẫu (`/`) và Nhãn Chủ đề Hộp thư (`MOD_QA_MESSENGER`, chặn xóa nhãn đang gắn hội thoại $\rightarrow$ chuyển `Tạm ẩn` + Audit Log). |
 | `POST /api/v1/qa/conversations` & `GET /api/v1/qa/conversations` | `FR-QACHAT-01..02` | Sinh viên mở luồng hỏi - đáp chuyển về Hộp thư chung của BCH (`Shared Inbox`, SLA 24h, Cursor Pagination). |
 | `POST /api/v1/qa/conversations/{id}/claim` | `FR-QACHAT-02` (`Edge 39`) | Thành viên BCH nhận xử lý hội thoại bằng truy vấn nguyên tử (`findOneAndUpdate` khi `assignedBchUserId == null`). |
 | `POST /api/v1/qa/conversations/{id}/messages` & `STOMP /topic/qa.bch.inbox` | `FR-QACHAT-03..05` | Nhắn tin 2 chiều thời gian thực (Cursor Pagination tin nhắn theo `beforeMessageId`), tra cứu thẻ tóm tắt 360° của sinh viên (có ghi vết Audit) và đóng hội thoại. |
@@ -296,6 +302,17 @@ flowchart TB
 | `POST /api/v1/voting/campaigns/{id}/freeze-led` & `/close` | `FR-VOTE-05` | MC/Kỹ thuật (`MOD_QUIZ_EXAM_HOST`) bật/tắt chế độ **Đóng băng màn hình LED phút chót (`Freeze Mode`)** hoặc đóng cổng bình chọn. |
 | `STOMP /topic/voting.{id}` & `/topic/voting.{id}.admin` | `FR-VOTE-03`, `FR-VOTE-05` | Kênh `.admin` được bảo vệ bởi `StompChannelInterceptor`; với phiếu kín, khi đang mở cổng chỉ phát số lượng cử tri đã bỏ phiếu (`totalVotersCast`), tuyệt đối không phát số phiếu từng ứng viên theo thời gian thực (`A5`). |
 | `GET /api/v1/voting/campaigns/{id}/verify-receipt` & `POST .../export-minutes` | `FR-VOTE-03`, `FR-VOTE-05` | Cử tri tra cứu mã biên nhận `SHA-256` sau khi đóng cổng (Rate Limit `15 req/phút/IP`); BTC kết xuất **Biên bản Kiểm phiếu (PDF/Excel)** lưu lên Silo. |
+
+### 3.2b. Mở rộng Phân hệ 4.2 — Sự kiện Đăng ký theo Đội & Đa vòng (`FR-EVT-07..12`)
+| Phương thức & Endpoint / Kênh | Mã FR / Ràng buộc SRS | Mô tả Nghiệp vụ & Cơ chế Bảo mật |
+| :--- | :--- | :--- |
+| `POST /api/v1/events/{eventId}/teams` & `POST .../teams/join` | `FR-EVT-08` | Đội trưởng tạo đội (`DRAFT`, sinh `joinCode`) ngay trên sự kiện; thành viên (UTE & SV ngoài trường tự đăng ký Email + OTP) nhập `joinCode` xác nhận vào đội (Partial Unique Index chặn Edge 43). |
+| `POST /api/v1/events/{eventId}/teams/{teamId}/submit` & `PATCH .../review` | `FR-EVT-08` | Chốt nộp đội khi đủ sĩ số (`5/5`) và BTC (`MOD_EVENT_OPS`) duyệt hồ sơ đội (`APPROVED / REJECTED`), yêu cầu `If-Match` (`@Version`). |
+| `POST /api/v1/events/{eventId}/rounds/{roundId}/compute-ranking` & `/finalize` | `FR-EVT-09..10` | Tổng hợp điểm 5 bài thi cá nhân (`SUM_OF_MEMBERS` / `AVG_OF_MEMBERS`) từ `4.6.2`/`4.8`, áp `cheatingPolicy`, phát hiện đồng điểm biên hạng $n$, đóng băng BXH & gán `QUALIFIED` (Top $n$) / `STANDBY`. |
+| `POST .../rounds/{roundId}/teams/{teamId}/confirm` & `POST .../promote-standby` | `FR-EVT-10` | Đội Top $n$ xác nhận tham dự Chung kết (`CONFIRMED`) hoặc rút lui (`WITHDRAWN`); BTC đôn đội dự bị kế tiếp (`n+1`) có bắt buộc lý do & `Audit Log` (Edge 45). |
+| `POST .../rounds/{roundId}/sync-voting` & `POST .../stage-scores` | `FR-EVT-11` | Đồng bộ 1 chạm Top $n$ đội `CONFIRMED` sang `VOTING_CANDIDATES` của `4.20`; BGK (`judgeUserIds`) chấm điểm từng chặng/Rubric quy đổi thang 100. |
+| `POST /api/v1/events/{eventId}/finalize-awards` | `FR-EVT-12` | `BTV` chốt giải thưởng chung cuộc (`Idempotency-Key`), phát hành E-Cert (`4.4`) cho cả 5 thành viên và tách bạch cộng `ĐRL/CTXH/CĐDN` riêng cho SV HCM-UTE (Edge 44). |
+| `STOMP /topic/event.{eventId}.round.{roundId}.leaderboard` & `.admin` | `FR-EVT-11` | Phát bảng điểm LED Chung kết thời gian thực (tôn trọng `Freeze Mode`); kênh `.admin` bảo vệ bởi `StompChannelInterceptor`. |
 
 ---
 
@@ -336,7 +353,7 @@ flowchart TB
 
 ### 4.3. Chuẩn `Idempotency-Key`, Optimistic Locking (`If-Match`), Webhook HMAC & Chống Mass Assignment
 1. **HTTP `Idempotency-Key` Header:** Bắt buộc gửi `Idempotency-Key: <UUIDv4>` trên các lệnh ghi nhạy cảm: `POST /api/v1/store/orders`, `POST /api/v1/store/orders/{id}/fulfill`, `POST /api/v1/store/cod-handovers`, `POST /api/v1/awards/campaigns/{id}/applications`, `POST /api/v1/attendance/review-queue/bulk-action`, `POST /api/v1/certificates/{id}/revoke`, `POST /api/v1/certificates/{id}/reissue`. Server lưu trạng thái xử lý kèm `payloadHash` (SHA-256 của request body) trên Redis (`idemp:{userId}:{method}:{path}:{key}`, TTL `24h`); nếu trùng key và cùng body thì trả kết quả cũ, nếu trùng key nhưng khác body thì trả `409 Conflict`.
-2. **Optimistic Locking (`@Version` & `If-Match`):** Các tài nguyên cộng tác nhiều người (`EVENTS`, `BLOG_POSTS`, `VOTING_CAMPAIGNS`, `STORE_PRODUCTS`, `PERFORMANCE_ACTS`, `STUDENT_PORTFOLIOS`) lưu trường `@Version Long version`. Khi gọi `PUT`/`PATCH`, Client **bắt buộc** gửi kèm `version` trong body hoặc Header `If-Match: "<version>"`; nếu thiếu trả `400 Bad Request`, nếu không khớp trả `409 Conflict` (`OPTIMISTIC_LOCK_CONFLICT`) chống ghi đè mất dữ liệu.
+2. **Optimistic Locking (`@Version` & `If-Match`):** Các tài nguyên cộng tác nhiều người (`EVENTS`, `EVENT_TEAMS`, `BLOG_POSTS`, `VOTING_CAMPAIGNS`, `STORE_PRODUCTS`, `PERFORMANCE_ACTS`, `STUDENT_PORTFOLIOS`) lưu trường `@Version Long version`. Khi gọi `PUT`/`PATCH`, Client **bắt buộc** gửi kèm `version` trong body hoặc Header `If-Match: "<version>"`; nếu thiếu trả `400 Bad Request`, nếu không khớp trả `409 Conflict` (`OPTIMISTIC_LOCK_CONFLICT`) chống ghi đè mất dữ liệu.
 3. **Chuẩn Chữ ký Webhook VietQR (`POST /api/v1/store/webhooks/vietqr`):** Chuỗi đầu vào HMAC-SHA256 là `"{X-Webhook-Timestamp}." + rawBodyBytes` (UTF-8), chữ ký được biểu diễn dạng chuỗi `hex` viết thường (chấp nhận cả có hoặc không có tiền tố `sha256=`), so sánh hằng thời gian bằng `MessageDigest.isEqual` trong cửa sổ $|\text{now} - \text{timestamp}| \le 300\text{s}$.
 4. **Chống Mass Assignment & Strict DTO:** Toàn bộ Request DTO bật `DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES = true` và toàn bộ Response trả về qua `record` DTO định kiểu chặt (tuyệt đối không bind hay trả trực tiếp MongoDB `@Document` entity hoặc `Map<String, Object>` không tường minh).
 

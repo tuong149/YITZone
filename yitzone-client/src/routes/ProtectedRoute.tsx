@@ -1,20 +1,27 @@
 import { Navigate, Outlet } from "react-router-dom";
+import { hasAnyPermission } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 
 interface ProtectedRouteProps {
   requiredAuthority?: string;
+  requiredAuthorities?: readonly string[];
   requireAuth?: boolean;
 }
 
-export function ProtectedRoute({ requiredAuthority, requireAuth = true }: ProtectedRouteProps) {
+export function ProtectedRoute({
+  requiredAuthority,
+  requiredAuthorities,
+  requireAuth = true
+}: ProtectedRouteProps) {
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasAuthority = useAuthStore((s) => s.hasAuthority);
+  const authorities = useAuthStore((s) => s.authorities);
 
   if (requireAuth && !accessToken) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredAuthority && !hasAuthority(requiredAuthority)) {
+  const requiredList = requiredAuthorities ?? (requiredAuthority ? [requiredAuthority] : undefined);
+  if (requiredList && !hasAnyPermission(authorities, requiredList)) {
     return <Navigate to="/" replace />;
   }
 

@@ -8,20 +8,20 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg"],
+      includeAssets: ["brand/YITZoneIconWeb.png"],
       manifest: {
         name: "YITZone — Đoàn Hội & Học thuật FIT",
         short_name: "YITZone",
         description: "Hệ thống Quản lý Hoạt động Đoàn - Hội & Học thuật Khoa CNTT",
-        theme_color: "#0f172a",
-        background_color: "#ffffff",
+        theme_color: "#090d16",
+        background_color: "#060a14",
         display: "standalone",
         start_url: "/",
         icons: [
           {
-            src: "favicon.svg",
-            sizes: "any",
-            type: "image/svg+xml"
+            src: "brand/YITZoneIconWeb.png",
+            sizes: "512x512",
+            type: "image/png"
           }
         ]
       },
@@ -54,6 +54,21 @@ export default defineConfig({
   },
   define: {
     global: "globalThis"
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+            if (id.includes("@radix-ui") || id.includes("lucide-react")) return "vendor-ui";
+            if (id.includes("react-router") || id.includes("@tanstack")) return "vendor-data";
+            return "vendor";
+          }
+          return undefined;
+        }
+      }
+    }
   },
   server: {
     port: 5173,

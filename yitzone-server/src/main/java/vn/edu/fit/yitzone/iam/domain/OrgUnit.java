@@ -20,15 +20,19 @@ public class OrgUnit {
 
     private String name;
     private UnitType unitType;
+
+    @Indexed
     private String parentId;
 
     @Indexed
     private List<String> ancestors = new ArrayList<>();
 
     private List<String> defaultDeptModules = new ArrayList<>();
+    private String termYear;
+    private boolean active = true;
 
     public enum UnitType {
-        FACULTY_UNION, COMMITTEE, TEAM
+        FACULTY_UNION, EXECUTIVE_BODY, COMMITTEE, TEAM, SUBGROUP
     }
 
     public String getId() { return id; }
@@ -45,4 +49,8 @@ public class OrgUnit {
     public void setAncestors(List<String> ancestors) { this.ancestors = ancestors; }
     public List<String> getDefaultDeptModules() { return defaultDeptModules; }
     public void setDefaultDeptModules(List<String> defaultDeptModules) { this.defaultDeptModules = defaultDeptModules; }
+    public String getTermYear() { return termYear; }
+    public void setTermYear(String termYear) { this.termYear = termYear; }
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
 }

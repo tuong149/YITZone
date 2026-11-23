@@ -1,8 +1,8 @@
 # TÀI LIỆU THIẾT KẾ KIẾN TRÚC MỨC CAO (HIGH-LEVEL DESIGN - HLD)
 
 **Tên dự án:** YITZone — Hệ thống Quản lý Hoạt động Đoàn - Hội & Học thuật Khoa Công nghệ Thông tin  
-**Phiên bản:** 2.2.1 (Căn cứ trực tiếp theo `SRS_YITZone.md` phiên bản `2.2.1` — Hoàn thiện theo `report03.md`)  
-**Ngày lập:** 19/11/2026  
+**Phiên bản:** 2.3.0 (Căn cứ trực tiếp theo `SRS_YITZone.md` phiên bản `2.3.0` — Mở rộng Module `event` (`4.2`) hỗ trợ Sự kiện Đăng ký theo Đội & Đa vòng `FR-EVT-07..12`)  
+**Ngày lập:** 22/11/2026  
 **Tài liệu liên kết:**  
 - [Đặc tả Yêu cầu Phần mềm (SRS_YITZone.md)](./SRS_YITZone.md)  
 - [Thiết kế Chi tiết Kỹ thuật (LLD_YITZone.md)](./LLD_YITZone.md)  
@@ -32,7 +32,7 @@ Kiến trúc của YITZone được thiết kế để giải quyết 6 thách t
 | **1. Đỉnh tải Hội trường, Live Voting & Tương tác Thời gian thực** | `500` người dùng ảo (ramp-up `10s`, 1 check-in + 20 tương tác Bình chọn `Live Voting` / `Live Q&A` / `Minigame` trong `60s`), chỉ tiêu nghiệm thu chính thức (**Acceptance SLA**) đạt **`≥ 150 req/s`** *(ngưỡng dự phòng thiết kế tham khảo `300 req/s` — `A23`)*, `≥ 500` kết nối WebSocket đồng thời, độ trễ server `p95 ≤ 300 ms`, lỗi `< 0.5%` (`NFR-PERF-01`). | Sử dụng **Java 21 Virtual Threads** trên Spring Boot + **STOMP over WebSocket** (có `ChannelInterceptor` kiểm tra quyền trên các kênh quản trị `.admin` — `A24b`) kết hợp **Redis Pub/Sub, Hash & Sorted Sets (`ZSET`)** để xử lý đua top bình chọn định danh, đóng băng kết quả (`Freeze Mode`) và bảng xếp hạng trong RAM. |
 | **2. Hội trường Mất sóng, Tương thích iOS 16.4 & Quét Mã vạch Thẻ SV Tốc độ Cao** | Mở Vé QR & xác thực trên **Máy soát vé BTC Ngoại tuyến** trong `≤ 0.5s` trên cả **iOS Safari $\ge 16.4$ và Android Chrome $\ge 110$** (`A9`); quét & tra cứu **Mã vạch 1D trên Thẻ sinh viên nhựa vật lý (`Code 128`/`Code 39`)** trong `≤ 0.3s` kể cả khi `navigator.onLine == false` (`FR-ATT-07`, `FR-ATT-09`, `FR-PWA-02`, `NFR-PERF-05`). | Áp dụng **Offline-First PWA (Workbox + IndexedDB Vault)** với **Vé ký số bất đối xứng chuẩn `ECDSA P-256` (chu kỳ bucket `15s`)** + **Mã hóa `AES-GCM` & tự động xóa gói dữ liệu offline trên máy BTC sau sự kiện (`A14`)** + **1D Barcode Camera & USB/Bluetooth HID Wedge Listener (`30–50ms/char`, chỉ bật ở màn hình soát vé — `A24`)** + hậu kiểm bắt buộc `BARCODE_WALKIN_UNVERIFIED` với sự kiện có quyền lợi (`A3`). |
 | **3. Phân quyền Động Cô lập Đa tầng & Thu hồi $\le 5\text{s}$** | Kiểm tra quyền RBAC `< 5 ms`, 20 Gói Quyền, hỗ trợ cây đơn vị đệ quy N-tầng, tách quyền sự kiện nội bộ (`internal_event:host_attendance` — `A16`), thu hồi quyền (kể cả **hết hạn tự động**) có hiệu lực trong `≤ 5s` (`NFR-SEC-06`). | Mô hình **Hybrid Recursive (`parentId` + `ancestors[]`)** + **Role & Module Flattening** trên Redis có lưu **`expiresAt` kiểm tra lúc đánh giá**, đối chiếu **`permissionVersion`** và phát tán xóa cache qua **Redis Pub/Sub**. |
-| **4. Chống Bán lố Tồn kho, Xác thực Webhook, Đối soát Tiền mặt COD & Lợi nhuận Quỹ** | `0%` sai lệch tồn kho/voucher (`NFR-PERF-03`); xác thực chữ ký Webhook thanh toán (`A11`); kiểm soát đơn COD & bàn giao tiền mặt cuối ca (`A12`, `B3`); thanh gây quỹ phản ánh lợi nhuận thực tế của hàng đã giao (`FR-STR-03`, `A13`). | **Bước 0 xác minh chữ ký HMAC-SHA256 hằng thời gian tại Webhook** + **Reservation Pattern** (`15m + 5m` cho VietQR; `PENDING_COD` hạn `03 ngày` & tối đa 2 đơn/SV) + **Phiếu bàn giao tiền mặt COD cuối ca (`COD_CASH_HANDOVERS`)** + **MongoDB ACID Transaction** + **Redis `SETNX` Lock có TTL 30s (`A32`)** + ghi nhận giá vốn `costPriceVnd` tại thời điểm `fulfill`. |
+| **4. Chống Bán lố Tồn kho, Xác thực Webhook, Đối soát Tiền mặt COD & Lợi nhuận Quỹ** | `0%` sai lệch tồn kho/voucher (`NFR-PERF-03`); xác thực chữ ký Webhook thanh toán (`A11`); kiểm soát đơn COD & bàn giao tiền mặt cuối ca (`A12`, `B3`); thống kê quỹ phản ánh lợi nhuận thực tế của hàng đã giao (`FR-STR-03`, `A13`). | **Bước 0 xác minh chữ ký HMAC-SHA256 hằng thời gian tại Webhook** + **Reservation Pattern** (`15m + 5m` cho VietQR; `PENDING_COD` hạn `03 ngày` & tối đa 2 đơn/SV) + **Phiếu bàn giao tiền mặt COD cuối ca (`COD_CASH_HANDOVERS`)** + **MongoDB ACID Transaction** + **Redis `SETNX` Lock có TTL 30s (`A32`)** + ghi nhận giá vốn `costPriceVnd` tại thời điểm `fulfill`. |
 | **5. Bảo vệ Dữ liệu Cá nhân (Luật 91/2025, NĐ 356/2025 & NĐ 330/2026) & Bỏ phiếu Kín Outbox** | Tuân thủ `NFR-PRIV-01..06` (Consent, Retention, Export dữ liệu, Audit hash-chain 5 năm có neo hash ra ngoài `A20`, Quét mã độc, `RPO ≤ 1h` điểm danh/thanh toán, `RTO ≤ 4h`, tách bảng khảo sát ẩn danh & bỏ phiếu kín chống tương quan thời gian `FR-VOTE-03`, `A5`). | **Consent & Privacy Governance**, **Data Retention Scheduler**, **ClamAV**, **Single-Writer Audit Sequencer + Daily External Hash Anchor (Email BTV & WORM Backup)**, và **Bỏ phiếu kín qua `VOTING_BALLOT_OUTBOX` trộn lô (`_id` UUID v4) + Tắt kiểm phiếu thời gian thực (kể cả kênh `.admin`)**. |
 | **6. AI Gateway An toàn, Trích dẫn & Kiểm soát Ngân sách** | TTFT `p95 ≤ 1.5s` (`NFR-PERF-04`), trích dẫn nguồn $\ge 90\%$, chống Prompt Injection, ngắt mạch ngân sách (`NFR-AI-BUDGET-01`). | **AI Gateway** với lớp trừu tượng LLM theo cấu hình, **Token/Cost Circuit Breaker** về FAQ tĩnh, **PII Redactor** (+ xem trước thủ công), **Metadata Citation Enforcement** và `@Tool` chỉ đọc theo `SecurityContextHolder`. |
 
@@ -224,14 +224,48 @@ Thay thế thiết kế cũ (đã gỡ bỏ Exam Semantic Shielding cosine $\ge 
 * **Đường ống Kiểm tra Tệp & Quét Mã độc (`NFR-STORAGE-01`):** Mọi tệp tải lên đi qua lớp kiểm tra dung lượng (`5 MB` ảnh / `10 MB` PDF / `300 MB` video), kiểm tra **Magic Bytes** (chặn `.exe, .sh, .bat, .js...`), và quét qua **ClamAV Daemon** trước khi ghi vào **Silo**.
 * **Sao lưu & Khôi phục (`NFR-BACKUP-01`):** Sao lưu gia tăng oplog/snapshot mỗi **`≤ 1 giờ`** cho phân hệ điểm danh & thanh toán (`RPO ≤ 1 giờ`) và sao lưu toàn bộ CSDL + Silo hằng ngày ra vùng lưu trữ tách biệt (`RPO ≤ 24 giờ`, kèm mốc neo Hash Audit Log chỉ ghi `A20`), đảm bảo mục tiêu khôi phục **`RTO ≤ 4 giờ`** kèm diễn tập khôi phục định kỳ theo học kỳ.
 
+### 3.10. Kiến trúc Mở rộng Module `event` cho Sự kiện Đăng ký theo Đội & Đa vòng (`FR-EVT-07..12`)
+Để hỗ trợ các sự kiện cuộc thi học thuật nhiều vòng theo đội (điển hình như **Mastering IT**: Đăng ký đội 5 SV có SV ngoài trường $\rightarrow$ 5 thành viên thi cá nhân gộp điểm đội $\rightarrow$ Chốt Top $n$ vào chung kết $\rightarrow$ Đêm Chung kết sân khấu) **ngay trong luồng Sự kiện thông thường** mà không tách phân hệ hay thêm gói quyền mới, mở rộng trực tiếp module `vn.edu.fit.yitzone.event` với các service con:
+
+```mermaid
+flowchart TB
+    subgraph EventModule["Module Mở rộng: event (Phân hệ 4.2 — Sự kiện & Cuộc thi Đa vòng)"]
+        EvtSvc["EventService\n(Cấu hình sự kiện & cờ teamCompetitionConfig)"]
+        TeamSvc["EventTeamService\n(Đội 5 người, JoinCode, SV ngoài trường OTP)"]
+        AdvSvc["EventRoundAdvancementService\n(Gộp điểm SUM/AVG, Chốt Top n, Đôn dự bị)"]
+        StageSvc["EventStageRubricService\n(Chấm điểm nhiều chặng / Rubric BGK)"]
+    end
+
+    subgraph ExistingModules["Các Module Liên kết (Phụ thuộc 1 chiều, không circular dependency)"]
+        IAM["iam (USERS + externalProfile)"]
+        EXAM["exam (4.6.2 Proctored MCQ)"]
+        OJ["oj (4.8 Online Judge - P3)"]
+        VOTE["voting (4.20 Live Voting + LED)"]
+        ATT["attendance (4.3 QR / Barcode)"]
+        CERT["certificates (4.4 E-Cert + QR)"]
+        NOTIF["notifications & audit (4.14)"]
+    end
+
+    TeamSvc --> IAM
+    AdvSvc -->|Đọc điểm cá nhân| EXAM & OJ
+    AdvSvc -->|Đẩy Top n làm ứng viên| VOTE
+    StageSvc -->|Đồng bộ điểm BGK thang 100| VOTE
+    AdvSvc --> CERT
+    EvtSvc & AdvSvc --> NOTIF
+    EvtSvc --> ATT
+```
+
+* **Giữ nguyên 20 phân hệ & 20 Gói Quyền:** Mọi cuộc thi học thuật là một bản ghi `EVENTS` bình thường bật cờ tùy chọn `teamCompetitionConfig` (tái sử dụng `MOD_EVENT_OPS`, `MOD_QUIZ_EXAM_HOST`, `MOD_OJ_MANAGER`, `MOD_SURVEY_POLL`, `judgeUserIds` và `BTV`).
+* **Tuân thủ `NFR-PRIV` cho SV ngoài trường:** Mọi thí sinh ngoài trường tự đăng ký tài khoản Email + OTP (`FR-IAM-01`), lưu hồ sơ bổ sung (`externalProfile`) tuân thủ chính sách xóa/ẩn danh hóa định kỳ của `Data Retention Scheduler`, và tách biệt khỏi tiến trình cộng quyền lợi `ĐRL/CTXH/CĐDN` của sinh viên HCM-UTE.
+
 ---
 
 ## 4. Chiến lược Dữ liệu, Bộ nhớ Đệm & Lưu trữ Tệp (Data, Caching & Storage Strategy)
 
 ### 4.1. Chiến lược Thiết kế Cơ sở Dữ liệu MongoDB
-* **Document Model & Tham chiếu Hợp lý:** Nhúng mảng/tài liệu con gắn chặt vòng đời (`roleScopes`, `assignedModules`, `attendanceSessions`, `benefitTypes`, `variants`, `items`, `criteriaTree`, `candidates`), giới hạn mảng tin nhắn `CHAT_SESSIONS.messages[]` theo cửa sổ trượt tối đa `50 tin nhắn/phiên` để không chạm trần 16 MB (`A30`), đồng thời tách collection cho các luồng tăng trưởng không giới hạn hoặc yêu cầu bảo mật/ẩn danh riêng (`OFFICIAL_DIRECTORY_ROSTER`, `EVENT_ATTENDANCES` với khóa định danh tổng quát `attendeeKey`, `ATTENDANCE_REVIEW_QUEUE`, `OFFLINE_SCAN_BATCHES`, `SURVEY_PARTICIPATIONS` vs `SURVEY_RESPONSES`, `VOTING_CAMPAIGNS` + `VOTING_VOTER_LOGS` + `VOTING_BALLOT_OUTBOX` vs `VOTING_BALLOTS` + `VOTING_JUDGE_SCORES`, `COD_CASH_HANDOVERS`, `ORDER_SUPPORT_REQUESTS`, `CONSENT_RECORDS`, `AI_USAGE_LEDGER`, `AUDIT_CHAIN_STATE`).
+* **Document Model & Tham chiếu Hợp lý:** Nhúng mảng/tài liệu con gắn chặt vòng đời (`roleScopes`, `assignedModules`, `attendanceSessions`, `teamCompetitionConfig`, `benefitTypes`, `variants`, `items`, `criteriaTree`, `candidates`, `members`, `stageSegments`), giới hạn mảng tin nhắn `CHAT_SESSIONS.messages[]` theo cửa sổ trượt tối đa `50 tin nhắn/phiên` để không chạm trần 16 MB (`A30`), đồng thời tách collection cho các luồng tăng trưởng không giới hạn hoặc yêu cầu bảo mật/ẩn danh riêng (`OFFICIAL_DIRECTORY_ROSTER`, `EVENT_ATTENDANCES` với khóa định danh tổng quát `attendeeKey`, `ATTENDANCE_REVIEW_QUEUE`, `OFFLINE_SCAN_BATCHES`, `EVENT_TEAMS` + `EVENT_ROUNDS` + `EVENT_ROUND_RESULTS`, `SURVEY_PARTICIPATIONS` vs `SURVEY_RESPONSES`, `VOTING_CAMPAIGNS` + `VOTING_VOTER_LOGS` + `VOTING_BALLOT_OUTBOX` vs `VOTING_BALLOTS` + `VOTING_JUDGE_SCORES`, `COD_CASH_HANDOVERS`, `ORDER_SUPPORT_REQUESTS`, `CONSENT_RECORDS`, `AI_USAGE_LEDGER`, `AUDIT_CHAIN_STATE`).
 * **Mô hình Đệ quy Lai (`ORG_UNITS`):** Kết hợp `parentId` + `ancestors[]` + `$graphLookup` cho cây tổ chức 4 Ban - 9 Tổ để kiểm tra phạm vi đơn vị trong $O(1)$.
-* **Chỉ mục & ACID Transaction (`A15`):** `2dsphere` (tín hiệu rủi ro GPS), `vector` Index (RAG), `text` Index (Blog), `Sparse Unique` (`studentCode`, `staffId`), `Compound Unique` (**`{eventId, sessionId, attendeeKey}`** trên `EVENT_ATTENDANCES` để hỗ trợ cả sinh viên có MSSV, khách vãng lai chưa có `userId` lẫn giảng viên/khách mời không có MSSV mà không bị lỗi trùng `null` — `A15`; `{campaignId, userId}` chống bỏ phiếu 2 lần; `{campaignId, judgeUserId}` trên `VOTING_JUDGE_SCORES`). Bật MongoDB Replica Set cho Multi-Document ACID Transactions. *(Xem chi tiết Schema & Indexes tại [LLD_YITZone.md](./LLD_YITZone.md)).*
+* **Chỉ mục & ACID Transaction (`A15`):** `2dsphere` (tín hiệu rủi ro GPS), `vector` Index (RAG), `text` Index (Blog), `Sparse Unique` (`studentCode`, `staffId`), `Partial Unique` (`{eventId, "members.userId"}` trên `EVENT_TEAMS` chặn 1 sinh viên tham gia 2 đội cùng sự kiện — Edge 43), `Compound Unique` (**`{eventId, sessionId, attendeeKey}`** trên `EVENT_ATTENDANCES` để hỗ trợ cả sinh viên có MSSV, khách vãng lai chưa có `userId` lẫn giảng viên/khách mời không có MSSV mà không bị lỗi trùng `null` — `A15`; `{campaignId, userId}` chống bỏ phiếu 2 lần; `{campaignId, judgeUserId}` trên `VOTING_JUDGE_SCORES`). Bật MongoDB Replica Set cho Multi-Document ACID Transactions. *(Xem chi tiết Schema & Indexes tại [LLD_YITZone.md](./LLD_YITZone.md)).*
 
 ### 4.2. Chiến lược Phân tầng Bộ nhớ Đệm (Redis Caching)
 | Phân vùng Dữ liệu Redis | Cấu trúc & Cơ chế | Mục đích & Đồng bộ |
@@ -259,7 +293,7 @@ Thay thế thiết kế cũ (đã gỡ bỏ Exam Semantic Shielding cosine $\ge 
 | **Core Library & Build Tool** | **React.js** + **Vite** | React `18.3+` / `19.x` + Vite `6.x` | Xây dựng SPA tốc độ cao, tách biệt hoàn toàn với Backend. |
 | **Ngôn ngữ & Kiểm tra Kiểu** | **TypeScript (Strict Mode)** + **ESLint** + **Zod** | TypeScript `5.x` | Đảm bảo an toàn kiểu dữ liệu xuyên suốt 20 phân hệ khi bàn giao qua nhiều nhiệm kỳ phát triển, kết hợp Zod xác thực runtime DTO. |
 | **PWA, Offline & Chữ ký Vé `ECDSA P-256`** | **`vite-plugin-pwa` (Workbox)** + **`Dexie.js` (IndexedDB)** + **WebCrypto API (`ECDSA P-256` & `AES-GCM`)** + **Web Push API** | Workbox `7.x` + Dexie `4.x` | Đóng gói PWA (Android Chrome $\ge 110$ & iOS Safari $\ge 16.4$), giữ khóa riêng **`ECDSA P-256` (`extractable: false`)** cho Vé QR bất đối xứng (bucket 15s) & bằng chứng sở hữu thiết bị (`PoP`), mã hóa `AES-GCM` & tự xóa gói dữ liệu trên **Máy Soát vé BTC Ngoại tuyến** (`A9`, `A10`, `A14`). |
-| **Định tuyến & UI** | **React Router** + **Tailwind CSS** + **Shadcn/UI** + **Lucide Icons** | Router `v7`/`v6.28+` · Tailwind `3.4+`/`4.x` | Điều hướng `ProtectedRoute` theo RBAC và giao diện đáp ứng **WCAG 2.1 Level AA**. |
+| **Định tuyến & UI** | **React Router** + **Tailwind CSS** + **Shadcn/UI (Radix UI Primitives)** + **Lucide Icons** + **Recharts** | Router `v7`/`v6.28+` · Tailwind `3.4+` | Điều hướng `ProtectedRoute` theo RBAC, bộ component tùy biến theo Design Token YITZone (`DESIGN.md` — hỗ trợ Light/Dark theo hệ thống & Dark Stage LED), biểu đồ thống kê và giao diện đáp ứng **WCAG 2.1 Level AA**. |
 | **Data Fetching & State** | **TanStack Query** + **Axios** + **Zustand** | v5 | Quản lý API, tự động xoay vòng Refresh Token, caching và trạng thái Minigame/Live Q&A/Live Voting. |
 | **Real-time & AI Streaming** | **`@stomp/stompjs`** + **`sockjs-client`** + **Fetch EventSource (SSE)** | `@stomp/stompjs 7.x` | Kênh thời gian thực STOMP (QR động, Minigame, Live Q&A, Live Voting, Messenger) và nhận luồng SSE từ `YITBot`. |
 | **Biểu mẫu, Soạn thảo & Code** | **React Hook Form** + **Tiptap** + `react-markdown` + **KaTeX** + **Monaco Editor** (P3) | Tiptap `2.x` | Soạn bài Blog, công thức toán và trình soạn code (P3). |
