@@ -223,7 +223,7 @@ export function LoginPage() {
       return;
     }
     setRegNotice(
-      "Xác thực thành công! Đã đối chiếu OFFICIAL_DIRECTORY_ROSTER và tự động Auto-Link bản ghi điểm danh vãng lai (nếu có)."
+      "Xác thực thành công! Đã đối chiếu danh sách sinh viên chính thức của Trường và tự động liên kết lịch sử điểm danh."
     );
     setRegOtpStep(false);
   };
@@ -324,22 +324,24 @@ export function LoginPage() {
                     />
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="login-preset">Vai trò mô phỏng nhanh (Dev / Local)</Label>
-                    <Select
-                      value={rolePreset}
-                      onValueChange={(v) => setRolePreset(v as "STUDENT" | "CADRE_OFIT" | "BTV_ADMIN")}
-                    >
-                      <SelectTrigger id="login-preset" className="h-11 rounded-xl text-sm sm:h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="STUDENT">Sinh viên Khoa CNTT (FACULTY · 22110123)</SelectItem>
-                        <SelectItem value="CADRE_OFIT">Trưởng Ban Văn phòng (OFIT)</SelectItem>
-                        <SelectItem value="BTV_ADMIN">Ban Thường vụ (BTV · Bắt buộc bước TOTP MFA)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {import.meta.env.DEV && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="login-preset">Vai trò mô phỏng nhanh (Dev / Local)</Label>
+                      <Select
+                        value={rolePreset}
+                        onValueChange={(v) => setRolePreset(v as "STUDENT" | "CADRE_OFIT" | "BTV_ADMIN")}
+                      >
+                        <SelectTrigger id="login-preset" className="h-11 rounded-xl text-sm sm:h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="STUDENT">Sinh viên Khoa CNTT (22110123)</SelectItem>
+                          <SelectItem value="CADRE_OFIT">Trưởng Ban Văn phòng (OFIT)</SelectItem>
+                          <SelectItem value="BTV_ADMIN">Ban Thường vụ (BTV · Bắt buộc bước TOTP MFA)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </>
               ): (
                 <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-3.5 sm:p-4">

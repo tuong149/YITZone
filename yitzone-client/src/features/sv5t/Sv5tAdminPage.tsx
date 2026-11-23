@@ -192,7 +192,7 @@ export function Sv5tAdminPage(){
           return (
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-status-danger/30 bg-status-danger/10 px-2.5 py-1.5 text-xs font-semibold text-status-danger">
               <ShieldAlert className="h-3.5 w-3.5" />
-              <span>Tự động khóa (Trùng userId)</span>
+              <span>Khóa tự chấm hồ sơ cá nhân</span>
             </span>
           );
         }
@@ -315,7 +315,7 @@ export function Sv5tAdminPage(){
       <Tabs defaultValue="review" className="min-h-[520px]">
         <TabsList className="justify-start">
           <TabsTrigger value="review">Thẩm tra &amp; Chấm duyệt ({applications.length})</TabsTrigger>
-          <TabsTrigger value="criteria">CRUD Cây 5 Tiêu chí</TabsTrigger>
+          <TabsTrigger value="criteria">Cấu hình Cây 5 Tiêu chí</TabsTrigger>
           <TabsTrigger value="cohort">Tiến độ Toàn Khoa &amp; Chốt Bảng vàng</TabsTrigger>
         </TabsList>
 

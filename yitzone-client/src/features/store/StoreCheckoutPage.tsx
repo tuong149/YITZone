@@ -184,7 +184,7 @@ export function StoreCheckoutPage(){
               <CardTitle>
                 {createdOrder.method === "VIETQR"
                   ? "Quét mã VietQR để hoàn tất thanh toán"
-: "Đặt đơn COD thành công (PENDING_COD)"}
+                  : "Đặt đơn thanh toán khi nhận hàng (COD) thành công"}
               </CardTitle>
               <Badge variant={createdOrder.method === "VIETQR" ? "info": "warning"}>
                 <span className="tabular-mono">{createdOrder.orderCode}</span>
@@ -239,7 +239,7 @@ export function StoreCheckoutPage(){
                   <span className="tabular-mono">{formatVnd(createdOrder.total)}</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Đơn hàng ở trạng thái <span className="tabular-mono font-semibold">PENDING_COD</span> với hạn
+                  Đơn hàng đang ở trạng thái <span className="font-semibold text-foreground">Chờ thu tiền khi giao</span> với hạn
                   nhận hàng <strong>03 ngày làm việc</strong>. Quá hạn, hệ thống sẽ tự động hủy đơn và hoàn tồn
                   kho + Voucher.
                 </p>

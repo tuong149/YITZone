@@ -495,7 +495,7 @@ export function InboxAdminPage(){
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Hồ sơ SV Tối thiểu</CardTitle>
                 <CardDescription>
-                  Mọi lượt mở xem đều ghi <span className="tabular-mono">VIEW_STUDENT_SUMMARY</span> vào Audit Log.
+                  Mọi lượt mở xem tóm tắt hồ sơ sinh viên đều được ghi nhận tự động vào Nhật ký Kiểm toán.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-xs">
@@ -519,7 +519,7 @@ export function InboxAdminPage(){
                 ): (
                   <div className="space-y-3">
                     <Badge variant="info" className="w-full justify-center tabular-mono text-[10px]">
-                      AUDIT: VIEW_STUDENT_SUMMARY · {revealedIds[activeItem.id]}
+                      Đã ghi nhận xem hồ sơ · {revealedIds[activeItem.id]}
                     </Badge>
                     <div className="rounded-lg border border-border bg-muted/35 p-3 space-y-1">
                       <div className="font-semibold text-foreground">{activeItem.studentName}</div>
@@ -612,7 +612,7 @@ export function InboxAdminPage(){
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Tag className="h-4 w-4 text-primary" />
-                Nhãn Chủ đề Hộp thư (`categoryTag`)
+                Nhãn Chủ đề Hộp thư
               </CardTitle>
               <CardDescription>
                 Chặn xóa nhãn đã gắn hội thoại — chỉ cho phép Tạm ẩn (ghi Audit Log).

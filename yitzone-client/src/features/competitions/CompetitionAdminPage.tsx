@@ -151,13 +151,13 @@ export function CompetitionAdminPage({ embedded = false }: { embedded?: boolean 
     setErrorMsg(null);
     if (boundaryTieDetected) {
       setErrorMsg(
-        `Phát hiện đồng điểm tuyệt đối tại biên hạng #${qualifyTopN} (Edge 45). Cần BGK xác nhận phương án phân định trước khi đóng băng BXH.`
+        `Phát hiện đồng điểm tuyệt đối tại biên hạng #${qualifyTopN}. Cần BGK xác nhận phương án phân định trước khi đóng băng BXH.`
       );
       return;
     }
     setAuditModal({
       title: `Chốt BXH Vòng loại & Chọn Top ${qualifyTopN} vào Chung kết`,
-      description: `Đóng băng bảng xếp hạng theo công thức ${scoringMode}, tự động gắn QUALIFIED cho Top ${qualifyTopN}, STANDBY cho các đội kế tiếp và gửi thông báo hạn xác nhận.`,
+      description: `Đóng băng bảng xếp hạng theo công thức đã chọn, tự động gắn trạng thái Vào Chung kết cho Top ${qualifyTopN}, Dự bị cho các đội kế tiếp và gửi thông báo hạn xác nhận.`,
       code: "COMP_ROUND_FINALIZE",
       onDone: () => {
         const topIds = new Set(standings.slice(0, qualifyTopN).map((s) => s.team.id));
@@ -183,10 +183,10 @@ export function CompetitionAdminPage({ embedded = false }: { embedded?: boolean 
   const handleWithdrawAndPromote = (withdrawnTeam: CompetitionTeamRecord) => {
     const nextStandby = standbyTeams[0]?.team;
     setAuditModal({
-      title: `Ghi nhận rút lui & Đôn đội dự bị kế tiếp (Edge 45)`,
+      title: "Ghi nhận rút lui & Đôn đội dự bị kế tiếp",
       description: nextStandby
-        ? `Chuyển ${withdrawnTeam.teamName} sang WITHDRAWN và đôn đội dự bị #1 (${nextStandby.teamName} · ${nextStandby.teamCode}) lên QUALIFIED.`
-        : `Chuyển ${withdrawnTeam.teamName} sang WITHDRAWN (hiện không còn đội STANDBY).`,
+        ? `Chuyển ${withdrawnTeam.teamName} sang Đã rút lui và đôn đội dự bị #1 (${nextStandby.teamName} · ${nextStandby.teamCode}) lên Vào Chung kết.`
+        : `Chuyển ${withdrawnTeam.teamName} sang Đã rút lui (hiện không còn đội dự bị).`,
       code: "COMP_PROMOTE_STANDBY",
       onDone: () => {
         setTeams((prev) =>
@@ -493,9 +493,9 @@ export function CompetitionAdminPage({ embedded = false }: { embedded?: boolean 
         <TabsContent value="qualifying" className="space-y-4">
           <Card>
             <CardHeader className="border-b border-border/70 pb-4">
-              <CardTitle>Quy tắc Tổng hợp Điểm Đội &amp; Chọn Top n (FR-EVT-09, FR-EVT-10)</CardTitle>
+              <CardTitle>Quy tắc Tổng hợp Điểm Đội &amp; Chọn Top n</CardTitle>
               <CardDescription>
-                Thay đổi công thức tổng hợp hoặc chính sách xử lý vi phạm (Edge 46) để xem bảng xếp hạng tính lại tức thì trước khi đóng băng.
+                Thay đổi công thức tổng hợp hoặc chính sách xử lý vi phạm để xem bảng xếp hạng tính lại tức thì trước khi đóng băng.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 pt-4 md:grid-cols-4">
@@ -517,7 +517,7 @@ export function CompetitionAdminPage({ embedded = false }: { embedded?: boolean 
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="cheating-policy">Chính sách vi phạm quy chế (Edge 46)</Label>
+                <Label htmlFor="cheating-policy">Chính sách vi phạm quy chế</Label>
                 <Select
                   value={cheatingPolicy}
                   onValueChange={(v) => setCheatingPolicy(v as CheatingPolicy)}
@@ -621,7 +621,7 @@ export function CompetitionAdminPage({ embedded = false }: { embedded?: boolean 
                               <AlertTriangle className="h-3 w-3" />
                               <span>
                                 {row.teamDisqualifiedByPolicy
-                                  ? "Loại cả đội (Edge 46)"
+                                  ? "Loại cả đội"
                                   : "1 SV bị hủy bài (0đ)"}
                               </span>
                             </Badge>
@@ -996,9 +996,9 @@ export function CompetitionAdminPage({ embedded = false }: { embedded?: boolean 
           <Card>
             <CardHeader className="flex flex-col gap-3 border-b border-border/70 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle>Chốt Giải thưởng Chung cuộc &amp; Phát hành E-Certificate (FR-EVT-12)</CardTitle>
+                <CardTitle>Chốt Giải thưởng Chung cuộc &amp; Phát hành E-Certificate</CardTitle>
                 <CardDescription>
-                  Chỉ BTV có quyền chốt cuối. Hệ thống tự động tách bạch E-Cert (5/5 thành viên) và Quyền lợi nội bộ ĐRL/CĐDN (chỉ SV HCM-UTE — Edge 44).
+                  Chỉ BTV có quyền chốt cuối. Hệ thống tự động tách bạch E-Cert (5/5 thành viên) và Quyền lợi nội bộ ĐRL/CĐDN (chỉ SV HCM-UTE).
                 </CardDescription>
               </div>
               <Button
@@ -1018,8 +1018,8 @@ export function CompetitionAdminPage({ embedded = false }: { embedded?: boolean 
                     <tr>
                       <th className="px-4 py-3">Giải thưởng</th>
                       <th className="px-4 py-3">Đội đạt giải</th>
-                      <th className="px-4 py-3">Cấp E-Certificate (4.4)</th>
-                      <th className="px-4 py-3">Cộng ĐRL / CĐDN (Edge 44)</th>
+                      <th className="px-4 py-3">Cấp E-Certificate</th>
+                      <th className="px-4 py-3">Ghi nhận ĐRL / CĐDN</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">

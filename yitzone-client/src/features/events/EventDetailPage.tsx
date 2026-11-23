@@ -236,6 +236,7 @@ export function EventDetailPage() {
                 )}
                 <TabsTrigger value="sessions">Lịch trình ({event.sessions.length} buổi)</TabsTrigger>
                 {event.hasExam && <TabsTrigger value="exam">Bài thi Trắc nghiệm</TabsTrigger>}
+                <TabsTrigger value="survey">Khảo sát &amp; E-Cert</TabsTrigger>
                 {canApplyBtc && <TabsTrigger value="btc">Ứng tuyển Ban Tổ chức</TabsTrigger>}
               </TabsList>
 
@@ -286,7 +287,7 @@ export function EventDetailPage() {
                               </span>
                               {s.activities.liveQa && (
                                 <Link
-                                  to="/live-qa/482910"
+                                  to={`/live-qa/${((event.id.replace(/\D/g, "") || "482") + "910").slice(0, 6)}`}
                                   className="inline-flex items-center gap-1 rounded-full border border-status-info/35 bg-status-info/10 px-2.5 py-1 text-xs font-semibold text-status-info transition-colors hover:bg-status-info/20"
                                 >
                                   <MessageSquare className="h-3 w-3" />
@@ -306,7 +307,7 @@ export function EventDetailPage() {
                               )}
                               {s.activities.quizExam && (
                                 <Link
-                                  to={event.examPath ?? "/exam/ex-fit-2026"}
+                                  to={event.examPath ?? `/exam/exam-${event.id.toLowerCase()}`}
                                   className="inline-flex items-center gap-1 rounded-full border border-cal-exam/35 bg-cal-exam/10 px-2.5 py-1 text-xs font-semibold text-cal-exam transition-colors hover:bg-cal-exam/20"
                                 >
                                   <ClipboardList className="h-3 w-3" />
@@ -376,7 +377,7 @@ export function EventDetailPage() {
                       </div>
 
                       <Button asChild className="liquid-glass-btn-cobalt h-11 w-full rounded-full px-6 sm:w-auto">
-                        <Link to={event.examPath ?? "/exam/ex-fit-2026"}>
+                        <Link to={event.examPath ?? `/exam/exam-${event.id.toLowerCase()}`}>
                           <span>Vào phòng thi trắc nghiệm</span>
                         </Link>
                       </Button>
@@ -384,6 +385,35 @@ export function EventDetailPage() {
                   </Card>
                 </TabsContent>
               )}
+
+              {/* Post-Event Survey & E-Certificate Unlock Tab (S2) */}
+              <TabsContent value="survey" className="mt-4">
+                <Card className="rounded-[20px]">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 font-display text-xl font-medium">
+                      <FileText className="h-5 w-5 text-primary" />
+                      Khảo sát Sau Sự kiện &amp; Mở khóa E-Certificate
+                    </CardTitle>
+                    <CardDescription>
+                      Sau khi quét QR điểm danh tại hội trường, bạn cần hoàn thành phiếu khảo sát chất lượng trong vòng 24 giờ để mở khóa Chứng nhận điện tử (E-Certificate).
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild className="liquid-glass-btn-cobalt h-11 rounded-full px-6">
+                        <Link to={`/surveys/${event.id === "EVT-2026-CLOUD" ? "evt-cloud-2026" : event.id}`}>
+                          <span>Làm khảo sát sự kiện này</span>
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline" className="h-11 rounded-full px-5">
+                        <Link to="/me/certificates">
+                          <span>Kiểm tra Ví E-Certificate</span>
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
               {/* BTC Recruiting (CTV+ Only) */}
               {canApplyBtc && (
@@ -586,7 +616,7 @@ export function EventDetailPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button asChild className="liquid-glass-btn-cobalt h-11 flex-1 rounded-full">
-                    <Link to="/scanner?tab=ticket">
+                    <Link to={`/scanner?tab=ticket&eventId=${event.id}`}>
                       <QrCode className="h-4 w-4" />
                       <span>Mở Vé QR</span>
                     </Link>

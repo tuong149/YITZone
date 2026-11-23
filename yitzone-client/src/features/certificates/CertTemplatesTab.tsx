@@ -205,7 +205,7 @@ export function CertTemplatesTab({ onNotify }: { onNotify: (msg: string) => void
     },
     {
       key: "actions",
-      header: "Quản trị (CRUD)",
+      header: "Thao tác",
       align: "right",
       render: (row) => (
         <div className="flex justify-end gap-1.5">

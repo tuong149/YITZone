@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
   Download,
@@ -16,6 +16,7 @@ import {
   Square,
   Trash2,
   Trophy,
+  Unlock,
   Users
 } from "lucide-react";
 import { AuditActionDialog } from "@/components/ui/audit-action-dialog";
@@ -36,92 +37,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useEventStore } from "@/stores/event-store";
-
-type CampaignStatus = "DRAFT" | "OPEN" | "CLOSED";
-type CampaignSource = "EVENT" | "STANDALONE";
-
-interface CandidateItem {
-  id: string;
-  code: string;
-  name: string;
-  audienceVotes: number;
-  judgeScore: number;
-}
-
-interface AdminVotingCampaign {
-  id: string;
-  title: string;
-  source: CampaignSource;
-  eventId?: string;
-  eventLabel?: string;
-  sessionLabel?: string;
-  status: CampaignStatus;
-  isSecretBallot: boolean;
-  usesJudges: boolean;
-  judgeWeight: number;
-  freezeMode: boolean;
-  voterCount: number;
-  expectedVoters?: number;
-  candidates: CandidateItem[];
-}
-
-const INITIAL_CAMPAIGNS: AdminVotingCampaign[] = [
-  {
-    id: "gala-fit-2026",
-    title: "Bình chọn Tiết mục Yêu thích — Đêm Gala FIT 2026",
-    source: "EVENT",
-    eventId: "evt-gala-fit-2026",
-    eventLabel: "Đêm Gala Văn nghệ FIT 2026",
-    sessionLabel: "Buổi 1 · Đêm công diễn",
-    status: "OPEN",
-    isSecretBallot: false,
-    usesJudges: true,
-    judgeWeight: 60,
-    freezeMode: false,
-    voterCount: 429,
-    candidates: [
-      { id: "c-1", code: "01", name: "Mashup Tuổi trẻ FIT (Đội Hát ARTIT)", audienceVotes: 148, judgeScore: 91 },
-      { id: "c-2", code: "02", name: "Nhảy Hiện đại Cyber Pulse (Tổ Nhảy ARTIT)", audienceVotes: 162, judgeScore: 88 },
-      { id: "c-3", code: "03", name: "Hòa tấu Guitar & Cajon (CLB Acoustic FIT)", audienceVotes: 119, judgeScore: 94 }
-    ]
-  },
-  {
-    id: "congress-2026",
-    title: "Biểu quyết Nghị quyết Đại hội Đoàn Khoa CNTT 2026",
-    source: "EVENT",
-    eventId: "evt-congress-2026",
-    eventLabel: "Đại hội Đại biểu Đoàn Khoa CNTT",
-    sessionLabel: "Phiên toàn thể",
-    status: "OPEN",
-    isSecretBallot: true,
-    usesJudges: false,
-    judgeWeight: 0,
-    freezeMode: false,
-    voterCount: 118,
-    expectedVoters: 150,
-    candidates: [
-      { id: "r-1", code: "01", name: "Tán thành Nghị quyết Đại hội nhiệm kỳ 2026–2027", audienceVotes: 0, judgeScore: 0 },
-      { id: "r-2", code: "02", name: "Không tán thành", audienceVotes: 0, judgeScore: 0 },
-      { id: "r-3", code: "03", name: "Không có ý kiến", audienceVotes: 0, judgeScore: 0 }
-    ]
-  },
-  {
-    id: "fit-shirt-2026",
-    title: "Bình chọn Mẫu Áo Khoa CNTT Phiên bản 2026",
-    source: "STANDALONE",
-    status: "DRAFT",
-    isSecretBallot: false,
-    usesJudges: false,
-    judgeWeight: 0,
-    freezeMode: false,
-    voterCount: 0,
-    candidates: [
-      { id: "s-1", code: "01", name: "Mẫu Cobalt Constellation", audienceVotes: 0, judgeScore: 0 },
-      { id: "s-2", code: "02", name: "Mẫu Midnight Navy Tech", audienceVotes: 0, judgeScore: 0 },
-      { id: "s-3", code: "03", name: "Mẫu Orbital White", audienceVotes: 0, judgeScore: 0 }
-    ]
-  }
-];
+import {
+  useVotingStore,
+  type AdminVotingCampaign,
+  type CampaignSource,
+  type CampaignStatus,
+  type CandidateItem
+} from "@/stores/voting-store";
 
 function statusLabel(status: CampaignStatus): string {
   if (status === "DRAFT") return "Bản nháp";
@@ -135,16 +57,26 @@ function statusBadgeVariant(status: CampaignStatus): "secondary" | "success" | "
   return "outline";
 }
 
-export function VotingAdminPage() {
+export function VotingAdminPage({ embeddedEventId }: { embeddedEventId?: string } = {}) {
+  const [searchParams] = useSearchParams();
+  const filterEventId = embeddedEventId ?? searchParams.get("eventId") ?? undefined;
+
   const storedEvents = useEventStore((s) => s.events);
-  const [campaigns, setCampaigns] = useState<AdminVotingCampaign[]>(INITIAL_CAMPAIGNS);
+  const campaigns = useVotingStore((s) => s.campaigns);
+  const upsertCampaign = useVotingStore((s) => s.upsertCampaign);
+  const storeUpdateCampaign = useVotingStore((s) => s.updateCampaign);
+  const setActiveStageCampaignId = useVotingStore((s) => s.setActiveStageCampaignId);
+
   const [sourceFilter, setSourceFilter] = useState<"ALL" | CampaignSource>("ALL");
-  const [selectedId, setSelectedId] = useState<string>(INITIAL_CAMPAIGNS[0]!.id);
+  const [selectedId, setSelectedId] = useState<string>(campaigns[0]?.id ?? "gala-fit-2026");
   const [activeTab, setActiveTab] = useState<string>("options");
 
   const [newCandName, setNewCandName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Confirm delete candidate dialog (B11)
+  const [deleteCandTarget, setDeleteCandTarget] = useState<CandidateItem | null>(null);
 
   // Create standalone campaign modal state
   const [createOpen, setCreateOpen] = useState(false);
@@ -160,7 +92,7 @@ export function VotingAdminPage() {
     onDone: () => void;
   } | null>(null);
 
-  // Merge liveVoting sessions created in EventCreateWizard into the campaign list (read-only derivation for unsynced ones)
+  // Merge liveVoting sessions created in EventCreateWizard into the campaign list
   const allCampaigns = useMemo(() => {
     const existingIds = new Set(campaigns.map((c) => c.id));
     const derivedFromEvents: AdminVotingCampaign[] = [];
@@ -173,16 +105,20 @@ export function VotingAdminPage() {
         derivedFromEvents.push({
           id: derivedId,
           title: `${evt.title} — ${ses.name}`,
+          pin: String(500000 + ((evt.id.length * 4127 + ses.id.length * 8819) % 499999)),
           source: "EVENT",
           eventId: evt.id,
           eventLabel: evt.title,
           sessionLabel: ses.name,
+          requireAttendance: true,
           status: "DRAFT",
           isSecretBallot: Boolean(ses.activities.liveVotingSecret),
+          secretUnsealed: false,
           usesJudges: !ses.activities.liveVotingSecret,
           judgeWeight: ses.activities.liveVotingSecret ? 0 : 60,
           freezeMode: false,
           voterCount: 0,
+          expectedVoters: evt.capacity > 0 ? evt.capacity : undefined,
           candidates: []
         });
       }
@@ -191,36 +127,46 @@ export function VotingAdminPage() {
     return [...campaigns, ...derivedFromEvents];
   }, [campaigns, storedEvents]);
 
+  useEffect(() => {
+    if (!filterEventId) return;
+    const match = allCampaigns.find((c) => c.eventId === filterEventId);
+    if (match) {
+      setSelectedId(match.id);
+    }
+  }, [filterEventId, allCampaigns]);
+
   const filteredCampaigns = useMemo(() => {
-    if (sourceFilter === "ALL") return allCampaigns;
-    return allCampaigns.filter((c) => c.source === sourceFilter);
-  }, [allCampaigns, sourceFilter]);
+    const byEvent = filterEventId
+      ? allCampaigns.filter((c) => c.eventId === filterEventId)
+      : allCampaigns;
+    if (sourceFilter === "ALL") return byEvent;
+    return byEvent.filter((c) => c.source === sourceFilter);
+  }, [allCampaigns, sourceFilter, filterEventId]);
 
   const activeCampaign = useMemo(
-    () => allCampaigns.find((c) => c.id === selectedId) ?? allCampaigns[0]!,
-    [allCampaigns, selectedId]
+    () =>
+      filteredCampaigns.find((c) => c.id === selectedId) ??
+      allCampaigns.find((c) => c.id === selectedId) ??
+      filteredCampaigns[0] ??
+      allCampaigns[0]!,
+    [filteredCampaigns, allCampaigns, selectedId]
   );
 
-  // Persist edits on either an existing campaign or a newly materialized event-derived campaign
   const updateCampaign = (
     campaignId: string,
     updater: (campaign: AdminVotingCampaign) => AdminVotingCampaign
   ) => {
-    setCampaigns((prev) => {
-      const exists = prev.some((c) => c.id === campaignId);
-      if (exists) {
-        return prev.map((c) => (c.id === campaignId ? updater(c) : c));
-      }
-      const derived = allCampaigns.find((c) => c.id === campaignId);
-      if (!derived) return prev;
-      return [...prev, updater(derived)];
-    });
+    const fallback = allCampaigns.find((c) => c.id === campaignId);
+    storeUpdateCampaign(campaignId, updater, fallback);
   };
 
   const isLocked = activeCampaign.status !== "DRAFT" || activeCampaign.voterCount > 0;
   const audienceWeight = 100 - activeCampaign.judgeWeight;
   const maxVotes = Math.max(1, ...activeCampaign.candidates.map((c) => c.audienceVotes));
   const totalAudienceVotes = activeCampaign.candidates.reduce((sum, c) => sum + c.audienceVotes, 0);
+  const canShowVoteNumbers =
+    !activeCampaign.isSecretBallot ||
+    (activeCampaign.status === "CLOSED" && Boolean(activeCampaign.secretUnsealed));
 
   const ranked = useMemo(() => {
     return [...activeCampaign.candidates]
@@ -236,6 +182,7 @@ export function VotingAdminPage() {
 
   const handleSelectCampaign = (campaign: AdminVotingCampaign) => {
     setSelectedId(campaign.id);
+    setActiveStageCampaignId(campaign.id);
     setErrorMsg(null);
     setNotice(null);
     setNewCandName("");
@@ -269,14 +216,17 @@ export function VotingAdminPage() {
     setNotice(`Đã thêm "${trimmed}" vào bản nháp.`);
   };
 
-  const handleDeleteCandidate = (candId: string) => {
-    if (isLocked) return;
+  const confirmDeleteCandidate = () => {
+    if (!deleteCandTarget || isLocked) return;
+    const removedName = deleteCandTarget.name;
     updateCampaign(activeCampaign.id, (c) => ({
       ...c,
       candidates: c.candidates
-        .filter((item) => item.id !== candId)
+        .filter((item) => item.id !== deleteCandTarget.id)
         .map((item, idx) => ({ ...item, code: String(idx + 1).padStart(2, "0") }))
     }));
+    setDeleteCandTarget(null);
+    setNotice(`Đã xóa phương án "${removedName}" khỏi bản nháp.`);
   };
 
   const handleCreateStandalone = (e: React.FormEvent) => {
@@ -287,9 +237,12 @@ export function VotingAdminPage() {
     const created: AdminVotingCampaign = {
       id: `vote-${crypto.randomUUID().slice(0, 8)}`,
       title,
+      pin: String(300000 + Math.floor(Math.random() * 699999)),
       source: "STANDALONE",
+      requireAttendance: false,
       status: "DRAFT",
       isSecretBallot: draftBallotType === "SECRET",
+      secretUnsealed: false,
       usesJudges: draftBallotType === "PUBLIC_JUDGE",
       judgeWeight: draftBallotType === "PUBLIC_JUDGE" ? 60 : 0,
       freezeMode: false,
@@ -297,8 +250,9 @@ export function VotingAdminPage() {
       candidates: []
     };
 
-    setCampaigns((prev) => [created, ...prev]);
+    upsertCampaign(created);
     setSelectedId(created.id);
+    setActiveStageCampaignId(created.id);
     setActiveTab("options");
     setDraftTitle("");
     setDraftBallotType("PUBLIC");
@@ -320,6 +274,7 @@ export function VotingAdminPage() {
       code: "VOTING_CAMPAIGN_OPEN",
       onDone: () => {
         updateCampaign(activeCampaign.id, (c) => ({ ...c, status: "OPEN" }));
+        setActiveStageCampaignId(activeCampaign.id);
         setNotice(`Đã mở cổng "${activeCampaign.title}" và khóa danh sách phương án (đã ghi Audit Log).`);
       }
     });
@@ -336,6 +291,20 @@ export function VotingAdminPage() {
       onDone: () => {
         updateCampaign(activeCampaign.id, (c) => ({ ...c, status: "CLOSED", freezeMode: false }));
         setNotice(`Đã đóng cổng "${activeCampaign.title}" (đã ghi Audit Log).`);
+      }
+    });
+  };
+
+  const requestUnsealSecretBallot = () => {
+    setAuditModal({
+      title: "Mở Niêm phong Thùng phiếu Kín & Công bố Kết quả",
+      description:
+        "Chỉ thực hiện sau khi đã đóng cổng bỏ phiếu. Toàn bộ lá phiếu đã trộn qua Outbox Shuffle sẽ được tổng hợp công khai trên biên bản kiểm phiếu và màn hình LED.",
+      targetSummary: `${activeCampaign.title} · ${activeCampaign.voterCount} phiếu hợp lệ`,
+      code: "VOTING_SECRET_BALLOT_UNSEAL",
+      onDone: () => {
+        updateCampaign(activeCampaign.id, (c) => ({ ...c, secretUnsealed: true }));
+        setNotice(`Đã mở niêm phong kết quả bỏ phiếu kín cho "${activeCampaign.title}" (đã ghi Audit Log).`);
       }
     });
   };
@@ -363,35 +332,37 @@ export function VotingAdminPage() {
 
   return (
     <div className="space-y-5">
-      {/* Page Header */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-1">
-          <h1 className="font-display text-2xl font-medium text-foreground">
-            Điều hành Bình chọn, Biểu quyết &amp; Ban Giám khảo
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Quản lý chiến dịch gắn sự kiện và chiến dịch độc lập, chấm điểm trọng số BGK và điều khiển hiển thị LED.
-          </p>
-        </div>
+      {/* Page Header (hidden when embedded in EventManagePage) */}
+      {!embeddedEventId && (
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1">
+            <h1 className="font-display text-2xl font-medium text-foreground">
+              Điều hành Bình chọn, Biểu quyết &amp; Ban Giám khảo
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Quản lý chiến dịch gắn sự kiện và chiến dịch độc lập, chấm điểm trọng số BGK và điều khiển hiển thị LED.
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link to="/kiosk/voting">
-              <QrCode className="h-4 w-4" />
-              <span>Quầy Kiosk 60s</span>
-            </Link>
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="rounded-full"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="h-4 w-4" />
-            <span>Tạo chiến dịch độc lập</span>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link to="/kiosk/voting">
+                <QrCode className="h-4 w-4" />
+                <span>Quầy Kiosk 60s</span>
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-full"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              <span>Tạo chiến dịch độc lập</span>
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Feedback Alerts */}
       {notice && (
@@ -443,35 +414,37 @@ export function VotingAdminPage() {
         <Card className="h-fit lg:col-span-4">
           <CardHeader className="space-y-3 pb-3">
             <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base">Chiến dịch ({allCampaigns.length})</CardTitle>
+              <CardTitle className="text-base">Chiến dịch ({filteredCampaigns.length})</CardTitle>
               <Badge variant="outline" className="tabular-mono">
-                {allCampaigns.filter((c) => c.status === "OPEN").length} đang mở
+                {filteredCampaigns.filter((c) => c.status === "OPEN").length} đang mở
               </Badge>
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              {(
-                [
-                  { id: "ALL", label: "Tất cả" },
-                  { id: "EVENT", label: "Gắn sự kiện" },
-                  { id: "STANDALONE", label: "Độc lập" }
-                ] as const
-              ).map((pill) => (
-                <button
-                  key={pill.id}
-                  type="button"
-                  onClick={() => setSourceFilter(pill.id)}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    sourceFilter === pill.id
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {pill.label}
-                </button>
-              ))}
-            </div>
+            {!embeddedEventId && (
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { id: "ALL", label: "Tất cả" },
+                    { id: "EVENT", label: "Gắn sự kiện" },
+                    { id: "STANDALONE", label: "Độc lập" }
+                  ] as const
+                ).map((pill) => (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setSourceFilter(pill.id)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      sourceFilter === pill.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {pill.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </CardHeader>
 
           <CardContent className="space-y-2 pt-0">
@@ -519,8 +492,8 @@ export function VotingAdminPage() {
                     </span>
                     <span className="tabular-mono">
                       {campaign.expectedVoters
-                        ? `${campaign.voterCount}/${campaign.expectedVoters} đại biểu`
-                        : `${campaign.voterCount} phiếu`}
+                        ? `Đã bỏ phiếu: ${campaign.voterCount}/${campaign.expectedVoters}`
+                        : `Đã bỏ phiếu: ${campaign.voterCount}`}
                     </span>
                   </div>
                 </button>
@@ -554,12 +527,15 @@ export function VotingAdminPage() {
                   {activeCampaign.isSecretBallot && (
                     <VerifiedBadge label="Bỏ phiếu Kín · Outbox Shuffle" />
                   )}
+                  <Badge variant="outline" className="tabular-mono">
+                    PIN: {activeCampaign.pin.slice(0, 3)} {activeCampaign.pin.slice(3, 6)}
+                  </Badge>
                 </div>
 
-                {activeCampaign.eventId && (
+                {activeCampaign.eventId && !embeddedEventId && (
                   <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground">
                     <Link to={`/admin/events/${activeCampaign.eventId}`}>
-                      <span>Mở sự kiện</span>
+                      <span>Mở trung tâm sự kiện</span>
                       <ExternalLink className="h-3 w-3" />
                     </Link>
                   </Button>
@@ -587,36 +563,53 @@ export function VotingAdminPage() {
                   </Button>
                 )}
 
-                {activeCampaign.status === "OPEN" && !activeCampaign.isSecretBallot && (
+                {activeCampaign.status === "OPEN" && (
                   <>
-                    <Button asChild variant="outline" size="sm">
-                      <Link to="/stage/voting">
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveStageCampaignId(activeCampaign.id)}
+                    >
+                      <Link to={`/stage/voting?campaignId=${encodeURIComponent(activeCampaign.id)}`}>
                         <MonitorPlay className="h-3.5 w-3.5" />
-                        <span>LED Đua Top</span>
+                        <span>
+                          {activeCampaign.isSecretBallot ? "Chiếu LED Phiếu kín" : "Chiếu LED Đua Top"}
+                        </span>
                       </Link>
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={activeCampaign.freezeMode ? "default" : "outline"}
-                      onClick={requestToggleFreeze}
-                    >
-                      <Snowflake className="h-3.5 w-3.5" />
-                      <span>
-                        {activeCampaign.freezeMode ? "Đang đóng băng (Mở băng)" : "Bật Freeze Mode"}
-                      </span>
+
+                    {!activeCampaign.isSecretBallot && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={activeCampaign.freezeMode ? "default" : "outline"}
+                        onClick={requestToggleFreeze}
+                      >
+                        <Snowflake className="h-3.5 w-3.5" />
+                        <span>
+                          {activeCampaign.freezeMode ? "Đang đóng băng (Mở băng)" : "Bật Freeze Mode"}
+                        </span>
+                      </Button>
+                    )}
+
+                    <Button type="button" size="sm" variant="destructive" onClick={requestCloseCampaign}>
+                      <Square className="h-3.5 w-3.5" />
+                      <span>Đóng cổng</span>
                     </Button>
                   </>
                 )}
 
-                {activeCampaign.status === "OPEN" && (
-                  <Button type="button" size="sm" variant="destructive" onClick={requestCloseCampaign}>
-                    <Square className="h-3.5 w-3.5" />
-                    <span>Đóng cổng</span>
-                  </Button>
-                )}
+                {activeCampaign.status === "CLOSED" &&
+                  activeCampaign.isSecretBallot &&
+                  !activeCampaign.secretUnsealed && (
+                    <Button type="button" size="sm" onClick={requestUnsealSecretBallot}>
+                      <Unlock className="h-3.5 w-3.5" />
+                      <span>Mở niêm phong &amp; Công bố kết quả</span>
+                    </Button>
+                  )}
 
-                {activeCampaign.status !== "DRAFT" && (
+                {activeCampaign.status !== "DRAFT" && canShowVoteNumbers && (
                   <Button
                     type="button"
                     size="sm"
@@ -661,9 +654,15 @@ export function VotingAdminPage() {
                           : "Danh sách Ứng viên / Tiết mục"}
                       </CardTitle>
                       <CardDescription>
-                        {isLocked
-                          ? "Danh sách đã tự động khóa sau khi mở cổng để đảm bảo tính toàn vẹn kiểm phiếu."
-                          : "Chiến dịch đang ở Bản nháp — bạn có thể thêm hoặc xóa phương án trước khi mở cổng."}
+                        {activeCampaign.isSecretBallot && !canShowVoteNumbers
+                          ? `Chế độ Bỏ phiếu Kín đang ẩn hoàn toàn số phiếu từng phương án · Đã bỏ phiếu: ${
+                              activeCampaign.expectedVoters
+                                ? `${activeCampaign.voterCount} / ${activeCampaign.expectedVoters} cử tri`
+                                : `${activeCampaign.voterCount} cử tri`
+                            }.`
+                          : isLocked
+                            ? "Danh sách đã tự động khóa sau khi mở cổng để đảm bảo tính toàn vẹn kiểm phiếu."
+                            : "Chiến dịch đang ở Bản nháp — bạn có thể thêm hoặc xóa phương án trước khi mở cổng."}
                       </CardDescription>
                     </div>
                     {isLocked && (
@@ -676,7 +675,6 @@ export function VotingAdminPage() {
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  {/* Only show composer when campaign is editable (DRAFT) */}
                   {!isLocked && (
                     <form onSubmit={handleAddCandidate} className="flex gap-2">
                       <Input
@@ -724,12 +722,17 @@ export function VotingAdminPage() {
                             </div>
 
                             <div className="flex shrink-0 items-center gap-3">
-                              {/* Secret ballot NEVER displays live vote counts (DESIGN.md rule) */}
-                              {!activeCampaign.isSecretBallot && activeCampaign.status !== "DRAFT" && (
+                              {/* Secret ballot NEVER displays live vote counts until closed & unsealed */}
+                              {canShowVoteNumbers && activeCampaign.status !== "DRAFT" ? (
                                 <span className="tabular-mono text-xs text-muted-foreground">
                                   {c.audienceVotes} phiếu ({pct}%)
                                 </span>
-                              )}
+                              ) : activeCampaign.isSecretBallot ? (
+                                <Badge variant="secondary" className="gap-1 text-[11px]">
+                                  <Lock className="h-3 w-3" />
+                                  <span>Đang niêm phong</span>
+                                </Badge>
+                              ) : null}
 
                               {!isLocked && (
                                 <Button
@@ -738,7 +741,7 @@ export function VotingAdminPage() {
                                   variant="ghost"
                                   aria-label={`Xóa ${c.name}`}
                                   className="text-brand-crimson hover:bg-brand-crimson/10"
-                                  onClick={() => handleDeleteCandidate(c.id)}
+                                  onClick={() => setDeleteCandTarget(c)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -856,12 +859,12 @@ export function VotingAdminPage() {
                       <div className="rounded-xl border border-border bg-muted/35 p-4">
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Users className="h-3.5 w-3.5 text-primary" />
-                          <span>Tổng số cử tri đã bỏ phiếu</span>
+                          <span>Đã bỏ phiếu</span>
                         </div>
                         <div className="tabular-mono mt-1 text-2xl font-semibold text-foreground">
                           {activeCampaign.expectedVoters
-                            ? `${activeCampaign.voterCount} / ${activeCampaign.expectedVoters}`
-                            : activeCampaign.voterCount}
+                            ? `${activeCampaign.voterCount} / ${activeCampaign.expectedVoters} cử tri`
+                            : `${activeCampaign.voterCount} cử tri`}
                         </div>
                       </div>
                       <div className="rounded-xl border border-border bg-muted/35 p-4">
@@ -870,9 +873,11 @@ export function VotingAdminPage() {
                           <span>Trạng thái niêm phong Outbox Shuffle</span>
                         </div>
                         <div className="mt-1.5 text-sm font-semibold text-foreground">
-                          {activeCampaign.status === "CLOSED"
-                            ? "Đã đóng cổng — Sẵn sàng kiểm phiếu"
-                            : "Đang niêm phong — Ẩn tỷ lệ từng phương án"}
+                          {activeCampaign.secretUnsealed
+                            ? "Đã mở niêm phong & công bố biên bản"
+                            : activeCampaign.status === "CLOSED"
+                              ? "Đã đóng cổng — Chờ BTV mở niêm phong"
+                              : "Đang niêm phong — Ẩn tỷ lệ từng phương án"}
                         </div>
                       </div>
                     </div>
@@ -883,6 +888,28 @@ export function VotingAdminPage() {
           </Tabs>
         </div>
       </div>
+
+      {/* Confirm Delete Candidate Dialog (B11) */}
+      <Dialog open={Boolean(deleteCandTarget)} onOpenChange={(o) => !o && setDeleteCandTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xóa phương án khỏi bản nháp?</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa phương án{" "}
+              <strong className="text-foreground">{deleteCandTarget?.name}</strong> khỏi chiến dịch{" "}
+              <strong className="text-foreground">{activeCampaign.title}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteCandTarget(null)}>
+              Hủy
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmDeleteCandidate}>
+              Xác nhận xóa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Standalone Campaign Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

@@ -71,7 +71,7 @@ export function ProfileSecurityPage(){
             <h1 className="font-display text-3xl font-medium leading-[1.15] tracking-tight text-foreground sm:text-4xl">
               {fullName}
             </h1>
-            <Badge variant="success">Đang học (ACTIVE_STUDY)</Badge>
+            <Badge variant="success">Đang theo học</Badge>
             <VerifiedBadge label="Khoa CNTT · Mã ngành 110 (CĐDN)" />
           </div>
           <p className="text-sm text-muted-foreground">

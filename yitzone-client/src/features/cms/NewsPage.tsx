@@ -14,26 +14,73 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCmsStore } from "@/stores/cms-store";
-import { useThemeStore } from "@/stores/theme-store";
+import { slugifyVietnamese } from "./cms-data";
 
 export function NewsPage() {
   const location = useLocation();
   const categories = useCmsStore((s) => s.categories);
   const articles = useCmsStore((s) => s.articles);
+  const addArticle = useCmsStore((s) => s.addArticle);
 
-  const surface = useThemeStore((s) => s.surface);
   const isAuthenticated = useAuthStore((s) => Boolean(s.accessToken));
+  const fullName = useAuthStore((s) => s.fullName) ?? "Sinh viên Khoa CNTT";
   const authorities = useAuthStore((s) => s.authorities);
 
-  const isPublicSurface = surface === "public";
   const canContributeArticle =
-    !isPublicSurface && isAuthenticated && hasAnyPermission(authorities, PERMISSIONS.CMS_CONTRIBUTE);
+    isAuthenticated && hasAnyPermission(authorities, PERMISSIONS.CMS_CONTRIBUTE);
   const canOpenEditorial =
-    !isPublicSurface && isAuthenticated && hasAnyPermission(authorities, PERMISSIONS.ADMIN_CMS);
+    isAuthenticated && hasAnyPermission(authorities, PERMISSIONS.ADMIN_CMS);
+
+  const [contribOpen, setContribOpen] = useState(false);
+  const [contribTitle, setContribTitle] = useState("");
+  const [contribCategoryId, setContribCategoryId] = useState<string>(
+    () => categories[0]?.id ?? "cat-doan-hoi"
+  );
+  const [contribBody, setContribBody] = useState("");
+
+  const handleQuickContributeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contribTitle.trim() || !contribBody.trim()) return;
+    const slug = slugifyVietnamese(contribTitle) || `bai-cong-tac-${Date.now()}`;
+    addArticle({
+      id: `art-contrib-${Date.now()}`,
+      slug,
+      title: contribTitle.trim(),
+      excerpt: contribBody.trim().slice(0, 150),
+      categoryId: contribCategoryId,
+      tags: ["Cộng tác Sinh viên", "FIT HCM-UTE"],
+      coverImage: "/images/card-hackathon.jpg",
+      authorName: fullName,
+      authorRole: "Cộng tác viên Sinh viên Khoa CNTT",
+      source: "STUDENT_CONTRIBUTION",
+      status: "PENDING_REVIEW",
+      publishedAt: "Chờ biên tập EMFIT",
+      readingMinutes: Math.max(2, Math.ceil(contribBody.split(/\s+/).length / 180)),
+      views: 0,
+      sections: [{ type: "paragraph", text: contribBody.trim() }]
+    });
+    setContribFeedback(
+      `Đã gửi bài cộng tác "${contribTitle.trim()}" vào hàng chờ biên tập của Tổ Truyền thông EMFIT.`
+    );
+    setContribTitle("");
+    setContribBody("");
+    setContribOpen(false);
+  };
 
   const activeCategories = useMemo(
     () => categories.filter((c) => c.isActive).sort((a, b) => a.displayOrder - b.displayOrder),
@@ -105,11 +152,13 @@ export function NewsPage() {
         {(canContributeArticle || canOpenEditorial) && (
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">
             {canContributeArticle && (
-              <Button asChild className="liquid-glass-btn-cobalt rounded-full">
-                <Link to="/news/compose">
-                  <PenSquare className="h-4 w-4" />
-                  <span>Gửi bài Cộng tác</span>
-                </Link>
+              <Button
+                type="button"
+                className="liquid-glass-btn-cobalt rounded-full"
+                onClick={() => setContribOpen(true)}
+              >
+                <PenSquare className="h-4 w-4" />
+                <span>Gửi bài Cộng tác</span>
               </Button>
             )}
             {canOpenEditorial && (
@@ -123,6 +172,64 @@ export function NewsPage() {
           </div>
         )}
       </section>
+
+      {/* Streamlined Student Contribution Modal (B9) */}
+      <Dialog open={contribOpen} onOpenChange={setContribOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Đóng góp Bài viết Cộng tác Sinh viên</DialogTitle>
+            <DialogDescription>
+              Chia sẻ góc nhìn học thuật, kinh nghiệm thực tập hoặc hoạt động phong trào. Bài viết sẽ chuyển vào Hàng chờ Biên tập của Tổ Truyền thông EMFIT.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleQuickContributeSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="contrib-title">Tiêu đề bài viết</Label>
+              <Input
+                id="contrib-title"
+                required
+                value={contribTitle}
+                onChange={(e) => setContribTitle(e.target.value)}
+                placeholder="VD: Kinh nghiệm chinh phục học bổng doanh nghiệp năm 3..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Chuyên mục đề xuất</Label>
+              <Select value={contribCategoryId} onValueChange={setContribCategoryId}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="contrib-body">Nội dung bài viết</Label>
+              <Textarea
+                id="contrib-body"
+                required
+                rows={5}
+                value={contribBody}
+                onChange={(e) => setContribBody(e.target.value)}
+                placeholder="Nhập nội dung bài viết cộng tác của bạn..."
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setContribOpen(false)}>
+                Hủy
+              </Button>
+              <Button type="submit" disabled={!contribTitle.trim() || !contribBody.trim()}>
+                Gửi tới Ban Biên tập
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {contribFeedback && (
         <div className="flex items-start justify-between gap-3 rounded-xl border border-status-success/30 bg-status-success/10 px-4 py-3 text-sm text-status-success">

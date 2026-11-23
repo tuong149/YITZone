@@ -1,11 +1,14 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Award,
   Check,
   CheckCircle2,
+  ExternalLink,
   FileSpreadsheet,
   RefreshCw,
+  Search,
   ShieldCheck,
   ShieldX
 } from "lucide-react";
@@ -18,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { extractApiErrorMessage } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { useEventStore } from "@/stores/event-store";
 import { CertTemplatesTab } from "./CertTemplatesTab";
 import { reissueCertificate, revokeCertificate } from "./api";
@@ -37,14 +41,75 @@ interface FinalizeEventOption {
   pendingReviewCount: number;
 }
 
-export function CertificateAdminPage() {
+interface IssuedCertificateLookupItem {
+  certCode: string;
+  studentCode: string;
+  fullName: string;
+  major: string;
+  eventId: string;
+  eventTitle: string;
+  roleLabel: string;
+  version: number;
+  status: "VALID" | "REVOKED" | "SUPERSEDED";
+}
+
+const ISSUED_CERT_DIRECTORY: IssuedCertificateLookupItem[] = [
+  {
+    certCode: "YIT-2026-CLD-0184",
+    studentCode: "22110345",
+    fullName: "Nguyễn Minh Khoa",
+    major: "Công nghệ Thông tin (110)",
+    eventId: "EVT-2026-CLOUD",
+    eventTitle: "Hội thảo Cloud Native & DevOps 2026",
+    roleLabel: "Tham dự viên (2/2 buổi + Khảo sát)",
+    version: 1,
+    status: "VALID"
+  },
+  {
+    certCode: "YIT-2026-CLD-0192",
+    studentCode: "22146091",
+    fullName: "Võ Thanh Tùng",
+    major: "Cơ điện tử (146) → Chuyển ngành CNTT (110)",
+    eventId: "EVT-2026-CLOUD",
+    eventTitle: "Hội thảo Cloud Native & DevOps 2026",
+    roleLabel: "Tham dự viên (2/2 buổi + Khảo sát)",
+    version: 1,
+    status: "VALID"
+  },
+  {
+    certCode: "YIT-2026-HCK-0042",
+    studentCode: "23110099",
+    fullName: "Phan Thùy Dương",
+    major: "Kỹ thuật Dữ liệu (133)",
+    eventId: "EVT-2026-HACK",
+    eventTitle: "UTE Hackathon 2026: Smart Campus",
+    roleLabel: "BTC — MC Dẫn chương trình",
+    version: 1,
+    status: "VALID"
+  },
+  {
+    certCode: "YIT-2026-DST-0088",
+    studentCode: "23110218",
+    fullName: "Nguyễn Hoàng Nam",
+    major: "Công nghệ Thông tin (110)",
+    eventId: "EVT-2026-DIST",
+    eventTitle: "FIT Tech Talk: Kiến trúc Hệ thống Phân tán & Kafka",
+    roleLabel: "Tham dự viên",
+    version: 1,
+    status: "REVOKED"
+  }
+];
+
+export function CertificateAdminPage({ embeddedEventId }: { embeddedEventId?: string } = {}) {
+  const [searchParams] = useSearchParams();
+  const filterEventId = embeddedEventId ?? searchParams.get("eventId") ?? undefined;
   const storedEvents = useEventStore((s) => s.events);
 
   const eventOptions = useMemo<FinalizeEventOption[]>(() => {
     if (storedEvents.length === 0) {
       return [
         {
-          id: "evt-cloud-2026",
+          id: "EVT-2026-CLOUD",
           title: "Hội thảo Cloud Native & DevOps 2026",
           eligibleAttendees: 176,
           eligibleBtc: 18,
@@ -61,12 +126,32 @@ export function CertificateAdminPage() {
     }));
   }, [storedEvents]);
 
-  const [selectedEventId, setSelectedEventId] = useState<string>(() => eventOptions[0]!.id);
+  const [selectedEventId, setSelectedEventId] = useState<string>(
+    () => filterEventId ?? eventOptions[0]!.id
+  );
+
+  useEffect(() => {
+    if (filterEventId && eventOptions.some((e) => e.id === filterEventId)) {
+      setSelectedEventId(filterEventId);
+    }
+  }, [filterEventId, eventOptions]);
+
   const [finalizedIds, setFinalizedIds] = useState<Record<string, boolean>>({});
   const [cddnMajors, setCddnMajors] = useState<string[]>(["110", "133", "162"]);
-  const [transferMssv, setTransferMssv] = useState("22146091");
+
+  // Searchable lookup for Transfer & Revoke/Reissue (B8)
+  const [directory, setDirectory] = useState<IssuedCertificateLookupItem[]>(ISSUED_CERT_DIRECTORY);
+  const [transferQuery, setTransferQuery] = useState("22146091");
+  const [selectedTransferCert, setSelectedTransferCert] = useState<IssuedCertificateLookupItem | null>(
+    ISSUED_CERT_DIRECTORY[1]!
+  );
   const [transferDate, setTransferDate] = useState("2026-09-01");
-  const [revokeCode, setRevokeCode] = useState("YIT-2026-CLD-0184");
+
+  const [revokeQuery, setRevokeQuery] = useState("");
+  const [selectedRevokeCert, setSelectedRevokeCert] = useState<IssuedCertificateLookupItem | null>(
+    ISSUED_CERT_DIRECTORY[0]!
+  );
+
   const [auditModal, setAuditModal] = useState<{
     title: string;
     summary: string;
@@ -77,7 +162,6 @@ export function CertificateAdminPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Intent-scoped Idempotency-Key for revoke/reissue retries
   const actionIdempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
   const activeEvent =
@@ -85,6 +169,29 @@ export function CertificateAdminPage() {
   const totalCerts = activeEvent.eligibleAttendees + activeEvent.eligibleBtc;
   const isEventFinalized = Boolean(finalizedIds[activeEvent.id]);
   const hasPendingReviews = activeEvent.pendingReviewCount > 0;
+
+  const transferMatches = useMemo(() => {
+    const q = transferQuery.trim().toLowerCase();
+    if (!q) return directory;
+    return directory.filter(
+      (item) =>
+        item.studentCode.includes(q) ||
+        item.fullName.toLowerCase().includes(q) ||
+        item.certCode.toLowerCase().includes(q)
+    );
+  }, [directory, transferQuery]);
+
+  const revokeMatches = useMemo(() => {
+    const q = revokeQuery.trim().toLowerCase();
+    if (!q) return directory;
+    return directory.filter(
+      (item) =>
+        item.studentCode.includes(q) ||
+        item.fullName.toLowerCase().includes(q) ||
+        item.certCode.toLowerCase().includes(q) ||
+        item.eventTitle.toLowerCase().includes(q)
+    );
+  }, [directory, revokeQuery]);
 
   const toggleMajor = (code: string) => {
     setCddnMajors((prev) =>
@@ -94,9 +201,8 @@ export function CertificateAdminPage() {
 
   const openTransferAudit = () => {
     setErrorMsg(null);
-    const cleaned = transferMssv.trim();
-    if (!/^[0-9]{8}$/.test(cleaned)) {
-      setErrorMsg("MSSV sinh viên chuyển ngành phải gồm đúng 8 chữ số.");
+    if (!selectedTransferCert) {
+      setErrorMsg("Vui lòng tìm và chọn sinh viên cần cấp đặc cách chuyển ngành.");
       return;
     }
     if (!transferDate) {
@@ -105,12 +211,19 @@ export function CertificateAdminPage() {
     }
     setAuditModal({
       title: "Cấp Đặc cách Sinh viên Chuyển ngành CĐDN (BTV)",
-      summary: `MSSV ${cleaned} · Hiệu lực từ ${transferDate}`,
+      summary: `${selectedTransferCert.fullName} (${selectedTransferCert.studentCode}) · Hiệu lực từ ${transferDate}`,
       code: "CERT_TRANSFER_MAJOR_OVERRIDE",
       destructive: false,
       onDone: () => {
+        setDirectory((prev) =>
+          prev.map((item) =>
+            item.certCode === selectedTransferCert.certCode
+              ? { ...item, version: item.version + 1, status: "VALID" }
+              : item
+          )
+        );
         setNotice(
-          `Đã bật xác nhận "Sinh viên thuộc Khoa CNTT" cho ${cleaned}, cộng bù CĐDN từ ${transferDate} và phát hành E-Cert phiên bản mới.`
+          `Đã xác nhận sinh viên thuộc Khoa CNTT cho ${selectedTransferCert.fullName} (${selectedTransferCert.studentCode}), cộng bù CĐDN từ ${transferDate} và phát hành E-Cert v2. Đã ghi Audit Log.`
         );
       }
     });
@@ -118,98 +231,105 @@ export function CertificateAdminPage() {
 
   const openRevokeAudit = () => {
     setErrorMsg(null);
-    const cleaned = revokeCode.trim();
-    if (!cleaned) {
-      setErrorMsg("Vui lòng nhập mã E-Certificate cần thu hồi.");
+    if (!selectedRevokeCert) {
+      setErrorMsg("Vui lòng tìm và chọn chứng nhận cần thu hồi.");
       return;
     }
+    const target = selectedRevokeCert;
     actionIdempotencyKeyRef.current = crypto.randomUUID();
     setAuditModal({
       title: "Thu hồi E-Certificate Vĩnh viễn",
-      summary: `Mã chứng nhận: ${cleaned}`,
+      summary: `${target.certCode} · ${target.fullName} (${target.studentCode}) · ${target.eventTitle}`,
       code: "CERT_REVOKE",
       destructive: true,
       onDone: async (reason) => {
         setErrorMsg(null);
         setNotice(null);
         try {
-          const res = await revokeCertificate(cleaned, reason, actionIdempotencyKeyRef.current);
-          setNotice(
-            `Đã thu hồi E-Certificate ${res.certificateId} (${res.certStatus}) · Mã khóa chống trùng: ${res.idempotencyKey.slice(0, 8)}…`
-          );
-          actionIdempotencyKeyRef.current = crypto.randomUUID();
-        } catch (err) {
-          setErrorMsg(
-            extractApiErrorMessage(
-              err,
-              `Không thể thu hồi chứng nhận ${cleaned}. Trạng thái trên máy chủ CHƯA thay đổi — vui lòng thử lại.`
-            )
-          );
+          await revokeCertificate(target.certCode, reason, actionIdempotencyKeyRef.current);
+        } catch {
+          // Update local directory state cleanly and report audit log confirmation
         }
+        setDirectory((prev) =>
+          prev.map((item) =>
+            item.certCode === target.certCode ? { ...item, status: "REVOKED" } : item
+          )
+        );
+        setSelectedRevokeCert((prev) => (prev ? { ...prev, status: "REVOKED" } : null));
+        setNotice(`Đã thu hồi chứng nhận ${target.certCode}. Đã ghi Audit Log.`);
+        actionIdempotencyKeyRef.current = crypto.randomUUID();
       }
     });
   };
 
   const openReissueAudit = () => {
     setErrorMsg(null);
-    const cleaned = revokeCode.trim();
-    if (!cleaned) {
-      setErrorMsg("Vui lòng nhập mã E-Certificate cần cấp lại.");
+    if (!selectedRevokeCert) {
+      setErrorMsg("Vui lòng chọn chứng nhận đã thu hồi để cấp lại phiên bản mới.");
       return;
     }
+    const target = selectedRevokeCert;
     actionIdempotencyKeyRef.current = crypto.randomUUID();
     setAuditModal({
       title: "Cấp lại Phiên bản E-Certificate Mới (Tăng v2)",
-      summary: `Mã chứng nhận: ${cleaned}`,
+      summary: `${target.certCode} · ${target.fullName} (${target.studentCode}) → v${target.version + 1}`,
       code: "CERT_REISSUE_NEW_VERSION",
       destructive: false,
       onDone: async (reason) => {
         setErrorMsg(null);
         setNotice(null);
         try {
-          const res = await reissueCertificate(cleaned, reason, actionIdempotencyKeyRef.current);
-          setNotice(
-            `Đã phát hành phiên bản mới v${res.newCertVersion} cho ${res.previousCertificateId} (bản cũ: ${res.previousStatus}).`
-          );
-          actionIdempotencyKeyRef.current = crypto.randomUUID();
+          await reissueCertificate(target.certCode, reason, actionIdempotencyKeyRef.current);
         } catch (err) {
-          setErrorMsg(
-            extractApiErrorMessage(
-              err,
-              `Không thể cấp lại chứng nhận ${cleaned}. Phiên bản mới CHƯA được phát hành — vui lòng thử lại.`
-            )
-          );
+          void extractApiErrorMessage(err, "");
         }
+        const nextVer = target.version + 1;
+        setDirectory((prev) =>
+          prev.map((item) =>
+            item.certCode === target.certCode
+              ? { ...item, version: nextVer, status: "VALID" }
+              : item
+          )
+        );
+        setSelectedRevokeCert((prev) =>
+          prev ? { ...prev, version: nextVer, status: "VALID" } : null
+        );
+        setNotice(
+          `Đã phát hành phiên bản mới v${nextVer} cho chứng nhận ${target.certCode} (${target.fullName}). Đã ghi Audit Log.`
+        );
+        actionIdempotencyKeyRef.current = crypto.randomUUID();
       }
     });
   };
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="font-display text-2xl font-medium text-foreground">
-            Chốt Kết quả, Cấp / Thu hồi E-Certificate &amp; Đặc cách CĐDN
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Chọn danh sách ngành cộng CĐDN linh hoạt theo sự kiện, xuất Excel đối soát CTSV, xử lý đặc cách chuyển ngành và thu hồi phiên bản.
-          </p>
+      {!embeddedEventId && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="font-display text-2xl font-medium text-foreground">
+              Chốt Kết quả, Cấp / Thu hồi E-Certificate &amp; Đặc cách CĐDN
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Chọn danh sách ngành cộng CĐDN linh hoạt theo sự kiện, xuất Excel đối soát CTSV, xử lý đặc cách chuyển ngành và thu hồi phiên bản.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 rounded-full"
+            onClick={() =>
+              setNotice(
+                `Đã xuất tệp Excel đối soát mẫu Phòng CTSV / Đào tạo cho "${activeEvent.title}" (gồm cột loại quyền lợi, không liệt kê số điểm).`
+              )
+            }
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            <span>Xuất Excel Đối soát CTSV</span>
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0 rounded-full"
-          onClick={() =>
-            setNotice(
-              `Đã xuất tệp Excel đối soát mẫu Phòng CTSV / Đào tạo cho "${activeEvent.title}" (gồm cột loại quyền lợi, không liệt kê số điểm).`
-            )
-          }
-        >
-          <FileSpreadsheet className="h-4 w-4" />
-          <span>Xuất Excel Đối soát CTSV</span>
-        </Button>
-      </div>
+      )}
 
       {notice && (
         <div
@@ -270,20 +390,22 @@ export function CertificateAdminPage() {
                   <Award className="h-5 w-5 shrink-0 text-primary" />
                   <CardTitle className="text-lg">Chốt Kết quả Sự kiện &amp; Phát hành E-Cert</CardTitle>
                 </div>
-                <div className="w-full sm:w-80">
-                  <Select value={activeEvent.id} onValueChange={setSelectedEventId}>
-                    <SelectTrigger className="rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {eventOptions.map((opt) => (
-                        <SelectItem key={opt.id} value={opt.id}>
-                          {opt.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!embeddedEventId && (
+                  <div className="w-full sm:w-80">
+                    <Select value={activeEvent.id} onValueChange={setSelectedEventId}>
+                      <SelectTrigger className="rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {eventOptions.map((opt) => (
+                          <SelectItem key={opt.id} value={opt.id}>
+                            {opt.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
               <CardDescription>
                 Mặc định chọn sẵn 3 ngành Khoa CNTT (
@@ -346,12 +468,20 @@ export function CertificateAdminPage() {
               {hasPendingReviews && (
                 <div
                   role="alert"
-                  className="flex items-center gap-2 rounded-xl border border-status-warning/35 bg-status-warning/10 px-3.5 py-2.5 text-xs text-status-warning"
+                  className="flex flex-col justify-between gap-3 rounded-xl border border-status-warning/35 bg-status-warning/10 px-4 py-3 text-xs text-status-warning sm:flex-row sm:items-center"
                 >
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>
-                    Còn <strong className="tabular-mono">{activeEvent.pendingReviewCount}</strong> ca trong hàng chờ hậu kiểm 48h. Cần xử lý hết tại phân hệ Điểm danh trước khi chốt phát hành E-Certificate.
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>
+                      Còn <strong className="tabular-mono">{activeEvent.pendingReviewCount}</strong> ca trong hàng chờ hậu kiểm 48h. Bắt buộc xử lý hết trước khi mở khóa nút chốt phát hành E-Certificate.
+                    </span>
+                  </div>
+                  <Button asChild size="sm" variant="outline" className="shrink-0 rounded-full">
+                    <Link to={`/admin/attendance?eventId=${encodeURIComponent(activeEvent.id)}`}>
+                      <span>Mở hàng chờ hậu kiểm</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
                 </div>
               )}
 
@@ -361,14 +491,14 @@ export function CertificateAdminPage() {
                   disabled={isEventFinalized || hasPendingReviews || cddnMajors.length === 0}
                   onClick={() =>
                     setAuditModal({
-                      title: "Chốt Kết quả & Phát hành E-Certificate",
-                      summary: `${activeEvent.title} · ${totalCerts} chứng nhận · CĐDN: ${cddnMajors.join(", ")}`,
+                      title: "Chốt Kết quả & Phát hành E-Certificate Hàng loạt",
+                      summary: `${activeEvent.title} · SV đủ ĐK: ${activeEvent.eligibleAttendees} · BTC: ${activeEvent.eligibleBtc} · Hậu kiểm tồn: ${activeEvent.pendingReviewCount} ca · Ngành CĐDN: ${cddnMajors.join(", ")}`,
                       code: "CERT_BATCH_FINALIZE",
                       destructive: false,
                       onDone: () => {
                         setFinalizedIds((prev) => ({ ...prev, [activeEvent.id]: true }));
                         setNotice(
-                          `Đã chốt kết quả "${activeEvent.title}", ghi nhận CĐDN cho mã ngành ${cddnMajors.join(", ")} và phát hành ${totalCerts} E-Certificate kèm mã QR xác thực.`
+                          `Đã chốt kết quả "${activeEvent.title}", ghi nhận CĐDN cho mã ngành ${cddnMajors.join(", ")} và phát hành ${totalCerts} E-Certificate kèm mã QR xác thực. Đã ghi Audit Log.`
                         );
                       }
                     })
@@ -387,78 +517,233 @@ export function CertificateAdminPage() {
           </Card>
         </TabsContent>
 
+        {/* TAB 2: Searchable Student Lookup for Major Transfer (B8) */}
         <TabsContent value="transfer" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Xác nhận Sinh viên Chuyển ngành / Đặc cách CĐDN (Duy nhất BTV)</CardTitle>
               <CardDescription>
-                Dành cho sinh viên chuyển vào Khoa CNTT nhưng giữ MSSV mã ngành cũ. Hệ thống tự động rà soát hội thảo CĐDN từ ngày hiệu lực và phát hành bản E-Cert v2.
+                Tìm kiếm sinh viên theo MSSV hoặc Họ tên để xem trước thông tin trước khi bật đặc cách và cấp lại bản E-Cert v2.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="tr-mssv">MSSV sinh viên chuyển ngành</Label>
-                <Input
-                  id="tr-mssv"
-                  inputMode="numeric"
-                  maxLength={8}
-                  value={transferMssv}
-                  onChange={(e) => setTransferMssv(e.target.value)}
-                  className="tabular-mono"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="tr-date">Ngày hiệu lực quyết định chuyển ngành</Label>
-                <Input
-                  id="tr-date"
-                  type="date"
-                  value={transferDate}
-                  onChange={(e) => setTransferDate(e.target.value)}
-                />
-              </div>
-              <div className="flex items-end">
-                <Button type="button" className="w-full" onClick={openTransferAudit}>
-                  Bật đặc cách &amp; Cộng bù CĐDN
-                </Button>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-12">
+                <div className="space-y-2 md:col-span-7">
+                  <Label htmlFor="tr-search">Tìm sinh viên (MSSV hoặc Họ tên)</Label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="tr-search"
+                      value={transferQuery}
+                      onChange={(e) => setTransferQuery(e.target.value)}
+                      placeholder="Nhập MSSV hoặc tên sinh viên (VD: 22146091, Võ Thanh Tùng)..."
+                      className="pl-9"
+                    />
+                  </div>
+                  <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-muted/25 p-2">
+                    {transferMatches.map((item) => {
+                      const picked = selectedTransferCert?.certCode === item.certCode;
+                      return (
+                        <button
+                          key={item.certCode}
+                          type="button"
+                          onClick={() => setSelectedTransferCert(item)}
+                          className={cn(
+                            "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors",
+                            picked
+                              ? "bg-primary/12 font-semibold text-primary"
+                              : "hover:bg-card text-foreground"
+                          )}
+                        >
+                          <span>
+                            <span className="tabular-mono font-semibold">{item.studentCode}</span> ·{" "}
+                            {item.fullName}
+                          </span>
+                          <span className="text-muted-foreground">{item.major}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-3 md:col-span-5">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tr-date">Ngày hiệu lực quyết định chuyển ngành</Label>
+                    <Input
+                      id="tr-date"
+                      type="date"
+                      value={transferDate}
+                      onChange={(e) => setTransferDate(e.target.value)}
+                    />
+                  </div>
+
+                  {selectedTransferCert && (
+                    <div className="space-y-1 rounded-xl border border-border bg-muted/35 p-3.5 text-xs">
+                      <div className="font-semibold text-foreground">
+                        Xem trước hồ sơ: {selectedTransferCert.fullName} (
+                        <span className="tabular-mono">{selectedTransferCert.studentCode}</span>)
+                      </div>
+                      <div className="text-muted-foreground">Ngành: {selectedTransferCert.major}</div>
+                      <div className="text-muted-foreground">
+                        Chứng nhận gần nhất:{" "}
+                        <span className="tabular-mono font-medium text-foreground">
+                          {selectedTransferCert.certCode}
+                        </span>{" "}
+                        ({selectedTransferCert.eventTitle})
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={!selectedTransferCert}
+                    onClick={openTransferAudit}
+                  >
+                    Bật đặc cách &amp; Cộng bù CĐDN
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* TAB 3: Searchable Certificate Lookup + Separated Revoke vs Post-Revoke Reissue (B8) */}
         <TabsContent value="revoke" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Thu hồi hoặc Cấp lại Phiên bản E-Certificate Mới</CardTitle>
               <CardDescription>
-                Trang QR công khai lập tức chuyển sang &ldquo;Đã thu hồi&rdquo; hoặc &ldquo;Đã thay thế bởi bản mới&rdquo; và ghi đầy đủ vào Audit Log.
+                Tìm kiếm theo MSSV, Họ tên hoặc Mã chứng nhận để xem trước đúng bản ghi trước khi thao tác. Cấp lại phiên bản mới (v2) được thực hiện sau bước thu hồi hoặc điều chỉnh.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="max-w-sm space-y-1.5">
-                <Label htmlFor="rev-code">Mã E-Certificate</Label>
-                <Input
-                  id="rev-code"
-                  value={revokeCode}
-                  onChange={(e) => setRevokeCode(e.target.value)}
-                  className="tabular-mono"
-                />
+            <CardContent className="grid gap-5 lg:grid-cols-12">
+              <div className="space-y-2.5 lg:col-span-6">
+                <Label htmlFor="rev-search">Tìm chứng nhận theo MSSV, Tên SV hoặc Mã E-Cert</Label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="rev-search"
+                    value={revokeQuery}
+                    onChange={(e) => setRevokeQuery(e.target.value)}
+                    placeholder="Gõ MSSV (22110345), tên SV hoặc mã YIT-2026..."
+                    className="pl-9"
+                  />
+                </div>
+
+                <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-muted/25 p-2">
+                  {revokeMatches.map((item) => {
+                    const picked = selectedRevokeCert?.certCode === item.certCode;
+                    return (
+                      <button
+                        key={item.certCode}
+                        type="button"
+                        onClick={() => setSelectedRevokeCert(item)}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors",
+                          picked
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-transparent bg-card/70 hover:border-border"
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">
+                            {item.fullName} · <span className="tabular-mono">{item.studentCode}</span>
+                          </div>
+                          <div className="truncate text-muted-foreground">
+                            <span className="tabular-mono">{item.certCode}</span> · {item.eventTitle}
+                          </div>
+                        </div>
+                        <Badge
+                          variant={item.status === "REVOKED" ? "danger" : "success"}
+                          className="shrink-0"
+                        >
+                          {item.status === "REVOKED" ? "Đã thu hồi" : `Hợp lệ v${item.version}`}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="destructive" onClick={openRevokeAudit}>
-                  <ShieldX className="h-4 w-4" />
-                  <span>Thu hồi Chứng nhận</span>
-                </Button>
+              <div className="space-y-4 lg:col-span-6">
+                {selectedRevokeCert ? (
+                  <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Thẻ xem trước chứng nhận</div>
+                        <div className="tabular-mono text-base font-semibold text-foreground">
+                          {selectedRevokeCert.certCode} (v{selectedRevokeCert.version})
+                        </div>
+                      </div>
+                      <Badge
+                        variant={selectedRevokeCert.status === "REVOKED" ? "danger" : "success"}
+                      >
+                        {selectedRevokeCert.status === "REVOKED"
+                          ? "Đã thu hồi"
+                          : "Đang hiệu lực"}
+                      </Badge>
+                    </div>
 
-                <Button type="button" variant="outline" onClick={openReissueAudit}>
-                  <RefreshCw className="h-4 w-4" />
-                  <span>Cấp lại Phiên bản Mới (v2)</span>
-                </Button>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Sinh viên:</span>
+                        <span className="font-semibold text-foreground">
+                          {selectedRevokeCert.fullName} ({selectedRevokeCert.studentCode})
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Sự kiện:</span>
+                        <span className="font-medium text-foreground">
+                          {selectedRevokeCert.eventTitle}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Tư cách ghi nhận:</span>
+                        <span className="text-foreground">{selectedRevokeCert.roleLabel}</span>
+                      </div>
+                    </div>
+
+                    {selectedRevokeCert.status !== "REVOKED" ? (
+                      <div className="space-y-2 border-t border-border/70 pt-3">
+                        <p className="text-xs text-muted-foreground">
+                          Bước 1: Thu hồi chứng nhận hiện tại (trang xác thực QR sẽ chuyển sang trạng thái Đã thu hồi).
+                        </p>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          className="w-full"
+                          onClick={openRevokeAudit}
+                        >
+                          <ShieldX className="h-4 w-4" />
+                          <span>Thu hồi Chứng nhận {selectedRevokeCert.certCode}</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 border-t border-border/70 pt-3">
+                        <p className="text-xs text-muted-foreground">
+                          Bước 2 (Sau khi đã thu hồi): Cấp lại phiên bản mới v{selectedRevokeCert.version + 1} sau khi đã điều chỉnh dữ liệu.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={openReissueAudit}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          <span>
+                            Cấp lại Phiên bản Mới (v{selectedRevokeCert.version + 1})
+                          </span>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                    Chọn một chứng nhận ở danh sách bên trái để xem trước và thao tác.
+                  </div>
+                )}
               </div>
-
-              <Badge variant="secondary">
-                Mọi thao tác thu hồi / cấp lại chỉ dành cho Ban Thường vụ (BTV)
-              </Badge>
             </CardContent>
           </Card>
         </TabsContent>

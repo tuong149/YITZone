@@ -275,7 +275,7 @@ export function OfficeDutyPage(){
                     </div>
                   </div>
                   <Button asChild size="sm" variant="outline" className="shrink-0">
-                    <Link to="/admin/store">
+                    <Link to="/staff/store-booth">
                       <ShoppingBag className="h-3.5 w-3.5" />
                       <span>Mở Bàn giao hàng</span>
                     </Link>
@@ -290,9 +290,11 @@ export function OfficeDutyPage(){
                       <UserCheck className="h-4 w-4" />
                       <span>Check-in Đầu ca (Đúng giờ ≤ 15&apos;)</span>
                     </Button>
-                    <Button variant="outline" onClick={() => handleCheckIn(22)}>
-                      <span>Mô phỏng Check-in Trễ (phút 22)</span>
-                    </Button>
+                    {import.meta.env.DEV && (
+                      <Button variant="outline" onClick={() => handleCheckIn(22)}>
+                        <span>Mô phỏng Check-in Trễ (phút 22)</span>
+                      </Button>
+                    )}
                   </>
                 ): canCheckOut ? (
                   <Button
@@ -305,9 +307,11 @@ export function OfficeDutyPage(){
                     <span>Check-out Cuối ca</span>
                   </Button>
                 ): (
-                  <Button variant="outline" onClick={() => setCheckInState("IDLE")}>
-                    Đặt lại trạng thái mô phỏng
-                  </Button>
+                  import.meta.env.DEV && (
+                    <Button variant="outline" onClick={() => setCheckInState("IDLE")}>
+                      Đặt lại trạng thái mô phỏng
+                    </Button>
+                  )
                 )}
               </div>
 

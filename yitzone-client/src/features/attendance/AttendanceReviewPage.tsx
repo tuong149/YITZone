@@ -1,7 +1,14 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { QRCodeSVG } from "qrcode.react";
-import { CheckCircle2, Clock, MonitorPlay, QrCode, ShieldAlert, UserCheck } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  CheckCircle2,
+  Clock,
+  MonitorPlay,
+  QrCode,
+  Search,
+  ShieldAlert,
+  UserCheck
+} from "lucide-react";
 import { AuditActionDialog } from "@/components/ui/audit-action-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,13 +16,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEventStore } from "@/stores/event-store";
 
 interface ReviewQueueRow {
   id: string;
   studentCode: string;
   fullName: string;
-  flags: string;
+  flagLabel: string;
+  flagCode: string;
   riskWeight: 1 | 2;
   scannedAt: string;
 }
@@ -25,7 +35,8 @@ const INITIAL_QUEUE: ReviewQueueRow[] = [
     id: "rq-1",
     studentCode: "22110345",
     fullName: "Nguyễn Minh Khoa",
-    flags: "GPS lệch nhẹ (+1đ)",
+    flagLabel: "Tọa độ GPS lệch nhẹ (+1đ)",
+    flagCode: "GPS_MINOR_DRIFT",
     riskWeight: 1,
     scannedAt: "08:12:04"
   },
@@ -33,7 +44,8 @@ const INITIAL_QUEUE: ReviewQueueRow[] = [
     id: "rq-2",
     studentCode: "22110489",
     fullName: "Trần Thảo Vy",
-    flags: "Khóa thiết bị mới < 15p (+1đ)",
+    flagLabel: "Khóa thiết bị mới tạo < 15 phút (+1đ)",
+    flagCode: "RECENT_DEVICE_BINDING",
     riskWeight: 1,
     scannedAt: "08:14:31"
   },
@@ -41,7 +53,8 @@ const INITIAL_QUEUE: ReviewQueueRow[] = [
     id: "rq-3",
     studentCode: "23110219",
     fullName: "Lê Quốc Bảo",
-    flags: "DEVICE_TOKEN_COLLISION (+2đ · Tín hiệu Mạnh)",
+    flagLabel: "Trùng thiết bị điểm danh (+2đ · Tín hiệu Mạnh)",
+    flagCode: "DEVICE_TOKEN_COLLISION",
     riskWeight: 2,
     scannedAt: "08:18:10"
   },
@@ -49,18 +62,43 @@ const INITIAL_QUEUE: ReviewQueueRow[] = [
     id: "rq-4",
     studentCode: "24110077",
     fullName: "Phạm Gia Bảo (Vãng lai)",
-    flags: "BARCODE_WALKIN_UNVERIFIED (+2đ · Tín hiệu Mạnh)",
+    flagLabel: "Thẻ SV vãng lai chưa đăng ký (+2đ · Tín hiệu Mạnh)",
+    flagCode: "BARCODE_WALKIN_UNVERIFIED",
     riskWeight: 2,
     scannedAt: "08:21:55"
   }
 ];
 
-export function AttendanceReviewPage(){
+const STUDENT_DIRECTORY = [
+  { mssv: "22110345", fullName: "Nguyễn Minh Khoa", major: "K22 Công nghệ Phần mềm (110)", registered: true },
+  { mssv: "22110418", fullName: "Trần Đức Thịnh", major: "K22 Hệ thống Thông tin (110)", registered: true },
+  { mssv: "23110214", fullName: "Nguyễn Minh Khôi", major: "K23 Công nghệ Thông tin (110)", registered: true },
+  { mssv: "23110308", fullName: "Trần Thảo Vy", major: "K23 Công nghệ Thông tin (110)", registered: true },
+  { mssv: "24162019", fullName: "Lê Quốc Bảo", major: "K24 An toàn Thông tin (162)", registered: false }
+];
+
+export function AttendanceReviewPage() {
+  const [searchParams] = useSearchParams();
+  const events = useEventStore((s) => s.events);
+
+  const [selectedEventId, setSelectedEventId] = useState<string>(
+    () => searchParams.get("eventId") ?? events[0]?.id ?? "EVT-2026-CLOUD"
+  );
+  const selectedEvent = useMemo(
+    () => events.find((e) => e.id === selectedEventId) ?? events[0],
+    [events, selectedEventId]
+  );
+  const sessions = selectedEvent?.sessions ?? [];
+  const [selectedSessionId, setSelectedSessionId] = useState<string>(
+    () => sessions[0]?.id ?? "S1"
+  );
+
   const [queue, setQueue] = useState<ReviewQueueRow[]>(INITIAL_QUEUE);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [manualMssv, setManualMssv] = useState("");
-  const [qrCountdown, setQrCountdown] = useState(10);
-  const [qrNonce, setQrNonce] = useState(1001);
+  const [studentQuery, setStudentQuery] = useState("");
+  const [pickedStudent, setPickedStudent] = useState<(typeof STUDENT_DIRECTORY)[number] | null>(
+    STUDENT_DIRECTORY[0]!
+  );
   const [auditModal, setAuditModal] = useState<{
     title: string;
     summary: string;
@@ -70,30 +108,39 @@ export function AttendanceReviewPage(){
   } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setQrCountdown((prev) => {
-        if (prev <= 1) {
-          setQrNonce((n) => n + 1);
-          return 10;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, []);
+  const filteredDirectory = useMemo(() => {
+    const q = studentQuery.trim().toLowerCase();
+    if (!q) return STUDENT_DIRECTORY;
+    return STUDENT_DIRECTORY.filter(
+      (s) => s.mssv.includes(q) || s.fullName.toLowerCase().includes(q)
+    );
+  }, [studentQuery]);
 
   const columns: DataTableColumn<ReviewQueueRow>[] = [
-    { key: "code", header: "MSSV", render: (r) => <span className="tabular-mono font-semibold">{r.studentCode}</span> },
-    { key: "name", header: "Họ và tên", render: (r) => <span className="font-medium">{r.fullName}</span> },
+    {
+      key: "code",
+      header: "MSSV",
+      render: (r) => <span className="tabular-mono font-semibold">{r.studentCode}</span>
+    },
+    {
+      key: "name",
+      header: "Họ và tên",
+      render: (r) => <span className="font-medium">{r.fullName}</span>
+    },
     {
       key: "flags",
       header: "Cờ Rủi ro Trọng số",
       render: (r) => (
-        <Badge variant={r.riskWeight === 2 ? "danger": "warning"}>{r.flags}</Badge>
+        <span title={`Mã kỹ thuật: ${r.flagCode}`}>
+          <Badge variant={r.riskWeight === 2 ? "danger" : "warning"}>{r.flagLabel}</Badge>
+        </span>
       )
     },
-    { key: "time", header: "Giờ quét", render: (r) => <span className="tabular-mono text-xs text-muted-foreground">{r.scannedAt}</span> },
+    {
+      key: "time",
+      header: "Giờ quét",
+      render: (r) => <span className="tabular-mono text-xs text-muted-foreground">{r.scannedAt}</span>
+    },
     {
       key: "actions",
       header: "Quyết định (Hạn 48h)",
@@ -106,7 +153,7 @@ export function AttendanceReviewPage(){
             onClick={() =>
               setAuditModal({
                 title: "Chấp nhận Lượt Điểm danh Hậu kiểm",
-                summary: `${r.fullName} (${r.studentCode}) · ${r.flags}`,
+                summary: `${r.fullName} (${r.studentCode}) · ${r.flagLabel}`,
                 code: "ATTENDANCE_REVIEW_APPROVE",
                 destructive: false,
                 onDone: () => {
@@ -124,7 +171,7 @@ export function AttendanceReviewPage(){
             onClick={() =>
               setAuditModal({
                 title: "Từ chối Lượt Điểm danh Vi phạm",
-                summary: `${r.fullName} (${r.studentCode}) · ${r.flags}`,
+                summary: `${r.fullName} (${r.studentCode}) · ${r.flagLabel}`,
                 code: "ATTENDANCE_REVIEW_REJECT",
                 destructive: true,
                 onDone: () => {
@@ -143,26 +190,73 @@ export function AttendanceReviewPage(){
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-medium text-foreground">
-            Điểm danh Đa lớp, QR Động 10s &amp; Hậu kiểm 48h
+            Hậu kiểm Điểm danh 48 giờ &amp; Điểm danh Bù Có Kiểm toán
           </h1>
           <p className="text-sm text-muted-foreground">
-            Chấm điểm rủi ro trọng số, cấm duyệt hàng loạt nhóm Tín hiệu Mạnh (+2đ), điểm danh bù có Audit Log.
+            Chấm điểm rủi ro trọng số, khóa duyệt hàng loạt nhóm Tín hiệu Mạnh (+2đ) và điểm danh bù có tra cứu hồ sơ.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant="warning">
             <Clock className="h-3.5 w-3.5" />
             Hạn hậu kiểm còn: 41h 20p
           </Badge>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/scanner">
-              <QrCode className="h-4 w-4" />
-              Mở Máy Soát vé 1D
+          <Button asChild size="sm" variant="outline" className="rounded-full">
+            <Link to={`/stage/checkin?eventId=${selectedEvent?.id ?? "EVT-2026-CLOUD"}`}>
+              <MonitorPlay className="h-4 w-4 text-primary" />
+              <span>Chiếu QR Động LED 16:9</span>
             </Link>
           </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full">
+            <Link to={`/staff/scanner?eventId=${selectedEvent?.id ?? "EVT-2026-CLOUD"}`}>
+              <QrCode className="h-4 w-4" />
+              <span>Mở Máy Soát vé Hiện trường</span>
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      {/* Event & Session Context Selector */}
+      <div className="grid gap-3 rounded-2xl border border-border/80 bg-card/70 p-4 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Sự kiện đang rà soát hậu kiểm</Label>
+          <Select
+            value={selectedEvent?.id ?? ""}
+            onValueChange={(val) => {
+              setSelectedEventId(val);
+              const ev = events.find((e) => e.id === val);
+              if (ev?.sessions[0]) setSelectedSessionId(ev.sessions[0].id);
+            }}
+          >
+            <SelectTrigger className="rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {events.map((ev) => (
+                <SelectItem key={ev.id} value={ev.id}>
+                  {ev.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Buổi / Ca điểm danh</Label>
+          <Select value={selectedSessionId} onValueChange={setSelectedSessionId}>
+            <SelectTrigger className="rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sessions.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name} ({s.timeRange})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -175,9 +269,8 @@ export function AttendanceReviewPage(){
 
       <Tabs defaultValue="review" className="w-full">
         <TabsList>
-          <TabsTrigger value="review">Hàng chờ Hậu kiểm 48h</TabsTrigger>
+          <TabsTrigger value="review">Hàng chờ Hậu kiểm 48h ({queue.length})</TabsTrigger>
           <TabsTrigger value="manual">Điểm danh Sớm BTC &amp; Bù tay</TabsTrigger>
-          <TabsTrigger value="dynamic-qr">Chiếu QR Động 10s</TabsTrigger>
         </TabsList>
 
         <TabsContent value="review" className="space-y-4">
@@ -202,7 +295,7 @@ export function AttendanceReviewPage(){
                 onClick={() =>
                   setAuditModal({
                     title: "Xác nhận hàng loạt nhóm Cảnh báo Nhẹ (+1đ)",
-                    summary: `${selectedIds.length} lượt điểm danh cùng ngữ cảnh`,
+                    summary: `${selectedIds.length} lượt điểm danh · ${selectedEvent?.title ?? ""}`,
                     code: "ATTENDANCE_BULK_APPROVE_WEAK",
                     destructive: false,
                     onDone: () => {
@@ -224,39 +317,80 @@ export function AttendanceReviewPage(){
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserCheck className="h-5 w-5 text-primary" />
-                Điểm danh Bù Bằng tay Có Kiểm toán
+                Điểm danh Bù Bằng tay Có Tra cứu Hồ sơ
               </CardTitle>
               <CardDescription>
-                Dành cho sinh viên hết pin, lỗi thiết bị hoặc quên thẻ SV. Mọi thao tác bắt buộc nhập lý do và ghi Audit Log.
+                Tìm kiếm sinh viên theo MSSV hoặc Họ tên để kiểm tra trạng thái đăng ký trước khi xác nhận điểm danh bù.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="manual-mssv">MSSV 8 chữ số</Label>
-                <Input
-                  id="manual-mssv"
-                  maxLength={8}
-                  placeholder="22110345"
-                  value={manualMssv}
-                  onChange={(e) => setManualMssv(e.target.value)}
-                  className="tabular-mono"
-                />
+                <Label htmlFor="manual-student-search">Tìm sinh viên theo MSSV hoặc Họ tên</Label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="manual-student-search"
+                    placeholder="Nhập MSSV hoặc tên (VD: 22110345, Nguyễn Minh...)"
+                    value={studentQuery}
+                    onChange={(e) => setStudentQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
               </div>
+
+              <div className="max-h-36 space-y-1.5 overflow-y-auto rounded-xl border border-border/80 bg-muted/25 p-2">
+                {filteredDirectory.map((stu) => {
+                  const isPicked = pickedStudent?.mssv === stu.mssv;
+                  return (
+                    <button
+                      key={stu.mssv}
+                      type="button"
+                      onClick={() => setPickedStudent(stu)}
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${
+                        isPicked
+                          ? "bg-primary/12 font-semibold text-primary"
+                          : "hover:bg-card text-foreground"
+                      }`}
+                    >
+                      <span>
+                        <span className="tabular-mono font-semibold">{stu.mssv}</span> · {stu.fullName}
+                      </span>
+                      <Badge variant={stu.registered ? "success" : "warning"}>
+                        {stu.registered ? "Đã đăng ký" : "Vãng lai"}
+                      </Badge>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {pickedStudent && (
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 text-xs space-y-1">
+                  <div className="font-semibold text-foreground">
+                    Hồ sơ xác nhận: {pickedStudent.fullName} ({pickedStudent.mssv})
+                  </div>
+                  <div className="text-muted-foreground">
+                    {pickedStudent.major} · Sự kiện: <strong>{selectedEvent?.title}</strong>
+                  </div>
+                </div>
+              )}
+
               <Button
                 type="button"
-                disabled={!/^[0-9]{8}$/.test(manualMssv.trim())}
-                onClick={() =>
+                disabled={!pickedStudent}
+                onClick={() => {
+                  if (!pickedStudent) return;
                   setAuditModal({
                     title: "Xác nhận Điểm danh Bù Bằng tay",
-                    summary: `MSSV ${manualMssv} · Hội thảo Cloud Native & DevOps 2026`,
+                    summary: `${pickedStudent.fullName} (${pickedStudent.mssv}) · ${selectedEvent?.title ?? ""} (${selectedSessionId})`,
                     code: "ATTENDANCE_MANUAL_OVERRIDE",
                     destructive: false,
                     onDone: () => {
-                      setNotice(`Đã ghi nhận điểm danh bù cho MSSV ${manualMssv} và lưu Audit Log.`);
-                      setManualMssv("");
+                      setNotice(
+                        `Đã ghi nhận điểm danh bù cho ${pickedStudent.fullName} (${pickedStudent.mssv}) tại "${selectedEvent?.title}" và lưu Audit Log.`
+                      );
                     }
-                  })
-                }
+                  });
+                }}
               >
                 Ghi nhận Điểm danh Bù (Yêu cầu lý do Audit)
               </Button>
@@ -290,41 +424,6 @@ export function AttendanceReviewPage(){
                 >
                   Xác nhận có mặt
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="dynamic-qr">
-          <Card>
-            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle>Mã QR Động Ký số (Tự đổi mỗi 10 giây · Ân hạn truyền N=8s)</CardTitle>
-                <CardDescription>
-                  Vùng quiet zone trắng tối thiểu 16px đảm bảo camera hội trường bắt mã dưới 0.3s.
-                </CardDescription>
-              </div>
-              <Button asChild>
-                <Link to="/stage">
-                  <MonitorPlay className="h-4 w-4" />
-                  Phóng toàn màn hình LED 16:9
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center gap-4 py-6">
-              <div className="rounded-2xl border border-border bg-white p-5 shadow-floating">
-                <QRCodeSVG
-                  value={`YITZONE:EVT-CLOUD-2026:NONCE-${qrNonce}:SIG-ECDSA-P256`}
-                  size={220}
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <Badge variant="info" className="tabular-mono">
-                  Đổi mã sau: {qrCountdown}s
-                </Badge>
-                <span className="tabular-mono text-xs text-muted-foreground">
-                  Nonce #{qrNonce}
-                </span>
               </div>
             </CardContent>
           </Card>

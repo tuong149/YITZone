@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { useEventStore } from "@/stores/event-store";
 
 type CalCategory = "FACULTY" | "DEPT" | "OFFICE" | "ARTS" | "EXAM" | "DEADLINE";
 type CalViewMode = "month" | "week" | "agenda";
@@ -325,7 +326,61 @@ const MONTH_CELLS: Array<{ date: string | null; day: number | null }> = [
 ];
 
 export function CalendarPage(){
-  const [activities, setActivities] = useState<CalendarActivity[]>(INITIAL_ACTIVITIES);
+  const [baseActivities, setActivities] = useState<CalendarActivity[]>(INITIAL_ACTIVITIES);
+  const storedEvents = useEventStore((s) => s.events);
+  const storedRegistrations = useEventStore((s) => s.registrations);
+
+  const activities = useMemo<CalendarActivity[]>(() => {
+    const merged = baseActivities.map((item) => {
+      // If user registered for UTE Hackathon or any matching event in useEventStore, mark inMyCalendar = true
+      const matchedEvent = storedEvents.find(
+        (ev) => item.title.includes(ev.title) || ev.title.includes(item.title)
+      );
+      if (matchedEvent && storedRegistrations[matchedEvent.id]) {
+        return {
+          ...item,
+          inMyCalendar: true,
+          actionLabel: "Mở Vé QR",
+          actionTo: `/scanner?tab=ticket&eventId=${matchedEvent.id}`,
+          actionKind: "SCAN_QR" as const
+        };
+      }
+      return item;
+    });
+
+    for (const [evId, reg] of Object.entries(storedRegistrations)) {
+      if (!reg) continue;
+      const ev = storedEvents.find((e) => e.id === evId);
+      if (!ev) continue;
+      const alreadyExists = merged.some(
+        (a) => a.id === `cal-evt-${ev.id}` || a.title.includes(ev.title) || ev.title.includes(a.title)
+      );
+      if (!alreadyExists) {
+        const firstSession = ev.sessions[0];
+        const [rawStart, rawEnd] = (firstSession?.timeRange ?? "08:00 – 11:30")
+          .split(/[–-]/)
+          .map((t) => t.trim());
+        merged.unshift({
+          id: `cal-evt-${ev.id}`,
+          title: ev.title,
+          category: ev.visibility === "INTERNAL_CTV" ? "DEPT" : "FACULTY",
+          date: firstSession?.date ?? "2026-11-26",
+          startTime: rawStart || "08:00",
+          endTime: rawEnd || "11:30",
+          location: ev.location,
+          unitLabel: ev.scope === "DEPT_INTERNAL" ? "Nội bộ Ban" : "Đoàn – Hội Khoa CNTT",
+          inMyCalendar: true,
+          benefits: ev.benefits,
+          actionLabel: "Mở Vé QR",
+          actionTo: `/scanner?tab=ticket&eventId=${ev.id}`,
+          actionKind: "SCAN_QR",
+          description: ev.subtitle
+        });
+      }
+    }
+
+    return merged;
+  }, [baseActivities, storedEvents, storedRegistrations]);
   const [scope, setScope] = useState<CalScopeMode>("MINE");
   const [viewMode, setViewMode] = useState<CalViewMode>(() =>
     typeof window !== "undefined" && window.innerWidth < 768 ? "agenda" : "week"

@@ -459,7 +459,7 @@ export function OfficeAdminPage(){
           <TabsTrigger value="attendance">Thống kê Chuyên cần</TabsTrigger>
           <TabsTrigger value="assets">Tài sản &amp; Mượn – Trả QR/1D</TabsTrigger>
           <TabsTrigger value="inventory">Kiểm kê &amp; Tài sản dư</TabsTrigger>
-          <TabsTrigger value="crud">CRUD Checklist T6 &amp; Thanh lý</TabsTrigger>
+          <TabsTrigger value="crud">Hạng mục Vệ sinh T6 &amp; Thanh lý</TabsTrigger>
         </TabsList>
 
         <TabsContent value="exceptions" className="space-y-4">

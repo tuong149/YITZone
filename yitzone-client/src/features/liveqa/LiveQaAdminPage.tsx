@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Check,
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   GitMerge,
   MonitorOff,
   MonitorPlay,
+  MoreHorizontal,
   Plus,
   Radio,
   RotateCcw,
@@ -21,6 +22,12 @@ import { AuditActionDialog } from "@/components/ui/audit-action-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,78 +35,14 @@ import { hasAnyPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useEventStore } from "@/stores/event-store";
-
-type QuestionStatus = "PENDING" | "APPROVED" | "ANSWERED" | "REJECTED";
-
-interface ModQuestion {
-  id: string;
-  sessionId: string;
-  content: string;
-  anonymous: boolean;
-  realIdentity: string;
-  upvoterIds: string[];
-  status: QuestionStatus;
-  onStage: boolean;
-  unmasked?: boolean;
-}
-
-interface ProfanityTerm {
-  id: string;
-  word: string;
-  scope: "Live Q&A & Minigame";
-  active: boolean;
-}
-
-interface QaSessionOption {
-  id: string;
-  label: string;
-  pin: string;
-}
-
-const DEFAULT_SESSION: QaSessionOption = {
-  id: "qa-cloud-2026",
-  label: "Hội thảo Cloud Native & DevOps 2026 · Phiên Hỏi đáp",
-  pin: "482910"
-};
-
-const INITIAL_MOD_QUESTIONS: ModQuestion[] = [
-  {
-    id: "mq-1",
-    sessionId: DEFAULT_SESSION.id,
-    content: "Sinh viên chuyển ngành vào Khoa CNTT nhưng giữ MSSV cũ có được ghi nhận chuẩn CĐDN không?",
-    anonymous: true,
-    realIdentity: "22146091 · Võ Thanh Tùng",
-    upvoterIds: ["sv1", "sv2", "sv3", "sv4"],
-    status: "APPROVED",
-    onStage: true
-  },
-  {
-    id: "mq-2",
-    sessionId: DEFAULT_SESSION.id,
-    content: "Cho em hỏi chuyển ngành sang CNTT giữ mã số cũ thì có tính CĐDN không ạ?",
-    anonymous: true,
-    realIdentity: "23110218 · Nguyễn Hoàng Nam",
-    upvoterIds: ["sv2", "sv5"],
-    status: "APPROVED",
-    onStage: false
-  },
-  {
-    id: "mq-3",
-    sessionId: DEFAULT_SESSION.id,
-    content: "Bình luận công kích cá nhân vi phạm nội quy hội trường",
-    anonymous: true,
-    realIdentity: "23110999 · Trần Văn X",
-    upvoterIds: [],
-    status: "PENDING",
-    onStage: false
-  }
-];
-
-const INITIAL_PROFANITY: ProfanityTerm[] = [
-  { id: "pf-1", word: "lừa đảo", scope: "Live Q&A & Minigame", active: true },
-  { id: "pf-2", word: "vô học", scope: "Live Q&A & Minigame", active: true },
-  { id: "pf-3", word: "spam", scope: "Live Q&A & Minigame", active: true }
-];
+import {
+  DEFAULT_QA_SESSION,
+  useLiveQaStore,
+  type ModQuestion,
+  type ProfanityTerm,
+  type QaSessionOption,
+  type QuestionStatus
+} from "@/stores/liveqa-store";
 
 const UNMASK_PERMISSIONS = ["MOD_LIVEQA_UNMASK", "liveqa:unmask"] as const;
 
@@ -114,13 +57,23 @@ function statusMeta(q: ModQuestion): {
   return { label: "Đã ẩn", variant: "danger" };
 }
 
-export function LiveQaAdminPage() {
+export function LiveQaAdminPage({ embeddedEventId }: { embeddedEventId?: string } = {}) {
+  const [searchParams] = useSearchParams();
+  const filterEventId = embeddedEventId ?? searchParams.get("eventId") ?? undefined;
+
   const authorities = useAuthStore((s) => s.authorities);
   const storedEvents = useEventStore((s) => s.events);
   const canUnmask = hasAnyPermission(authorities, UNMASK_PERMISSIONS);
 
+  const questions = useLiveQaStore((s) => s.questions);
+  const terms = useLiveQaStore((s) => s.terms);
+  const selectedSessionId = useLiveQaStore((s) => s.activeSessionId);
+  const setSelectedSessionId = useLiveQaStore((s) => s.setActiveSessionId);
+  const setQuestions = useLiveQaStore((s) => s.setQuestions);
+  const setTerms = useLiveQaStore((s) => s.setTerms);
+
   const sessionOptions = useMemo<QaSessionOption[]>(() => {
-    const derived: QaSessionOption[] = [DEFAULT_SESSION];
+    const derived: QaSessionOption[] = [DEFAULT_QA_SESSION];
     for (const evt of storedEvents) {
       for (const ses of evt.sessions) {
         if (!ses.activities.liveQa) continue;
@@ -128,6 +81,7 @@ export function LiveQaAdminPage() {
         if (derived.some((s) => s.id === id)) continue;
         derived.push({
           id,
+          eventId: evt.id,
           label: `${evt.title} · ${ses.name}`,
           pin: String(400000 + ((evt.id.length * 7919 + ses.id.length * 104729) % 599999))
         });
@@ -136,52 +90,63 @@ export function LiveQaAdminPage() {
     return derived;
   }, [storedEvents]);
 
-  const [selectedSessionId, setSelectedSessionId] = useState<string>(DEFAULT_SESSION.id);
-  const [statusFilter, setStatusFilter] = useState<"ALL" | QuestionStatus>("ALL");
-  const [questions, setQuestions] = useState<ModQuestion[]>(INITIAL_MOD_QUESTIONS);
-  const [terms, setTerms] = useState<ProfanityTerm[]>(INITIAL_PROFANITY);
+  useEffect(() => {
+    if (!filterEventId) return;
+    const match = sessionOptions.find((s) => s.eventId === filterEventId);
+    if (match) {
+      setSelectedSessionId(match.id);
+    }
+  }, [filterEventId, sessionOptions, setSelectedSessionId]);
+
+  const [showHidden, setShowHidden] = useState(false);
   const [newWord, setNewWord] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [unmaskTarget, setUnmaskTarget] = useState<ModQuestion | null>(null);
   const [deleteWordTarget, setDeleteWordTarget] = useState<ProfanityTerm | null>(null);
 
   const activeSession =
-    sessionOptions.find((s) => s.id === selectedSessionId) ?? DEFAULT_SESSION;
+    sessionOptions.find((s) => s.id === selectedSessionId) ?? DEFAULT_QA_SESSION;
 
   const sessionQuestions = useMemo(
     () => questions.filter((q) => q.sessionId === activeSession.id),
     [questions, activeSession.id]
   );
 
-  const filteredQuestions = useMemo(() => {
-    const list =
-      statusFilter === "ALL"
-        ? sessionQuestions
-        : sessionQuestions.filter((q) => q.status === statusFilter);
-    return [...list].sort((a, b) => {
-      if (a.onStage !== b.onStage) return a.onStage ? -1 : 1;
-      if (a.status === "PENDING" && b.status !== "PENDING") return -1;
-      if (b.status === "PENDING" && a.status !== "PENDING") return 1;
-      return b.upvoterIds.length - a.upvoterIds.length;
-    });
-  }, [sessionQuestions, statusFilter]);
-
-  const counts = useMemo(
-    () => ({
-      all: sessionQuestions.length,
-      pending: sessionQuestions.filter((q) => q.status === "PENDING").length,
-      approved: sessionQuestions.filter((q) => q.status === "APPROVED").length,
-      answered: sessionQuestions.filter((q) => q.status === "ANSWERED").length,
-      rejected: sessionQuestions.filter((q) => q.status === "REJECTED").length
-    }),
+  // 3-Column Moderation Queues (B3: Chờ duyệt -> Đã duyệt -> Đang chiếu / Đã giải đáp)
+  const pendingCol = useMemo(
+    () =>
+      sessionQuestions
+        .filter((q) => q.status === "PENDING")
+        .sort((a, b) => b.upvoterIds.length - a.upvoterIds.length),
     [sessionQuestions]
   );
 
-  const primaryStageOrTopApproved = useMemo(
+  const approvedCol = useMemo(
     () =>
-      sessionQuestions.find((q) => q.onStage) ??
-      sessionQuestions.find((q) => q.status === "APPROVED") ??
-      null,
+      sessionQuestions
+        .filter((q) => q.status === "APPROVED" && !q.onStage)
+        .sort((a, b) => b.upvoterIds.length - a.upvoterIds.length),
+    [sessionQuestions]
+  );
+
+  const stageAndAnsweredCol = useMemo(
+    () =>
+      sessionQuestions
+        .filter((q) => q.onStage || q.status === "ANSWERED")
+        .sort((a, b) => (a.onStage === b.onStage ? b.upvoterIds.length - a.upvoterIds.length : a.onStage ? -1 : 1)),
+    [sessionQuestions]
+  );
+
+  const rejectedCol = useMemo(
+    () => sessionQuestions.filter((q) => q.status === "REJECTED"),
+    [sessionQuestions]
+  );
+
+  const mergeTargets = useMemo(
+    () =>
+      sessionQuestions.filter(
+        (q) => q.onStage || q.status === "APPROVED"
+      ),
     [sessionQuestions]
   );
 
@@ -202,16 +167,17 @@ export function LiveQaAdminPage() {
 
   const handlePinToStage = (questionId: string) => {
     setQuestions((prev) =>
-      prev.map((item) =>
-        item.sessionId === activeSession.id
-          ? {
-              ...item,
-              onStage: item.id === questionId
-            }
-          : item
-      )
+      prev.map((item) => {
+        if (item.sessionId !== activeSession.id) return item;
+        // Strictly only allow APPROVED questions onto stage
+        if (item.id === questionId && item.status !== "APPROVED") return item;
+        return {
+          ...item,
+          onStage: item.id === questionId
+        };
+      })
     );
-    setNotice("Đã đẩy câu hỏi lên Màn hình LED Sân khấu (/stage/qa).");
+    setNotice("Đã chiếu câu hỏi lên Màn hình LED Sân khấu (/stage/qa).");
   };
 
   const handleClearStage = (questionId: string, markAnswered: boolean) => {
@@ -229,7 +195,7 @@ export function LiveQaAdminPage() {
     setNotice(
       markAnswered
         ? "Đã đánh dấu câu hỏi là Đã giải đáp và gỡ khỏi màn hình LED."
-        : "Đã gỡ câu hỏi khỏi màn hình LED."
+        : "Đã gỡ câu hỏi khỏi màn hình LED về cột Đã duyệt."
     );
   };
 
@@ -244,7 +210,7 @@ export function LiveQaAdminPage() {
         .map((q) => (q.id === targetId ? { ...q, upvoterIds: unionUpvoters } : q))
     );
     setNotice(
-      `Đã gộp câu hỏi trùng (hợp lượt ủng hộ không trùng người: ${dst.upvoterIds.length} ∪ ${src.upvoterIds.length} = ${unionUpvoters.length} lượt).`
+      `Đã gộp câu trùng vào câu chính (tổng hợp không trùng người: ${unionUpvoters.length} lượt ủng hộ).`
     );
   };
 
@@ -265,45 +231,243 @@ export function LiveQaAdminPage() {
     setNewWord("");
   };
 
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-1">
-          <h1 className="font-display text-2xl font-medium text-foreground">
-            Điều phối Live Q&amp;A &amp; Bộ lọc Từ ngữ
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Kiểm duyệt câu hỏi hội trường, ghim câu hỏi lên LED 16:9, gộp câu trùng và quản lý bộ lọc từ ngữ nhạy cảm.
-          </p>
-        </div>
+  const renderOverflowMenu = (q: ModQuestion) => {
+    const otherMergeTargets = mergeTargets.filter((t) => t.id !== q.id);
+    const showMerge = q.status === "APPROVED" && !q.onStage && otherMergeTargets.length > 0;
+    const showUnmask = canUnmask && q.anonymous && !q.unmasked;
+    const showHideApproved = q.status === "APPROVED" && !q.onStage;
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link to={`/live-qa/${activeSession.pin}`}>Tường Khán giả</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link to="/stage/qa">
-              <MonitorPlay className="h-4 w-4" />
-              <span>Chiếu LED 16:9</span>
-            </Link>
-          </Button>
+    if (!showMerge && !showUnmask && !showHideApproved) return null;
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            className="rounded-full"
-            onClick={() =>
-              setNotice(
-                `Đã xuất tổng kết Live Q&A (${activeSession.label}) kèm trạng thái giải đáp và lượt ủng hộ.`
-              )
-            }
+            variant="ghost"
+            aria-label="Tùy chọn bổ sung"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
           >
-            <Download className="h-4 w-4" />
-            <span>Xuất Tổng kết</span>
+            <MoreHorizontal className="h-4 w-4" />
           </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          {showMerge &&
+            otherMergeTargets.map((target) => (
+              <DropdownMenuItem
+                key={target.id}
+                onSelect={() => handleMergeDuplicate(q.id, target.id)}
+              >
+                <GitMerge className="h-3.5 w-3.5 text-primary" />
+                <span className="truncate">
+                  Gộp vào: &ldquo;{target.content.slice(0, 32)}…&rdquo;
+                </span>
+              </DropdownMenuItem>
+            ))}
+          {showHideApproved && (
+            <DropdownMenuItem
+              onSelect={() =>
+                handleSetStatus(q.id, "REJECTED", "Đã chuyển câu hỏi sang mục Đã ẩn.")
+              }
+            >
+              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Ẩn câu hỏi này</span>
+            </DropdownMenuItem>
+          )}
+          {showUnmask && (
+            <DropdownMenuItem
+              onSelect={() => setUnmaskTarget(q)}
+              className="text-brand-crimson focus:text-brand-crimson"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              <span>Tra danh tính người gửi (Ghi Audit)</span>
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
+  const renderQuestionCard = (q: ModQuestion) => {
+    const meta = statusMeta(q);
+    const primaryMergeTarget = mergeTargets.find((t) => t.id !== q.id) ?? null;
+
+    return (
+      <div
+        key={q.id}
+        className={cn(
+          "space-y-3 rounded-xl border p-3.5 transition-colors",
+          q.onStage
+            ? "border-primary bg-primary/[0.05]"
+            : "border-border bg-card"
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant={meta.variant}>{meta.label}</Badge>
+            <span className="tabular-mono inline-flex items-center gap-1 text-xs font-semibold text-primary">
+              <ThumbsUp className="h-3 w-3" />
+              {q.upvoterIds.length}
+            </span>
+          </div>
+          {renderOverflowMenu(q)}
+        </div>
+
+        <p className="text-sm font-medium leading-relaxed text-foreground">{q.content}</p>
+
+        <div className="text-xs text-muted-foreground">
+          {q.unmasked ? (
+            <strong className="text-status-danger">Danh tính gốc: {q.realIdentity}</strong>
+          ) : q.anonymous ? (
+            "Sinh viên Khoa CNTT (Ẩn danh)"
+          ) : (
+            q.realIdentity
+          )}
+        </div>
+
+        {/* Strictly context-bound actions per column */}
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2.5">
+          {q.status === "PENDING" && (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  handleSetStatus(
+                    q.id,
+                    "APPROVED",
+                    "Đã duyệt câu hỏi sang cột Đã duyệt (sẵn sàng chiếu LED)."
+                  )
+                }
+              >
+                <Check className="h-3.5 w-3.5" />
+                <span>Duyệt</span>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="text-muted-foreground hover:text-status-danger"
+                onClick={() =>
+                  handleSetStatus(q.id, "REJECTED", "Đã ẩn câu hỏi khỏi tường khán giả.")
+                }
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Ẩn</span>
+              </Button>
+            </>
+          )}
+
+          {q.status === "APPROVED" && !q.onStage && (
+            <>
+              <Button type="button" size="sm" onClick={() => handlePinToStage(q.id)}>
+                <MonitorPlay className="h-3.5 w-3.5" />
+                <span>Chiếu LED</span>
+              </Button>
+              {primaryMergeTarget && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleMergeDuplicate(q.id, primaryMergeTarget.id)}
+                >
+                  <GitMerge className="h-3.5 w-3.5" />
+                  <span>Gộp câu trùng</span>
+                </Button>
+              )}
+            </>
+          )}
+
+          {q.onStage && (
+            <>
+              <Button type="button" size="sm" onClick={() => handleClearStage(q.id, true)}>
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Đã giải đáp</span>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => handleClearStage(q.id, false)}
+              >
+                <MonitorOff className="h-3.5 w-3.5" />
+                <span>Gỡ khỏi LED</span>
+              </Button>
+            </>
+          )}
+
+          {q.status === "ANSWERED" && !q.onStage && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handlePinToStage(q.id)}
+            >
+              <MonitorPlay className="h-3.5 w-3.5" />
+              <span>Chiếu lại LED</span>
+            </Button>
+          )}
+
+          {q.status === "REJECTED" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                handleSetStatus(q.id, "PENDING", "Đã khôi phục câu hỏi về cột Chờ duyệt.")
+              }
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Khôi phục về Chờ duyệt</span>
+            </Button>
+          )}
         </div>
       </div>
+    );
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      {!embeddedEventId && (
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1">
+            <h1 className="font-display text-2xl font-medium text-foreground">
+              Điều phối Live Q&amp;A &amp; Bộ lọc Từ ngữ
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Luồng kiểm duyệt 3 bước an toàn (Chờ duyệt → Đã duyệt → Đang chiếu / Đã giải đáp), chống chiếu nhầm câu hỏi chưa qua kiểm duyệt.
+            </p>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link to={`/live-qa/${activeSession.pin}`}>Tường Khán giả</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link to={`/stage/qa?sessionId=${encodeURIComponent(activeSession.id)}`}>
+                <MonitorPlay className="h-4 w-4" />
+                <span>Chiếu LED 16:9</span>
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={() =>
+                setNotice(
+                  `Đã xuất tổng kết Live Q&A (${activeSession.label}) kèm trạng thái giải đáp và lượt ủng hộ.`
+                )
+              }
+            >
+              <Download className="h-4 w-4" />
+              <span>Xuất Tổng kết</span>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Session Context Strip */}
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -326,11 +490,19 @@ export function LiveQaAdminPage() {
           </Select>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">Mã PIN phòng:</span>
           <Badge variant="outline" className="tabular-mono font-semibold text-foreground">
             {activeSession.pin.slice(0, 3)} {activeSession.pin.slice(3)}
           </Badge>
+          {embeddedEventId && (
+            <Button asChild variant="outline" size="sm" className="h-7 rounded-full text-xs">
+              <Link to={`/stage/qa?sessionId=${encodeURIComponent(activeSession.id)}`}>
+                <MonitorPlay className="h-3.5 w-3.5" />
+                <span>Mở LED Q&amp;A</span>
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -359,231 +531,111 @@ export function LiveQaAdminPage() {
       <Tabs defaultValue="moderate" className="min-h-[420px]">
         <TabsList className="justify-start">
           <TabsTrigger value="moderate">
-            Bảng Điều phối MC ({counts.all})
+            Bảng Điều phối MC ({sessionQuestions.length})
           </TabsTrigger>
           <TabsTrigger value="profanity">
             Từ điển Lọc Từ ngữ ({terms.length})
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: MC Moderation Queue */}
+        {/* TAB 1: 3-Column MC Moderation Board */}
         <TabsContent value="moderate" className="mt-4 space-y-4">
-          {/* Status Filter Pills */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(
-              [
-                { id: "ALL", label: `Tất cả (${counts.all})` },
-                { id: "PENDING", label: `Chờ duyệt (${counts.pending})` },
-                { id: "APPROVED", label: `Đã duyệt (${counts.approved})` },
-                { id: "ANSWERED", label: `Đã giải đáp (${counts.answered})` },
-                { id: "REJECTED", label: `Đã ẩn (${counts.rejected})` }
-              ] as const
-            ).map((pill) => (
-              <button
-                key={pill.id}
-                type="button"
-                onClick={() => setStatusFilter(pill.id)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                  statusFilter === pill.id
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-muted-foreground hover:text-foreground"
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Column 1: PENDING */}
+            <Card className="flex flex-col">
+              <CardHeader className="border-b border-border/70 pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">1. Chờ duyệt</CardTitle>
+                  <Badge variant="warning" className="tabular-mono">
+                    {pendingCol.length}
+                  </Badge>
+                </div>
+                <CardDescription className="text-xs">
+                  Câu hỏi mới từ khán giả — bắt buộc Duyệt trước khi có thể chiếu LED.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 space-y-3 pt-4">
+                {pendingCol.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-muted-foreground">
+                    Không có câu hỏi nào đang chờ duyệt.
+                  </p>
+                ) : (
+                  pendingCol.map(renderQuestionCard)
                 )}
-              >
-                {pill.label}
-              </button>
-            ))}
-          </div>
-
-          {filteredQuestions.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-sm font-medium text-foreground">
-                  Chưa có câu hỏi nào trong mục này
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Chia sẻ mã PIN <span className="tabular-mono font-semibold">{activeSession.pin}</span> hoặc mở màn hình LED để khán giả gửi câu hỏi.
-                </p>
               </CardContent>
             </Card>
-          ) : (
-            <div className="space-y-3">
-              {filteredQuestions.map((q) => {
-                const meta = statusMeta(q);
-                const canMergeIntoPrimary =
-                  q.status === "APPROVED" &&
-                  !q.onStage &&
-                  primaryStageOrTopApproved !== null &&
-                  primaryStageOrTopApproved.id !== q.id;
 
-                return (
-                  <Card
-                    key={q.id}
-                    className={cn(
-                      q.onStage && "border-primary/60",
-                      q.status === "REJECTED" && "opacity-75"
-                    )}
-                  >
-                    <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="min-w-0 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={meta.variant}>{meta.label}</Badge>
-                          <span className="tabular-mono inline-flex items-center gap-1 text-xs font-semibold text-primary">
-                            <ThumbsUp className="h-3 w-3" />
-                            {q.upvoterIds.length} lượt ủng hộ
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {q.unmasked ? (
-                              <strong className="text-status-danger">
-                                Danh tính gốc: {q.realIdentity}
-                              </strong>
-                            ) : q.anonymous ? (
-                              "Sinh viên Khoa CNTT (Ẩn danh)"
-                            ) : (
-                              q.realIdentity
-                            )}
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium leading-relaxed text-foreground">
-                          {q.content}
-                        </p>
-                      </div>
+            {/* Column 2: APPROVED */}
+            <Card className="flex flex-col">
+              <CardHeader className="border-b border-border/70 pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">2. Đã duyệt (Sẵn sàng chiếu)</CardTitle>
+                  <Badge variant="secondary" className="tabular-mono">
+                    {approvedCol.length}
+                  </Badge>
+                </div>
+                <CardDescription className="text-xs">
+                  Đã kiểm duyệt nội dung — bấm &ldquo;Chiếu LED&rdquo; hoặc gộp câu trùng.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 space-y-3 pt-4">
+                {approvedCol.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-muted-foreground">
+                    Chưa có câu hỏi nào trong hàng chờ chiếu LED.
+                  </p>
+                ) : (
+                  approvedCol.map(renderQuestionCard)
+                )}
+              </CardContent>
+            </Card>
 
-                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                        {/* PENDING: Must approve or reject BEFORE it can ever go on LED */}
-                        {q.status === "PENDING" && (
-                          <>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() =>
-                                handleSetStatus(
-                                  q.id,
-                                  "APPROVED",
-                                  "Đã duyệt câu hỏi vào hàng chờ chiếu LED."
-                                )
-                              }
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                              <span>Duyệt</span>
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="text-muted-foreground hover:text-status-danger"
-                              onClick={() =>
-                                handleSetStatus(
-                                  q.id,
-                                  "REJECTED",
-                                  "Đã ẩn câu hỏi vi phạm khỏi tường khán giả."
-                                )
-                              }
-                            >
-                              <X className="h-3.5 w-3.5" />
-                              <span>Từ chối</span>
-                            </Button>
-                          </>
-                        )}
+            {/* Column 3: ON STAGE / ANSWERED */}
+            <Card className="flex flex-col">
+              <CardHeader className="border-b border-border/70 pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">3. Đang chiếu / Đã giải đáp</CardTitle>
+                  <Badge variant="success" className="tabular-mono">
+                    {stageAndAnsweredCol.length}
+                  </Badge>
+                </div>
+                <CardDescription className="text-xs">
+                  Câu hỏi đang hiển thị trên màn hình LED 16:9 hoặc đã được diễn giả trả lời.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 space-y-3 pt-4">
+                {stageAndAnsweredCol.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-muted-foreground">
+                    Chưa có câu hỏi nào đang chiếu hoặc đã giải đáp.
+                  </p>
+                ) : (
+                  stageAndAnsweredCol.map(renderQuestionCard)
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-                        {/* APPROVED & NOT ON STAGE */}
-                        {q.status === "APPROVED" && !q.onStage && (
-                          <>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => handlePinToStage(q.id)}
-                            >
-                              <MonitorPlay className="h-3.5 w-3.5" />
-                              <span>Chiếu LED</span>
-                            </Button>
-                            {canMergeIntoPrimary && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleMergeDuplicate(q.id, primaryStageOrTopApproved.id)
-                                }
-                              >
-                                <GitMerge className="h-3.5 w-3.5" />
-                                <span>Gộp trùng</span>
-                              </Button>
-                            )}
-                          </>
-                        )}
-
-                        {/* CURRENTLY ON STAGE */}
-                        {q.onStage && (
-                          <>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => handleClearStage(q.id, true)}
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              <span>Đã giải đáp</span>
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleClearStage(q.id, false)}
-                            >
-                              <MonitorOff className="h-3.5 w-3.5" />
-                              <span>Gỡ LED</span>
-                            </Button>
-                          </>
-                        )}
-
-                        {/* REJECTED: Allow restore */}
-                        {q.status === "REJECTED" && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              handleSetStatus(q.id, "PENDING", "Đã khôi phục câu hỏi về hàng Chờ duyệt.")
-                            }
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            <span>Khôi phục</span>
-                          </Button>
-                        )}
-
-                        {/* Unmask action: permission-gated & restrained styling to prevent misclicks */}
-                        {canUnmask && q.anonymous && !q.unmasked && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="text-muted-foreground hover:bg-brand-crimson/10 hover:text-brand-crimson"
-                            onClick={() => setUnmaskTarget(q)}
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            <span>Tra danh tính</span>
-                          </Button>
-                        )}
-
-                        {q.status === "APPROVED" && !q.onStage && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            aria-label="Ẩn câu hỏi"
-                            className="text-muted-foreground hover:text-status-danger"
-                            onClick={() =>
-                              handleSetStatus(q.id, "REJECTED", "Đã ẩn câu hỏi khỏi danh sách.")
-                            }
-                          >
-                            <EyeOff className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+          {/* Collapsible Rejected/Hidden Questions */}
+          {rejectedCol.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Câu hỏi đã ẩn / từ chối ({rejectedCol.length})
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => setShowHidden((v) => !v)}
+                >
+                  {showHidden ? "Thu gọn" : "Xem danh sách đã ẩn"}
+                </Button>
+              </div>
+              {showHidden && (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {rejectedCol.map(renderQuestionCard)}
+                </div>
+              )}
             </div>
           )}
         </TabsContent>
@@ -594,7 +646,7 @@ export function LiveQaAdminPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <ShieldCheck className="h-4 w-4 text-primary" />
-                <span>Bộ Từ điển Lọc Từ ngữ Nhạy cảm Dùng chung</span>
+                <span>Danh mục Từ ngữ Nhạy cảm Dùng chung</span>
               </CardTitle>
               <CardDescription>
                 Áp dụng tức thì cho cả Live Q&amp;A Hội trường và chế độ Khách mời Minigame mà không cần khởi động lại hệ thống.

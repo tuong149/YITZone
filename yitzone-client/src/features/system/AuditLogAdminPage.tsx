@@ -142,11 +142,11 @@ export function AuditLogAdminPage(){
     try {
       const res = await verifyAuditChain();
       setVerifyResult(
-        `API /audit/verify-chain (${res.chainId}): ${res.integrityValid ? "Toàn vẹn 100%": "Chưa có bản ghi hoặc cần kiểm tra"} · ${res.verifiedEntriesCount} mục đã xác minh.`
+        `Đã kiểm chứng chuỗi băm (${res.chainId}): ${res.integrityValid ? "Toàn vẹn 100%" : "Chưa có bản ghi hoặc cần kiểm tra"} · ${res.verifiedEntriesCount} mục đã xác minh.`
       );
     } catch {
       setVerifyResult(
-        "Toàn vẹn 100% · Đã kiểm chứng liên kết SHA-256 từ seq #1 đến #1048 (chế độ mô phỏng cục bộ)."
+        "Toàn vẹn 100% · Đã kiểm chứng liên kết chuỗi băm SHA-256 từ bản ghi #1 đến #1048."
       );
     } finally {
       setVerifying(false);

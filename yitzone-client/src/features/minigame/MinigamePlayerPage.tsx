@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
-import { cn } from "@/lib/utils";
+import { cn, maskStudentCode } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 
 type QuestionKind = "SINGLE" | "MULTI" | "TRUE_FALSE";
@@ -178,21 +178,26 @@ export function MinigamePlayerPage() {
   const qrPinRaw = searchParams.get("pin")?.replace(/\D/g, "").slice(0, 6) ?? "";
   const formattedQrPin =
     qrPinRaw.length === 6 ? `${qrPinRaw.slice(0, 3)} ${qrPinRaw.slice(3)}` : null;
+  const initialMatchedRoom = formattedQrPin
+    ? MINIGAME_ROOMS.find((r) => r.pin.replace(/\s+/g, "") === qrPinRaw) ?? null
+    : null;
 
   const [accessFilter, setAccessFilter] = useState<"ALL" | "REQUIRE_ATTENDANCE" | "NO_ATTENDANCE">("ALL");
-  const [quickPin, setQuickPin] = useState("");
-  const [selectedRoom, setSelectedRoom] = useState<MinigameRoom | null>(
-    formattedQrPin ? MINIGAME_ROOMS[0]! : null
-  );
+  const [quickPin, setQuickPin] = useState(qrPinRaw);
+  const [selectedRoom, setSelectedRoom] = useState<MinigameRoom | null>(initialMatchedRoom);
 
   const [phase, setPhase] = useState<"catalog" | "join" | "playing" | "result">(
-    formattedQrPin ? "join" : "catalog"
+    initialMatchedRoom ? "join" : "catalog"
   );
   const [pin, setPin] = useState(formattedQrPin ?? "739 204");
   const [isGuest, setIsGuest] = useState(false);
   const [displayName, setDisplayName] = useState(authFullName ?? "Trần Đức Thịnh");
   const [mssv, setMssv] = useState(authUserId ?? "22110418");
-  const [joinError, setJoinError] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(
+    formattedQrPin && !initialMatchedRoom
+      ? "Không tìm thấy phòng, kiểm tra lại PIN trên màn hình LED."
+      : null
+  );
 
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
@@ -222,8 +227,7 @@ export function MinigamePlayerPage() {
   const currentQuestion = DEMO_QUESTIONS[qIndex] ?? DEMO_QUESTIONS[0]!;
   const maskedPlayerLabel = useMemo(() => {
     if (isGuest) return `${displayName.trim() || "Khách mời"} · Khách`;
-    const last3 = mssv.replace(/\D/g, "").slice(-3) || "000";
-    return `${displayName.trim() || "Sinh viên FIT"} ·...${last3}`;
+    return maskStudentCode(mssv, displayName.trim() || "Sinh viên FIT");
   }, [displayName, isGuest, mssv]);
 
   useEffect(() => {
@@ -255,7 +259,11 @@ export function MinigamePlayerPage() {
       return;
     }
     const formatted = `${digits.slice(0, 3)} ${digits.slice(3)}`;
-    const matched = MINIGAME_ROOMS.find((r) => r.pin.replace(/\s+/g, "") === digits) ?? MINIGAME_ROOMS[0]!;
+    const matched = MINIGAME_ROOMS.find((r) => r.pin.replace(/\s+/g, "") === digits);
+    if (!matched) {
+      setJoinError("Không tìm thấy phòng, kiểm tra lại PIN trên màn hình LED.");
+      return;
+    }
     if (matched.requireAttendance && !matched.userCheckedIn) {
       setJoinError("Phòng này yêu cầu bạn quét QR điểm danh sự kiện trước khi tham gia.");
       return;
@@ -273,11 +281,21 @@ export function MinigamePlayerPage() {
       setJoinError("Mã PIN phòng chơi phải gồm đúng 6 chữ số.");
       return;
     }
+    const matched = MINIGAME_ROOMS.find((r) => r.pin.replace(/\s+/g, "") === digits);
+    if (!matched) {
+      setJoinError("Không tìm thấy phòng, kiểm tra lại PIN trên màn hình LED.");
+      return;
+    }
+    if (matched.requireAttendance && !matched.userCheckedIn) {
+      setJoinError("Phòng này yêu cầu bạn quét QR điểm danh sự kiện trước khi tham gia.");
+      return;
+    }
     const lowered = displayName.toLowerCase();
     if (isGuest && PROFANITY_BLOCKLIST.some((w) => lowered.includes(w))) {
       setJoinError("Tên hiển thị chứa từ ngữ bị chặn bởi bộ lọc Khách mời.");
       return;
     }
+    setSelectedRoom(matched);
     setJoinError(null);
     setQIndex(0);
     setScore(0);
@@ -682,17 +700,19 @@ export function MinigamePlayerPage() {
               <div className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 tabular-mono text-xs font-semibold text-primary">
                 {score.toLocaleString("vi-VN")} điểm
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-full"
-                onClick={handleSimulateDisconnect}
-                disabled={reconnecting}
-              >
-                <RefreshCw className={cn("h-3.5 w-3.5", reconnecting && "animate-spin")} />
-                <span className="hidden sm:inline">Mô phỏng rớt mạng</span>
-              </Button>
+              {import.meta.env.DEV && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={handleSimulateDisconnect}
+                  disabled={reconnecting}
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", reconnecting && "animate-spin")} />
+                  <span className="hidden sm:inline">Mô phỏng rớt mạng</span>
+                </Button>
+              )}
             </div>
           </div>
 

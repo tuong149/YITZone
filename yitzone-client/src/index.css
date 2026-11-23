@@ -65,7 +65,8 @@
     --stage-panel: 224 49% 11%;
   }
 
-  .dark {
+  .dark,
+  .stage-dark {
     --yit-cobalt: 231 100% 71%;
     --yit-cobalt-hover: 231 100% 66%;
     --indigo-node: 259 88% 64%;

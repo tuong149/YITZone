@@ -297,10 +297,10 @@ export function StoreCatalogCrudTab({ onNotify }: { onNotify: (msg: string) => v
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Package className="h-4 w-4 text-primary" />
-            <span>Sản phẩm, Giá vốn &amp; Biến thể SKU (`STORE_PRODUCTS`)</span>
+            <span>Sản phẩm, Giá vốn &amp; Biến thể SKU</span>
           </CardTitle>
           <CardDescription>
-            Sản phẩm đã có đơn hàng không được phép xóa vĩnh viễn — chỉ chuyển trạng thái Ngưng bán (Archive) kèm Audit Log.
+            Sản phẩm đã có đơn hàng không được phép xóa vĩnh viễn — chỉ chuyển trạng thái Ngưng bán kèm Audit Log.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2.5">
@@ -391,7 +391,7 @@ export function StoreCatalogCrudTab({ onNotify }: { onNotify: (msg: string) => v
             <div>
               <CardTitle className="flex items-center gap-2 text-base">
                 <TicketPercent className="h-4 w-4 text-primary" />
-                <span>Mã giảm giá (`STORE_VOUCHERS`)</span>
+                <span>Mã giảm giá (Voucher)</span>
               </CardTitle>
               <CardDescription>Khóa khẩn cấp hoặc xóa mã chưa có lượt dùng.</CardDescription>
             </div>

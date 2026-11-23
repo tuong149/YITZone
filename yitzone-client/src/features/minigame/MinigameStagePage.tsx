@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, Flame, Shield, Trophy, Users } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, maskStudentCode } from "@/lib/utils";
 
 type StageMode = "lobby" | "question" | "reveal" | "podium";
 
 const STAGE_PLAYERS = [
-  { name: "Nguyễn Minh Khôi ·...345", score: 4280, streak: 3 },
-  { name: "Trần Thảo Vy ·...812", score: 3940, streak: 3 },
-  { name: "Lê Quốc Bảo ·...109", score: 3610, streak: 2 },
-  { name: "Phạm Gia Huy ·...554", score: 3120, streak: 1 },
-  { name: "Võ Ngọc Anh ·...901", score: 2890, streak: 2 },
-  { name: "Đặng Hoàng Phúc ·...276", score: 2640, streak: 1 }
+  { name: maskStudentCode("22110345", "Nguyễn Minh Khôi"), score: 4280, streak: 3 },
+  { name: maskStudentCode("23110812", "Trần Thảo Vy"), score: 3940, streak: 3 },
+  { name: maskStudentCode("24162109", "Lê Quốc Bảo"), score: 3610, streak: 2 },
+  { name: maskStudentCode("22110554", "Phạm Gia Huy"), score: 3120, streak: 1 },
+  { name: maskStudentCode("23133901", "Võ Ngọc Anh"), score: 2890, streak: 2 },
+  { name: maskStudentCode("22110276", "Đặng Hoàng Phúc"), score: 2640, streak: 1 }
 ];
 
 const STAGE_QUESTION = {

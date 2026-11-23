@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Archive,
   Award,
+  ExternalLink,
   FileSpreadsheet,
   Gamepad2,
   Laptop,
@@ -22,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEventStore } from "@/stores/event-store";
 
 type Difficulty = "Nhận biết" | "Thông hiểu" | "Vận dụng";
 
@@ -91,7 +93,7 @@ const INITIAL_CANDIDATES: CandidateSession[] = [
     score: 88,
     durationSec: 710,
     violations: 1,
-    flags: ["HEARTBEAT_GAP > 15s (LOG_ONLY)"],
+    flags: ["Gián đoạn kết nối > 15s (Chỉ ghi nhật ký)"],
     status: "IN_PROGRESS",
     deviceTransferred: false
   },
@@ -103,13 +105,28 @@ const INITIAL_CANDIDATES: CandidateSession[] = [
     score: 80,
     durationSec: 890,
     violations: 2,
-    flags: ["MOBILE_LOG_ONLY ×2"],
+    flags: ["Chuyển ứng dụng trên điện thoại ×2 (Chỉ ghi nhật ký)"],
     status: "SUBMITTED",
     deviceTransferred: false
   }
 ];
 
-export function ExamAdminPage(){
+export function ExamAdminPage({ mode = "exam" }: { mode?: "exam" | "minigame" } = {}) {
+  const [searchParams] = useSearchParams();
+  const events = useEventStore((s) => s.events);
+  const examEvents = useMemo(
+    () => events.filter((e) => e.hasExam || e.sessions.some((s) => s.activities.quizExam)),
+    [events]
+  );
+
+  const [selectedEventId, setSelectedEventId] = useState<string>(
+    () => searchParams.get("eventId") ?? examEvents[0]?.id ?? events[0]?.id ?? "EVT-2026-CLOUD"
+  );
+  const selectedEvent = useMemo(
+    () => events.find((e) => e.id === selectedEventId) ?? examEvents[0] ?? events[0],
+    [events, examEvents, selectedEventId]
+  );
+
   const [bank, setBank] = useState<BankQuestion[]>(INITIAL_BANK);
   const [candidates, setCandidates] = useState<CandidateSession[]>(INITIAL_CANDIDATES);
   const [newStem, setNewStem] = useState("");
@@ -120,10 +137,14 @@ export function ExamAdminPage(){
     know: 40,
     understand: 40,
     apply: 20,
-    durationMin: 20,
-    ecertPass: 75,
     maxBlur: 3
   });
+
+  // Derive duration and pass rate directly from the selected event (single source of truth per B10)
+  const eventDurationMin = selectedEvent?.examMinutes ?? 20;
+  const eventPassRate = selectedEvent?.examPassRate ?? 75;
+  const eventExamPath =
+    selectedEvent?.examPath ?? `/exam/exam-${(selectedEvent?.id ?? "ex-fit-2026").toLowerCase()}`;
 
   const [auditTarget, setAuditTarget] = useState<{
     kind: "ARCHIVE_Q" | "TRANSFER_DEVICE" | "DISQUALIFY";
@@ -142,7 +163,7 @@ export function ExamAdminPage(){
         usedInExam: false,
         archived: false
       },
-...prev
+      ...prev
     ]);
     setNewStem("");
   };
@@ -158,13 +179,13 @@ export function ExamAdminPage(){
       },
       {
         id: `Q-IMP-${bank.length + 2}`,
-        stem: "Phân biệt quyền hạn giữa MOD_YITBOT_CURATOR và MOD_YITBOT_FULL (BTV).",
+        stem: "Quy trình khử định danh 2 bước trước khi tóm tắt khảo sát bằng AI hoạt động như thế nào?",
         difficulty: "Vận dụng",
         usedInExam: false,
         archived: false
       }
     ];
-    setBank((prev) => [...imported,...prev]);
+    setBank((prev) => [...imported, ...prev]);
     setImportFeedback("Đã nhập thành công 2 câu hỏi mới từ tệp Excel mẫu (0 lỗi định dạng).");
   };
 
@@ -172,27 +193,27 @@ export function ExamAdminPage(){
     if (!auditTarget) return;
     if (auditTarget.kind === "ARCHIVE_Q") {
       setBank((prev) =>
-        prev.map((q) => (q.id === auditTarget.id ? {...q, archived: true }: q))
+        prev.map((q) => (q.id === auditTarget.id ? { ...q, archived: true } : q))
       );
     } else if (auditTarget.kind === "TRANSFER_DEVICE") {
       setCandidates((prev) =>
         prev.map((c) =>
           c.id === auditTarget.id
-            ? {...c, deviceTransferred: true, device: "Đã cấp phép máy mới (Đang đồng bộ nháp)" }
-: c
+            ? { ...c, deviceTransferred: true, device: "Đã cấp phép máy mới (Đang đồng bộ nháp)" }
+            : c
         )
       );
     } else if (auditTarget.kind === "DISQUALIFY") {
       setCandidates((prev) =>
-        prev.map((c) => (c.id === auditTarget.id ? {...c, status: "DISQUALIFIED" }: c))
+        prev.map((c) => (c.id === auditTarget.id ? { ...c, status: "DISQUALIFIED" } : c))
       );
     }
     setAuditTarget(null);
   };
 
   const rankedCandidates = [...candidates]
-.filter((c) => c.status !== "DISQUALIFIED")
-.sort((a, b) => b.score - a.score || a.durationSec - b.durationSec || a.violations - b.violations);
+    .filter((c) => c.status !== "DISQUALIFIED")
+    .sort((a, b) => b.score - a.score || a.durationSec - b.durationSec || a.violations - b.violations);
 
   const bankCols: DataTableColumn<BankQuestion>[] = [
     {
@@ -204,7 +225,7 @@ export function ExamAdminPage(){
       key: "stem",
       header: "Nội dung câu hỏi",
       render: (q) => (
-        <span className={q.archived ? "text-muted-foreground line-through": "font-medium text-foreground"}>
+        <span className={q.archived ? "text-muted-foreground line-through" : "font-medium text-foreground"}>
           {q.stem}
         </span>
       )
@@ -219,10 +240,10 @@ export function ExamAdminPage(){
       header: "Trạng thái",
       render: (q) =>
         q.archived ? (
-          <Badge variant="outline">Đã lưu trữ (Archive)</Badge>
-        ): q.usedInExam ? (
+          <Badge variant="outline">Đã lưu trữ</Badge>
+        ) : q.usedInExam ? (
           <Badge variant="info">Đã dùng trong đề</Badge>
-        ): (
+        ) : (
           <Badge variant="success">Chưa dùng</Badge>
         )
     },
@@ -233,7 +254,7 @@ export function ExamAdminPage(){
       render: (q) =>
         q.archived ? (
           <span className="text-xs text-muted-foreground">Khóa xóa</span>
-        ): q.usedInExam ? (
+        ) : q.usedInExam ? (
           <Button
             type="button"
             size="sm"
@@ -245,7 +266,7 @@ export function ExamAdminPage(){
             <Archive className="h-3.5 w-3.5" />
             Lưu trữ
           </Button>
-        ): (
+        ) : (
           <Button
             type="button"
             size="sm"
@@ -265,7 +286,7 @@ export function ExamAdminPage(){
       header: "Hạng",
       render: (c) => {
         const rankIdx = rankedCandidates.findIndex((r) => r.id === c.id);
-        return <span className="tabular-mono text-xs font-semibold">{rankIdx >= 0 ? `#${rankIdx + 1}`: "—"}</span>;
+        return <span className="tabular-mono text-xs font-semibold">{rankIdx >= 0 ? `#${rankIdx + 1}` : "—"}</span>;
       }
     },
     {
@@ -297,7 +318,7 @@ export function ExamAdminPage(){
           <div className="text-muted-foreground">
             {Math.floor(c.durationSec / 60)}p {c.durationSec % 60}s
           </div>
-          {c.score >= matrix.ecertPass && c.status !== "DISQUALIFIED" && (
+          {c.score >= eventPassRate && c.status !== "DISQUALIFIED" && (
             <Badge variant="verified">
               <Award className="h-3 w-3" />
               E-Cert
@@ -312,9 +333,9 @@ export function ExamAdminPage(){
       render: (c) =>
         c.status === "DISQUALIFIED" ? (
           <Badge variant="danger">Đã hủy kết quả</Badge>
-        ): c.flags.length === 0 ? (
-          <Badge variant="success">Sạch (0 vi phạm)</Badge>
-        ): (
+        ) : c.flags.length === 0 ? (
+          <Badge variant="success">Hợp lệ (0 cảnh báo)</Badge>
+        ) : (
           <div className="flex flex-wrap gap-1">
             {c.flags.map((f) => (
               <Badge key={f} variant="warning">
@@ -367,26 +388,115 @@ export function ExamAdminPage(){
     }
   ];
 
+  // Dedicated Minigame Admin Mode (/admin/minigame) (B10)
+  if (mode === "minigame") {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-medium text-foreground">
+              Quản trị Minigame Tốc độ Hội trường
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Quản lý bộ câu hỏi tương tác sân khấu, mã PIN 6 số và mở màn chiếu LED hội trường che 5 số đầu MSSV.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link to="/minigame">Màn hình người chơi</Link>
+            </Button>
+            <Button asChild size="sm" className="rounded-full">
+              <Link to="/stage/minigame">
+                <MonitorPlay className="h-4 w-4" />
+                <span>Mở LED Minigame 16:9</span>
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gamepad2 className="h-5 w-5 text-primary" />
+              Bộ Câu hỏi &amp; Phòng Chơi Minigame
+            </CardTitle>
+            <CardDescription>
+              Hỗ trợ 1 đáp án, Nhiều đáp án (chọn đủ), Đúng/Sai · Thời gian 10/20/30/60s · Điểm 1000/2000.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-display text-base font-medium text-foreground">
+                  Đấu trường Công nghệ FIT 2026
+                </div>
+                <Badge variant="success">10 câu · Đang mở (PIN 739 204)</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Chế độ Khách mời: Bật (có lọc từ ngữ nhạy cảm) · Hiển thị LED che 5 số đầu MSSV.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild size="sm" className="rounded-full">
+                  <Link to="/stage/minigame">Chiếu LED Sân khấu (PIN 739 204)</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="rounded-full">
+                  <Link to="/minigame?pin=739204">Vào thử với PIN</Link>
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-display text-base font-medium text-foreground">
+                  Hành trang Tân Sinh viên IT
+                </div>
+                <Badge variant="info">8 câu · Mở tự do (PIN 518 092)</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Không yêu cầu điểm danh sự kiện · Thưởng chuỗi thắng Streak tối đa +500đ.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild size="sm" variant="outline" className="rounded-full">
+                  <Link to="/stage/minigame">Xem trước Sân khấu LED</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="rounded-full">
+                  <Link to="/minigame?pin=518092">Vào thử với PIN</Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="font-display text-2xl font-medium text-foreground">
-            Quản trị Minigame &amp; Thi Trắc nghiệm
+            Quản trị Kỳ thi Trắc nghiệm &amp; Phòng Coi thi
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Ngân hàng câu hỏi 4 đáp án, Import Excel, Ma trận rút đề, Coi thi chuyển thiết bị &amp; LED Minigame.
+            Ngân hàng câu hỏi 4 đáp án, Import Excel, Ma trận rút đề gắn với sự kiện và Coi thi chuyển thiết bị có kiểm toán.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/stage/minigame">
-              <MonitorPlay className="h-4 w-4" />
-              <span>Mở LED Minigame</span>
-            </Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link to="/exam/ex-fit-2026">Xem thử Phòng thi</Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-64">
+            <Select value={selectedEvent?.id ?? ""} onValueChange={setSelectedEventId}>
+              <SelectTrigger className="h-9 rounded-full text-xs">
+                <SelectValue placeholder="Chọn sự kiện gắn kỳ thi" />
+              </SelectTrigger>
+              <SelectContent>
+                {events.map((ev) => (
+                  <SelectItem key={ev.id} value={ev.id}>
+                    {ev.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button asChild size="sm" className="rounded-full">
+            <Link to={eventExamPath}>Xem thử Phòng thi</Link>
           </Button>
         </div>
       </div>
@@ -396,7 +506,6 @@ export function ExamAdminPage(){
           <TabsTrigger value="bank">Ngân hàng Câu hỏi ({bank.length})</TabsTrigger>
           <TabsTrigger value="matrix">Cấu hình Kỳ thi</TabsTrigger>
           <TabsTrigger value="proctor">Coi thi &amp; Xếp hạng ({candidates.length})</TabsTrigger>
-          <TabsTrigger value="minigame">Bộ Câu hỏi Minigame</TabsTrigger>
         </TabsList>
 
         <TabsContent value="bank" className="mt-4 space-y-4">
@@ -405,7 +514,7 @@ export function ExamAdminPage(){
               <div>
                 <CardTitle>Thêm mới &amp; Import Hàng loạt Excel/CSV</CardTitle>
                 <CardDescription>
-                  Câu hỏi đã từng dùng trong kỳ thi bị chặn xóa cứng — chỉ cho phép Lưu trữ (Archive) kèm Audit Log.
+                  Câu hỏi đã từng dùng trong kỳ thi bị chặn xóa cứng — chỉ cho phép Lưu trữ kèm Audit Log.
                 </CardDescription>
               </div>
               <Button type="button" variant="outline" size="sm" onClick={handleSimulateExcelImport}>
@@ -456,14 +565,24 @@ export function ExamAdminPage(){
 
         <TabsContent value="matrix" className="mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sliders className="h-5 w-5 text-primary" />
-                Ma trận Rút đề Ngẫu nhiên &amp; Ngưỡng Giám sát
-              </CardTitle>
-              <CardDescription>
-                Cấu hình tỷ lệ 3 mức độ, điểm sàn mở khóa E-Cert và ngưỡng vi phạm rời tab trên Desktop.
-              </CardDescription>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Sliders className="h-5 w-5 text-primary" />
+                  Ma trận Rút đề Ngẫu nhiên &amp; Thông số Sự kiện
+                </CardTitle>
+                <CardDescription>
+                  Thời lượng và điểm sàn E-Cert được đồng bộ một nguồn duy nhất từ sự kiện <strong>{selectedEvent?.title}</strong>.
+                </CardDescription>
+              </div>
+              {selectedEvent && (
+                <Button asChild variant="outline" size="sm" className="rounded-full">
+                  <Link to={`/admin/events/${selectedEvent.id}/edit`}>
+                    <span>Sửa thời lượng / điểm sàn trong Sự kiện</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
@@ -471,7 +590,7 @@ export function ExamAdminPage(){
                 <Input
                   type="number"
                   value={matrix.know}
-                  onChange={(e) => setMatrix({...matrix, know: Number(e.target.value) })}
+                  onChange={(e) => setMatrix({ ...matrix, know: Number(e.target.value) })}
                   className="rounded-xl tabular-mono"
                 />
               </div>
@@ -480,7 +599,7 @@ export function ExamAdminPage(){
                 <Input
                   type="number"
                   value={matrix.understand}
-                  onChange={(e) => setMatrix({...matrix, understand: Number(e.target.value) })}
+                  onChange={(e) => setMatrix({ ...matrix, understand: Number(e.target.value) })}
                   className="rounded-xl tabular-mono"
                 />
               </div>
@@ -489,34 +608,34 @@ export function ExamAdminPage(){
                 <Input
                   type="number"
                   value={matrix.apply}
-                  onChange={(e) => setMatrix({...matrix, apply: Number(e.target.value) })}
+                  onChange={(e) => setMatrix({ ...matrix, apply: Number(e.target.value) })}
                   className="rounded-xl tabular-mono"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Thời gian làm bài (phút)</Label>
+                <Label>Thời gian làm bài (Từ cấu hình Sự kiện)</Label>
                 <Input
-                  type="number"
-                  value={matrix.durationMin}
-                  onChange={(e) => setMatrix({...matrix, durationMin: Number(e.target.value) })}
-                  className="rounded-xl tabular-mono"
+                  type="text"
+                  readOnly
+                  value={`${eventDurationMin} phút`}
+                  className="rounded-xl bg-muted/40 tabular-mono text-muted-foreground"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Điểm sàn mở khóa E-Cert (/100)</Label>
+                <Label>Điểm sàn mở khóa E-Cert (Từ cấu hình Sự kiện)</Label>
                 <Input
-                  type="number"
-                  value={matrix.ecertPass}
-                  onChange={(e) => setMatrix({...matrix, ecertPass: Number(e.target.value) })}
-                  className="rounded-xl tabular-mono"
+                  type="text"
+                  readOnly
+                  value={`≥ ${eventPassRate}/100`}
+                  className="rounded-xl bg-muted/40 tabular-mono text-muted-foreground"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Ngưỡng rời tab Desktop (lần)</Label>
+                <Label>Ngưỡng rời tab Máy tính (lần)</Label>
                 <Input
                   type="number"
                   value={matrix.maxBlur}
-                  onChange={(e) => setMatrix({...matrix, maxBlur: Number(e.target.value) })}
+                  onChange={(e) => setMatrix({ ...matrix, maxBlur: Number(e.target.value) })}
                   className="rounded-xl tabular-mono"
                 />
               </div>
@@ -540,55 +659,6 @@ export function ExamAdminPage(){
             </CardContent>
           </Card>
         </TabsContent>
-
-        <TabsContent value="minigame" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gamepad2 className="h-5 w-5 text-primary" />
-                Bộ Câu hỏi Minigame Hội trường
-              </CardTitle>
-              <CardDescription>
-                Hỗ trợ 1 đáp án, Nhiều đáp án (chọn đủ), Đúng/Sai · Thời gian 10/20/30/60s · Điểm 1000/2000.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-display text-base font-medium text-foreground">
-                    Đấu trường Công nghệ FIT 2026
-                  </div>
-                  <Badge variant="success">10 câu · Sẵn sàng</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Chế độ Khách mời: Bật (có lọc từ ngữ nhạy cảm) · Hiển thị LED che 5 số đầu MSSV.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild size="sm" className="rounded-full">
-                    <Link to="/stage/minigame">Mở phòng LED (PIN 739 204)</Link>
-                  </Button>
-                  <Button asChild size="sm" variant="outline" className="rounded-full">
-                    <Link to="/minigame">Màn hình người chơi</Link>
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-display text-base font-medium text-foreground">
-                    Rung chuông vàng Tân sinh viên K26
-                  </div>
-                  <Badge variant="secondary">15 câu · Bản nháp</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Chỉ dành cho Sinh viên đăng nhập SSO · Thưởng Streak tối đa +500đ.
-                </p>
-                <Button asChild size="sm" variant="outline" className="rounded-full">
-                  <Link to="/stage/minigame">Xem trước Sân khấu LED</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       <AuditActionDialog
@@ -596,25 +666,25 @@ export function ExamAdminPage(){
         onOpenChange={(open) => !open && setAuditTarget(null)}
         title={
           auditTarget?.kind === "ARCHIVE_Q"
-            ? "Lưu trữ (Archive) Câu hỏi Đã sử dụng"
-: auditTarget?.kind === "TRANSFER_DEVICE"
+            ? "Lưu trữ Câu hỏi Đã sử dụng"
+            : auditTarget?.kind === "TRANSFER_DEVICE"
               ? "Cấp phép Chuyển sang Thiết bị khác"
-: "Hủy Kết quả Thi do Gian lận"
+              : "Hủy Kết quả Thi do Gian lận"
         }
         description={
           auditTarget?.kind === "ARCHIVE_Q"
             ? "Câu hỏi này đã từng xuất hiện trong kỳ thi nên không thể xóa vĩnh viễn. Chuyển sang Lưu trữ để giữ toàn vẹn lịch sử."
-: auditTarget?.kind === "TRANSFER_DEVICE"
+            : auditTarget?.kind === "TRANSFER_DEVICE"
               ? "Hủy khóa máy cũ và cho phép thí sinh tiếp tục bài nháp trên thiết bị mới theo đồng hồ server."
-: "Hủy bỏ kết quả bài làm sau khi đối chiếu nhật ký vi phạm hậu kiểm."
+              : "Hủy bỏ kết quả bài làm sau khi đối chiếu nhật ký vi phạm hậu kiểm."
         }
         targetSummary={auditTarget?.label ?? ""}
         actionCode={
           auditTarget?.kind === "ARCHIVE_Q"
             ? "EXAM_QUESTION_ARCHIVE"
-: auditTarget?.kind === "TRANSFER_DEVICE"
+            : auditTarget?.kind === "TRANSFER_DEVICE"
               ? "EXAM_DEVICE_TRANSFER"
-: "EXAM_DISQUALIFY"
+              : "EXAM_DISQUALIFY"
         }
         destructive={auditTarget?.kind === "DISQUALIFY"}
         onConfirm={handleAuditConfirm}

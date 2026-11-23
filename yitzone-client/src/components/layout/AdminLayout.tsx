@@ -51,7 +51,7 @@ const ADMIN_GROUPS: AdminNavGroup[] = [
     label: "Điều hành chung",
     items: [
       { to: "/admin", label: "Tổng quan vận hành", icon: LayoutDashboard, keywords: "dashboard tong quan" },
-      { to: "/calendar", label: "Lịch Hoạt động", icon: CalendarDays, keywords: "lich hoat dong calendar ics" }
+      { to: "/admin/calendar", label: "Lịch Hoạt động", icon: CalendarDays, keywords: "lich hoat dong calendar ics" }
     ]
   },
   {
@@ -105,8 +105,8 @@ const ADMIN_GROUPS: AdminNavGroup[] = [
         requiredAuthorities: PERMISSIONS.ADMIN_ATTENDANCE
       },
       {
-        to: "/admin/scanner",
-        label: "Máy Soát vé Ngoại tuyến",
+        to: "/staff/scanner",
+        label: "Máy Soát vé Hiện trường",
         icon: QrCode,
         keywords: "soat ve ma vach hid offline scanner the sv",
         requiredAuthorities: PERMISSIONS.ADMIN_ATTENDANCE
@@ -181,6 +181,13 @@ const ADMIN_GROUPS: AdminNavGroup[] = [
       },
       {
         to: "/admin/exams",
+        label: "Thi Trắc nghiệm",
+        icon: ClipboardCheck,
+        keywords: "thi trac nghiem exam ngan hang cau hoi coi thi",
+        requiredAuthorities: PERMISSIONS.ADMIN_EXAMS_MINIGAME
+      },
+      {
+        to: "/admin/minigame",
         label: "Minigame Hội trường",
         icon: Gamepad2,
         keywords: "minigame hoi truong pin led",
@@ -215,17 +222,10 @@ const ADMIN_GROUPS: AdminNavGroup[] = [
         requiredAuthorities: PERMISSIONS.ADMIN_OJ
       },
       {
-        to: "/stage/minigame",
-        label: "LED Minigame",
+        to: "/stage",
+        label: "Màn chiếu LED 16:9",
         icon: MonitorPlay,
-        keywords: "led stage minigame hoi truong",
-        requiredAuthorities: PERMISSIONS.ADMIN_EXAMS_MINIGAME
-      },
-      {
-        to: "/stage/voting",
-        label: "LED Hội trường",
-        icon: MonitorPlay,
-        keywords: "led stage hoi truong",
+        keywords: "led stage man chieu hoi truong 16:9 qr live qa voting minigame",
         requiredAuthorities: PERMISSIONS.STAGE_CONTROL
       }
     ]
@@ -243,7 +243,21 @@ export function AdminLayout() {
 
   const authorities = useAuthStore((s) => s.authorities);
   const activeScopeId = useAuthStore((s) => s.activeScopeId);
+  const roleScopes = useAuthStore((s) => s.roleScopes);
   const setSurface = useThemeStore((s) => s.setSurface);
+
+  const activeScopeLabel = useMemo(() => {
+    const matched = roleScopes.find((s) => s.scopeId === activeScopeId);
+    if (matched) return matched.label.replace(/\s*\(FACULTY\)/gi, "");
+    if (activeScopeId === "FACULTY") return "Toàn Khoa CNTT";
+    return activeScopeId;
+  }, [roleScopes, activeScopeId]);
+
+  const scopeBadgeTone = useMemo(() => {
+    if (activeScopeId === "OFIT") return "text-cal-office";
+    if (activeScopeId === "EMFIT" || activeScopeId === "ARTIT") return "text-cal-dept";
+    return "text-brand-cyan";
+  }, [activeScopeId]);
 
   useEffect(() => {
     setSurface("admin");
@@ -487,9 +501,15 @@ export function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="liquid-glass hidden md:inline-flex h-11 items-center gap-2 rounded-full px-4 text-xs font-semibold text-brand-cyan">
+            <div
+              className={cn(
+                "liquid-glass hidden md:inline-flex h-11 items-center gap-2 rounded-full px-4 text-xs font-semibold",
+                scopeBadgeTone
+              )}
+              title={`Đang thao tác dưới tư cách: ${activeScopeLabel}`}
+            >
               <Radio className="h-3.5 w-3.5" />
-              <span className="tabular-mono">{activeScopeId}</span>
+              <span>Đang thao tác: {activeScopeLabel}</span>
             </div>
             <ThemeToggle />
           </div>
@@ -534,7 +554,7 @@ export function AdminLayout() {
               <ContextSwitcher className="rounded-xl bg-white/60 dark:bg-white/10" />
               <div className="inline-flex items-center gap-1.5 rounded-full bg-brand-cyan/10 px-3 py-1 text-[11px] font-semibold text-brand-cyan">
                 <Radio className="h-3 w-3" />
-                <span className="tabular-mono">Scope: {activeScopeId}</span>
+                <span>Đơn vị: {activeScopeLabel}</span>
               </div>
             </div>
 

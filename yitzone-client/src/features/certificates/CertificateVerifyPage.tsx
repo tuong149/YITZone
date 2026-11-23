@@ -18,20 +18,22 @@ export function CertificateVerifyPage(){
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <VerifiedBadge label="Cổng Xác thực Công khai · Không cần Đăng nhập" />
-        <div className="flex items-center gap-1.5 text-xs">
-          <span className="text-muted-foreground">Mô phỏng 3 trạng thái:</span>
-          {(["VALID", "SUPERSEDED", "REVOKED"] as CertVerifyState[]).map((st) => (
-            <Button
-              key={st}
-              size="sm"
-              variant={demoState === st ? "default": "outline"}
-              className="h-7 rounded-full px-2.5 text-[11px]"
-              onClick={() => setDemoState(st)}
-            >
-              {st === "VALID" ? "Hợp lệ": st === "SUPERSEDED" ? "Đã thay thế": "Đã thu hồi"}
-            </Button>
-          ))}
-        </div>
+        {import.meta.env.DEV && (
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground">Trạng thái kiểm thử (Dev):</span>
+            {(["VALID", "SUPERSEDED", "REVOKED"] as CertVerifyState[]).map((st) => (
+              <Button
+                key={st}
+                size="sm"
+                variant={demoState === st ? "default" : "outline"}
+                className="h-7 rounded-full px-2.5 text-[11px]"
+                onClick={() => setDemoState(st)}
+              >
+                {st === "VALID" ? "Hợp lệ" : st === "SUPERSEDED" ? "Đã thay thế" : "Đã thu hồi"}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       <Card className="overflow-hidden rounded-[22px]">
@@ -50,7 +52,7 @@ export function CertificateVerifyPage(){
               Mã: <strong>{certCode}</strong>
               {verifyApiData && (
                 <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-[10px]">
-                  API: {verifyApiData.valid ? "VALID": "UNVERIFIED"}
+                  {verifyApiData.valid ? "Đã đối chiếu sổ cái" : "Chưa xác thực"}
                 </span>
               )}
             </div>

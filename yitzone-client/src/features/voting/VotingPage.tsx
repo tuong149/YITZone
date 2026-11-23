@@ -25,6 +25,7 @@ import { extractApiErrorMessage } from "@/lib/api-client";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useVotingStore } from "@/stores/voting-store";
 import { castVotingBallot } from "./api";
 
 type CampaignStatus = "OPEN" | "UPCOMING" | "CLOSED";
@@ -152,6 +153,8 @@ const VOTING_CAMPAIGNS: VotingCampaign[] = [
 export function VotingPage() {
   const authorities = useAuthStore((s) => s.authorities);
   const canControlStage = hasAnyPermission(authorities, PERMISSIONS.STAGE_CONTROL);
+  const storeCampaigns = useVotingStore((s) => s.campaigns);
+  const updateStoreCampaign = useVotingStore((s) => s.updateCampaign);
 
   const [accessFilter, setAccessFilter] = useState<"ALL" | "REQUIRE_ATTENDANCE" | "NO_ATTENDANCE">("ALL");
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
@@ -166,19 +169,80 @@ export function VotingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const allCampaigns = useMemo<VotingCampaign[]>(() => {
+    const mappedFromStore: VotingCampaign[] = storeCampaigns
+      .filter((sc) => !VOTING_CAMPAIGNS.some((vc) => vc.id === sc.id))
+      .map((sc) => {
+        const mappedStatus: CampaignStatus =
+          sc.status === "CLOSED" ? "CLOSED" : sc.status === "OPEN" ? "OPEN" : "UPCOMING";
+        return {
+          id: sc.id,
+          title: sc.title,
+          eventLabel: sc.eventLabel ?? "Sự kiện Khoa CNTT",
+          description: sc.isSecretBallot
+            ? "Chế độ Bỏ phiếu Kín tắt hoàn toàn kiểm phiếu thời gian thực, tách danh tính cử tri khỏi lá phiếu và cấp mã biên nhận SHA-256 một lần."
+            : "Chương trình bình chọn trực tiếp đồng bộ từ sự kiện Đoàn - Hội Khoa CNTT.",
+          requireAttendance: sc.requireAttendance,
+          userCheckedIn: true,
+          accessRuleNote: sc.requireAttendance
+            ? "Yêu cầu đã quét QR điểm danh sự kiện · Đã xác nhận có mặt"
+            : "Không cần điểm danh sự kiện · Mở tự do cho sinh viên đã đăng nhập",
+          status: mappedStatus,
+          timeWindow: sc.status === "OPEN" ? "Đang mở bình chọn" : sc.status === "CLOSED" ? "Đã đóng cổng" : "Sắp mở",
+          location: "Hội trường Khoa CNTT · HCM-UTE",
+          isSecretBallot: sc.isSecretBallot,
+          isResolution: sc.id.includes("congress"),
+          allowChangeVote: !sc.isSecretBallot,
+          minSelect: 1,
+          maxSelect: 1,
+          turnoutText: `${sc.voterCount} lượt đã bỏ phiếu`,
+          options: sc.candidates.map((cand) => ({
+            id: cand.id,
+            code: cand.code,
+            title: cand.name,
+            subtitle: cand.subtitle,
+            votes: cand.audienceVotes
+          }))
+        };
+      });
+
+    return [
+      ...mappedFromStore,
+      ...VOTING_CAMPAIGNS.map((vc): VotingCampaign => {
+        const synced = storeCampaigns.find((sc) => sc.id === vc.id);
+        if (!synced) return vc;
+        const syncedStatus: CampaignStatus =
+          synced.status === "CLOSED" ? "CLOSED" : synced.status === "OPEN" ? "OPEN" : "UPCOMING";
+        return {
+          ...vc,
+          status: syncedStatus,
+          isSecretBallot: synced.isSecretBallot,
+          turnoutText: `${synced.voterCount} lượt bình chọn`,
+          options: synced.candidates.map((cand) => ({
+            id: cand.id,
+            code: cand.code,
+            title: cand.name,
+            subtitle: cand.subtitle,
+            votes: cand.audienceVotes
+          }))
+        };
+      })
+    ];
+  }, [storeCampaigns]);
+
   const filteredCampaigns = useMemo(
     () =>
-      VOTING_CAMPAIGNS.filter((c) => {
+      allCampaigns.filter((c) => {
         if (accessFilter === "REQUIRE_ATTENDANCE") return c.requireAttendance;
         if (accessFilter === "NO_ATTENDANCE") return !c.requireAttendance;
         return true;
       }),
-    [accessFilter]
+    [accessFilter, allCampaigns]
   );
 
   const activeCampaign = useMemo(
-    () => VOTING_CAMPAIGNS.find((c) => c.id === activeCampaignId) ?? null,
-    [activeCampaignId]
+    () => allCampaigns.find((c) => c.id === activeCampaignId) ?? null,
+    [activeCampaignId, allCampaigns]
   );
 
   const toggleOption = (campaign: VotingCampaign, optionId: string) => {
@@ -209,6 +273,15 @@ export function VotingPage() {
       const selectedCandidateIds = campaign.isResolution ? [] : picked;
       const resolutionChoice = campaign.isResolution ? picked[0] : undefined;
       const res = await castVotingBallot(campaign.id, selectedCandidateIds, resolutionChoice);
+      updateStoreCampaign(campaign.id, (c) => ({
+        ...c,
+        voterCount: c.voterCount + 1,
+        candidates: c.candidates.map((cand) =>
+          picked.includes(cand.id)
+            ? { ...cand, audienceVotes: cand.audienceVotes + 1 }
+            : cand
+        )
+      }));
       if (campaign.isSecretBallot) {
         setSecretReceipts((prev) => ({ ...prev, [campaign.id]: res.receiptCode }));
       } else {
@@ -266,12 +339,12 @@ export function VotingPage() {
               onValueChange={(v) => setAccessFilter(v as "ALL" | "REQUIRE_ATTENDANCE" | "NO_ATTENDANCE")}
             >
               <TabsList>
-                <TabsTrigger value="ALL">Tất cả ({VOTING_CAMPAIGNS.length})</TabsTrigger>
+                <TabsTrigger value="ALL">Tất cả ({allCampaigns.length})</TabsTrigger>
                 <TabsTrigger value="REQUIRE_ATTENDANCE">
-                  Cần điểm danh ({VOTING_CAMPAIGNS.filter((c) => c.requireAttendance).length})
+                  Cần điểm danh ({allCampaigns.filter((c) => c.requireAttendance).length})
                 </TabsTrigger>
                 <TabsTrigger value="NO_ATTENDANCE">
-                  Không cần điểm danh ({VOTING_CAMPAIGNS.filter((c) => !c.requireAttendance).length})
+                  Không cần điểm danh ({allCampaigns.filter((c) => !c.requireAttendance).length})
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -574,9 +647,16 @@ export function VotingPage() {
                     const totalVotes = activeCampaign.options.reduce((sum, o) => sum + (o.votes ?? 0), 0) || 1;
                     const picked = selections[activeCampaign.id] ?? [];
                     const isSubmitted = Boolean(submittedMap[activeCampaign.id]);
+                    const canShowPublicResults = isSubmitted || activeCampaign.status === "CLOSED";
 
                     return (
                       <>
+                        {!canShowPublicResults && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-muted/35 px-4 py-2.5 text-xs text-muted-foreground">
+                            <span>Tỷ lệ bình chọn chi tiết sẽ hiển thị sau khi bạn xác nhận gửi lá phiếu (tránh hiệu ứng đám đông).</span>
+                            <span className="tabular-mono font-semibold text-foreground">{activeCampaign.turnoutText}</span>
+                          </div>
+                        )}
                         <div className="space-y-3">
                           {activeCampaign.options.map((opt) => {
                             const checked = picked.includes(opt.id);
@@ -607,16 +687,20 @@ export function VotingPage() {
                                       <div className="mt-1 text-xs text-muted-foreground">{opt.subtitle}</div>
                                     )}
                                   </div>
-                                  <div className="shrink-0 text-right tabular-mono">
-                                    <div className="text-sm font-semibold text-foreground">
-                                      {opt.votes ?? 0} phiếu
+                                  {canShowPublicResults && (
+                                    <div className="shrink-0 text-right tabular-mono">
+                                      <div className="text-sm font-semibold text-foreground">
+                                        {opt.votes ?? 0} phiếu
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">{pct}%</div>
                                     </div>
-                                    <div className="text-xs text-muted-foreground">{pct}%</div>
+                                  )}
+                                </div>
+                                {canShowPublicResults && (
+                                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+                                    <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
                                   </div>
-                                </div>
-                                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-                                  <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                                </div>
+                                )}
                               </button>
                             );
                           })}

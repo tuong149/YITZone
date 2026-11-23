@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Settings2,
   ShieldAlert,
   Unlock,
@@ -29,6 +30,8 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEventStore, type StoredEventRecord } from "@/stores/event-store";
 
@@ -63,6 +66,19 @@ export function EventAdminPage() {
   const [activeTab, setActiveTab] = useState<"list" | "noshow">("list");
   const [noShows, setNoShows] = useState<NoShowRow[]>(INITIAL_NOSHOW);
   const [reviewEvent, setReviewEvent] = useState<StoredEventRecord | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING_BTV" | "PUBLISHED" | "DRAFT">("ALL");
+  const [scopeFilter, setScopeFilter] = useState<"ALL" | "FACULTY" | "DEPT_INTERNAL">("ALL");
+
+  const filteredEvents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return events.filter((e) => {
+      if (statusFilter !== "ALL" && e.status !== statusFilter) return false;
+      if (scopeFilter !== "ALL" && e.scope !== scopeFilter) return false;
+      if (q && !e.title.toLowerCase().includes(q) && !e.id.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [events, searchQuery, statusFilter, scopeFilter]);
 
   const [auditTarget, setAuditTarget] = useState<{
     title: string;
@@ -113,7 +129,7 @@ export function EventAdminPage() {
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="tabular-mono text-xs">{e.sessions.length} buổi</span>
             {hasLiveQa && (
-              <Link to="/admin/live-qa">
+              <Link to={`/admin/events/${e.id}?tab=live-qa`}>
                 <Badge variant="info" className="cursor-pointer hover:opacity-85">
                   <MessageSquare className="mr-1 h-3 w-3" />
                   Live Q&amp;A
@@ -121,7 +137,7 @@ export function EventAdminPage() {
               </Link>
             )}
             {hasLiveVoting && (
-              <Link to="/admin/voting">
+              <Link to={`/admin/events/${e.id}?tab=voting`}>
                 <Badge variant="default" className="cursor-pointer hover:opacity-85">
                   <Vote className="mr-1 h-3 w-3" />
                   Live Voting
@@ -129,7 +145,7 @@ export function EventAdminPage() {
               </Link>
             )}
             {hasQuiz && (
-              <Link to="/admin/exams">
+              <Link to={`/admin/exams?eventId=${e.id}`}>
                 <Badge variant="calExam" className="cursor-pointer hover:opacity-85">
                   <ClipboardList className="mr-1 h-3 w-3" />
                   Phòng thi
@@ -137,10 +153,12 @@ export function EventAdminPage() {
               </Link>
             )}
             {hasMinigame && (
-              <Badge variant="calArts">
-                <Gamepad2 className="mr-1 h-3 w-3" />
-                Minigame
-              </Badge>
+              <Link to={`/admin/minigame?eventId=${e.id}`}>
+                <Badge variant="calArts" className="cursor-pointer hover:opacity-85">
+                  <Gamepad2 className="mr-1 h-3 w-3" />
+                  Minigame
+                </Badge>
+              </Link>
             )}
           </div>
         );
@@ -184,29 +202,8 @@ export function EventAdminPage() {
       header: "Thao tác",
       align: "right",
       render: (e) => {
-        if (e.status === "DRAFT") {
-          return (
-            <div className="flex justify-end gap-1.5">
-              <Button asChild size="sm" variant="default" className="rounded-full">
-                <Link to={`/admin/events/${e.id}/edit`}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  <span>Chỉnh sửa</span>
-                </Link>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-full"
-                onClick={() => setReviewEvent(e)}
-              >
-                <FileCheck2 className="h-3.5 w-3.5" />
-                <span>Xem &amp; Thẩm định</span>
-              </Button>
-            </div>
-          );
-        }
-
-        if (e.status === "PENDING_BTV") {
+        // Consistent button order across all statuses (B6): [Primary Operational / Review] on left, [Edit Wizard] on right
+        if (e.status === "PENDING_BTV" || e.status === "DRAFT") {
           return (
             <div className="flex justify-end gap-1.5">
               <Button
@@ -233,7 +230,13 @@ export function EventAdminPage() {
             <Button asChild size="sm" variant="default" className="rounded-full">
               <Link to={`/admin/events/${e.id}`}>
                 <Settings2 className="h-3.5 w-3.5" />
-                <span>Quản lý</span>
+                <span>Điều hành</span>
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="rounded-full">
+              <Link to={`/admin/events/${e.id}/edit`}>
+                <Pencil className="h-3.5 w-3.5" />
+                <span>Chỉnh sửa</span>
               </Link>
             </Button>
             <Button asChild variant="ghost" size="sm" className="rounded-full">
@@ -341,8 +344,54 @@ export function EventAdminPage() {
           <TabsTrigger value="noshow">Khóa No-show ({noShows.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="list">
-          <DataTable columns={eventCols} data={events} />
+        <TabsContent value="list" className="space-y-4">
+          {/* Filter Bar: Search, Status, Scope (B6) */}
+          <div className="flex flex-col gap-3 rounded-2xl border border-border/80 bg-card/70 p-3.5 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm theo tên hoặc mã sự kiện..."
+                className="h-9 rounded-xl pl-9 text-xs"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="w-44">
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
+                >
+                  <SelectTrigger className="h-9 rounded-xl text-xs">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả trạng thái ({events.length})</SelectItem>
+                    <SelectItem value="PENDING_BTV">Chờ BTV duyệt ({pendingCount})</SelectItem>
+                    <SelectItem value="PUBLISHED">Đã xuất bản ({publishedCount})</SelectItem>
+                    <SelectItem value="DRAFT">Bản nháp</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-44">
+                <Select
+                  value={scopeFilter}
+                  onValueChange={(v) => setScopeFilter(v as typeof scopeFilter)}
+                >
+                  <SelectTrigger className="h-9 rounded-xl text-xs">
+                    <SelectValue placeholder="Phạm vi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả phạm vi</SelectItem>
+                    <SelectItem value="FACULTY">Sự kiện Toàn Khoa</SelectItem>
+                    <SelectItem value="DEPT_INTERNAL">Nội bộ Ban</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <DataTable columns={eventCols} data={filteredEvents} />
         </TabsContent>
 
         <TabsContent value="noshow" className="space-y-4">

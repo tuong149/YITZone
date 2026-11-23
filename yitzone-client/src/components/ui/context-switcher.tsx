@@ -1,6 +1,14 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { Building2, ChevronsUpDown, Globe, GraduationCap, MonitorPlay, Shield } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  Building2,
+  ChevronsUpDown,
+  Globe,
+  GraduationCap,
+  MonitorPlay,
+  ScanLine,
+  Shield
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -9,7 +17,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { canAccessAdminWorkspace, canAccessStageWorkspace } from "@/lib/permissions";
+import {
+  canAccessAdminWorkspace,
+  canAccessStageWorkspace,
+  hasAnyPermission,
+  PERMISSIONS
+} from "@/lib/permissions";
+import { queryClient } from "@/lib/query-client";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore, type WorkspaceSurface } from "@/stores/theme-store";
 import { cn } from "@/lib/utils";
@@ -58,6 +72,7 @@ export function ContextSwitcher({
   className?: string;
 }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const accessToken = useAuthStore((s) => s.accessToken);
   const authorities = useAuthStore((s) => s.authorities);
   const activeScopeId = useAuthStore((s) => s.activeScopeId);
@@ -70,6 +85,8 @@ export function ContextSwitcher({
   const isAuthenticated = Boolean(accessToken);
   const allowAdmin = canAccessAdminWorkspace(isAuthenticated, authorities);
   const allowStage = canAccessStageWorkspace(isAuthenticated, authorities);
+  const allowFieldScanner =
+    isAuthenticated && hasAnyPermission(authorities, PERMISSIONS.ADMIN_ATTENDANCE);
 
   const visibleSurfaces = useMemo<WorkspaceSurface[]>(() => {
     const list: WorkspaceSurface[] = ["student", "public"];
@@ -78,21 +95,39 @@ export function ContextSwitcher({
     return list;
   }, [allowAdmin, allowStage]);
 
+  // Only include FACULTY scope if user actually holds BTV/Faculty role or has no restricted unit scopes (A3)
   const availableScopes = useMemo(() => {
     const map = new Map<string, string>();
-    map.set("FACULTY", "Toàn Khoa CNTT (FACULTY)");
+    const hasFacultyAuthority =
+      authorities.includes("ROLE_STANDING_COMMITTEE") ||
+      roleScopes.some((s) => s.scopeId === "FACULTY" || s.scopeType === "FACULTY");
+
+    if (hasFacultyAuthority || roleScopes.length === 0) {
+      map.set("FACULTY", "Toàn Khoa CNTT");
+    }
     for (const scope of roleScopes) {
+      const cleanLabel = scope.label.replace(/\s*\(FACULTY\)/gi, "");
       if (!map.has(scope.scopeId)) {
-        map.set(scope.scopeId, scope.label);
+        map.set(scope.scopeId, cleanLabel);
       }
     }
     return Array.from(map.entries()).map(([scopeId, label]) => ({ scopeId, label }));
-  }, [roleScopes]);
+  }, [authorities, roleScopes]);
 
   const activeScopeLabel =
-    availableScopes.find((s) => s.scopeId === activeScopeId)?.label ?? "Toàn Khoa CNTT (FACULTY)";
+    availableScopes.find((s) => s.scopeId === activeScopeId)?.label ??
+    availableScopes[0]?.label ??
+    "Toàn Khoa CNTT";
   const meta = SURFACE_META[surface];
   const SurfaceIcon = meta.icon;
+
+  const handleSelectScope = (nextScopeId: string) => {
+    setActiveScopeId(nextScopeId);
+    void queryClient.invalidateQueries();
+    if (pathname.startsWith("/admin")) {
+      void navigate("/admin");
+    }
+  };
 
   return (
     <DropdownMenu modal={false}>
@@ -142,14 +177,14 @@ export function ContextSwitcher({
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-72">
-        <DropdownMenuLabel>Không gian bề mặt</DropdownMenuLabel>
+        <DropdownMenuLabel>Không gian làm việc</DropdownMenuLabel>
         {visibleSurfaces.map((key) => {
           const item = SURFACE_META[key];
           const Icon = item.icon;
           return (
             <DropdownMenuCheckboxItem
               key={key}
-              checked={surface === key}
+              checked={surface === key && !pathname.startsWith("/staff/")}
               onCheckedChange={() => {
                 setSurface(key);
                 navigate(item.defaultRoute);
@@ -161,18 +196,30 @@ export function ContextSwitcher({
           );
         })}
 
+        {allowFieldScanner && (
+          <DropdownMenuCheckboxItem
+            checked={pathname.startsWith("/staff/scanner")}
+            onCheckedChange={() => {
+              navigate("/staff/scanner");
+            }}
+          >
+            <ScanLine className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span className="truncate">Máy Soát vé Hiện trường</span>
+          </DropdownMenuCheckboxItem>
+        )}
+
         {isAuthenticated && availableScopes.length > 0 && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="flex items-center gap-1.5">
               <Building2 className="h-3.5 w-3.5" />
-              Đơn vị thao tác (X-Active-Scope-Id)
+              Đơn vị đang thao tác
             </DropdownMenuLabel>
             {availableScopes.map((scope) => (
               <DropdownMenuCheckboxItem
                 key={scope.scopeId}
                 checked={activeScopeId === scope.scopeId}
-                onCheckedChange={() => setActiveScopeId(scope.scopeId)}
+                onCheckedChange={() => handleSelectScope(scope.scopeId)}
               >
                 <span className="truncate">{scope.label}</span>
               </DropdownMenuCheckboxItem>

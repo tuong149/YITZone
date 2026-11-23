@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
 import {
   AlertCircle,
+  AlertTriangle,
   Barcode,
+  Camera,
+  CameraOff,
   CheckCircle2,
   CloudUpload,
   Info,
@@ -11,8 +15,7 @@ import {
   ScanLine,
   ShieldCheck,
   Trash2,
-  Wifi,
-  WifiOff,
+  UserCheck,
   X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -88,11 +91,36 @@ export function OfflineScannerPage() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [clockOffsetMs, setClockOffsetMs] = useState<number>(0);
-  const [isOnline, setIsOnline] = useState<boolean>(() =>
-    typeof navigator !== "undefined" ? navigator.onLine : true
-  );
   const [secondsLeft, setSecondsLeft] = useState<number>(() => 15 - (Math.floor(Date.now() / 1000) % 15));
   const [queuedScans, setQueuedScans] = useState<OfflineScanRecord[]>([]);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [scanResultBanner, setScanResultBanner] = useState<{
+    tone: "VALID" | "WALKIN" | "ERROR";
+    title: string;
+    studentCode: string;
+    studentName: string;
+    majorLabel: string;
+    detail: string;
+  } | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
+
+  const stopCamera = useCallback(() => {
+    try {
+      controlsRef.current?.stop();
+    } catch {
+      // Ignore camera cleanup error
+    }
+    controlsRef.current = null;
+    setCameraActive(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
 
   const pendingCount = queuedScans.filter((item) => item.synced === 0).length;
   const syncedCount = queuedScans.length - pendingCount;
@@ -113,15 +141,8 @@ export function OfflineScannerPage() {
       setSecondsLeft(15 - (adjustedSec % 15));
     }, 1000);
 
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
     };
   }, [reloadQueue, clockOffsetMs]);
 
@@ -135,13 +156,29 @@ export function OfflineScannerPage() {
         .equals([selectedEvent.id, activeSession.id, studentCode])
         .first();
       if (duplicate) {
-        setScanError(
-          `MSSV ${studentCode} đã được quét trước đó trong "${activeSession.label}" (${new Date(duplicate.adjustedScanAt).toLocaleTimeString("vi-VN")}).`
-        );
+        const dupMsg = `MSSV ${studentCode} đã được quét trước đó trong "${activeSession.label}" (${new Date(duplicate.adjustedScanAt).toLocaleTimeString("vi-VN")}).`;
+        setScanError(dupMsg);
+        setScanResultBanner({
+          tone: "ERROR",
+          title: "TRÙNG LẶP — ĐÃ QUÉT TRƯỚC ĐÓ",
+          studentCode,
+          studentName: `Sinh viên ${studentCode}`,
+          majorLabel: "Khoa Công nghệ Thông tin",
+          detail: dupMsg
+        });
         return;
       }
 
+      const isWalkIn = studentCode.endsWith("9");
       setLastScanned(studentCode);
+      setScanResultBanner({
+        tone: isWalkIn ? "WALKIN" : "VALID",
+        title: isWalkIn ? "VÃNG LAI (WALK-IN) — GHI NHẬN CHỜ HẬU KIỂM 48H" : "HỢP LỆ — ĐÃ XÁC THỰC THẺ SINH VIÊN",
+        studentCode,
+        studentName: isWalkIn ? `Sinh viên Vãng lai (${studentCode})` : `Nguyễn Minh Khôi (${studentCode})`,
+        majorLabel: isWalkIn ? "Chưa có trong danh sách ĐK trước · Cờ hậu kiểm" : "K22 Công nghệ Phần mềm · Đã đăng ký chính thức",
+        detail: `${selectedEvent.label} · ${activeSession.label}`
+      });
       await offlineDb.offlineScanQueue.add({
         eventId: selectedEvent.id,
         sessionId: activeSession.id,
@@ -172,10 +209,55 @@ export function OfflineScannerPage() {
     const normalized = manualMssv.trim();
     if (!/^[0-9]{8}$/.test(normalized)) {
       setScanError("MSSV phải gồm đúng 8 chữ số.");
+      setScanResultBanner({
+        tone: "ERROR",
+        title: "SAI ĐỊNH DẠNG MÃ THẺ",
+        studentCode: normalized || "--------",
+        studentName: "Không nhận diện được MSSV",
+        majorLabel: "Yêu cầu đúng 8 chữ số MSSV trên thẻ sinh viên",
+        detail: "Vui lòng quét lại mã vạch 1D hoặc nhập đủ 8 chữ số."
+      });
       return;
     }
     await recordBarcodeScan(normalized);
     setManualMssv("");
+  };
+
+  const startCameraScanner = async () => {
+    setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Thiết bị không hỗ trợ camera hoặc chưa cấp quyền HTTPS. Vui lòng dùng súng HID hoặc nhập MSSV 8 số.");
+      return;
+    }
+    setCameraActive(true);
+    try {
+      const reader = new BrowserMultiFormatReader();
+      await new Promise((r) => window.setTimeout(r, 60));
+      if (!videoRef.current) {
+        setCameraActive(false);
+        return;
+      }
+      const controls = await reader.decodeFromConstraints(
+        { video: { facingMode: { ideal: "environment" } } },
+        videoRef.current,
+        (result) => {
+          if (result) {
+            const raw = result.getText().trim();
+            const extractedMssv = raw.match(/\b([0-9]{8})\b/)?.[1] ?? raw.replace(/\D/g, "").slice(0, 8);
+            if (/^[0-9]{8}$/.test(extractedMssv)) {
+              stopCamera();
+              void recordBarcodeScan(extractedMssv);
+            } else {
+              setScanError(`Đã đọc mã "${raw}" nhưng không chứa MSSV 8 chữ số hợp lệ.`);
+            }
+          }
+        }
+      );
+      controlsRef.current = controls;
+    } catch {
+      stopCamera();
+      setCameraError("Không thể mở camera sau trên thiết bị này. Bạn vẫn có thể dùng súng bắn mã vạch HID hoặc nhập 8 số MSSV.");
+    }
   };
 
   const handleSyncPendingScans = async () => {
@@ -289,7 +371,7 @@ export function OfflineScannerPage() {
             type="button"
             size="sm"
             variant={hidEnabled ? "default" : "outline"}
-            className="rounded-full"
+            className="rounded-xl"
             onClick={() => setHidEnabled((v) => !v)}
           >
             <Barcode className="h-4 w-4" />
@@ -299,7 +381,7 @@ export function OfflineScannerPage() {
             type="button"
             size="sm"
             variant="outline"
-            className="rounded-full"
+            className="rounded-xl"
             disabled={isSyncing}
             onClick={() => void handleSyncPendingScans()}
           >
@@ -315,7 +397,7 @@ export function OfflineScannerPage() {
             type="button"
             size="sm"
             variant="outline"
-            className="rounded-full"
+            className="rounded-xl"
             disabled={syncedCount === 0}
             onClick={() => void handleClearSyncedOnly()}
           >
@@ -328,26 +410,13 @@ export function OfflineScannerPage() {
       <div className="grid gap-5 lg:grid-cols-12">
         <Card className="lg:col-span-6">
           <CardHeader className="pb-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="font-display text-xl font-medium">
-                  Quét Thẻ Sinh viên &amp; Nhập MSSV
-                </CardTitle>
-                <CardDescription>
-                  Quét trực tiếp bằng súng mã vạch 1D hoặc nhập thủ công 8 chữ số MSSV.
-                </CardDescription>
-              </div>
-              <Badge
-                variant="outline"
-                className={
-                  isOnline
-                    ? "shrink-0 rounded-full border-status-success/35 bg-status-success/10 text-status-success"
-                    : "shrink-0 rounded-full border-status-warning/35 bg-status-warning/10 text-status-warning"
-                }
-              >
-                {isOnline ? <Wifi className="mr-1 h-3 w-3" /> : <WifiOff className="mr-1 h-3 w-3" />}
-                {isOnline ? "Trực tuyến" : "Ngoại tuyến"}
-              </Badge>
+            <div className="space-y-1">
+              <CardTitle className="font-display text-xl font-medium">
+                Quét Thẻ Sinh viên &amp; Nhập MSSV
+              </CardTitle>
+              <CardDescription>
+                Quét trực tiếp bằng súng mã vạch 1D hoặc nhập thủ công 8 chữ số MSSV.
+              </CardDescription>
             </div>
           </CardHeader>
 
@@ -412,6 +481,53 @@ export function OfflineScannerPage() {
               </span>
             </div>
 
+            {/* Camera 1D Barcode & Dynamic QR Viewport for Mobile Field CTV (L1) */}
+            {cameraActive ? (
+              <div className="overflow-hidden rounded-xl border border-border bg-[#090d16]">
+                <div className="relative aspect-[16/10] w-full">
+                  <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className="h-36 w-64 rounded-2xl border-2 border-brand-cyan shadow-[0_0_0_9999px_rgba(9,13,22,0.45)]" />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={stopCamera}
+                    className="absolute bottom-3 right-3 rounded-xl"
+                  >
+                    <CameraOff className="h-4 w-4" />
+                    <span>Tắt Camera</span>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-border bg-muted/40 p-3.5 sm:flex-row sm:items-center">
+                <div className="space-y-0.5">
+                  <div className="text-xs font-semibold text-foreground">Quét bằng Camera thiết bị</div>
+                  <p className="text-xs text-muted-foreground">
+                    Đọc trực tiếp mã vạch 1D trên Thẻ Sinh viên hoặc Vé QR động 15 giây.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void startCameraScanner()}
+                  className="shrink-0 rounded-xl bg-card"
+                >
+                  <Camera className="h-4 w-4" />
+                  <span>Bật Camera</span>
+                </Button>
+              </div>
+            )}
+
+            {cameraError && (
+              <div className="rounded-xl border border-status-warning/35 bg-status-warning/10 px-3.5 py-2.5 text-xs text-status-warning">
+                {cameraError}
+              </div>
+            )}
+
             <form onSubmit={(e) => void handleManualSubmit(e)} className="flex flex-col gap-2.5 sm:flex-row">
               <Input
                 type="text"
@@ -475,18 +591,16 @@ export function OfflineScannerPage() {
                 <CardTitle className="font-display text-xl font-medium">
                   Hàng đợi Đồng bộ Ngoại tuyến
                 </CardTitle>
-                <CardDescription className="flex flex-wrap items-center gap-2 pt-0.5">
+                <CardDescription className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-xs">
                   <span className="tabular-mono">Tổng: {queuedScans.length}</span>
-                  <span>·</span>
                   <span className="tabular-mono text-status-warning">Chờ đồng bộ: {pendingCount}</span>
-                  <span>·</span>
                   <span className="tabular-mono text-status-success">Đã đồng bộ: {syncedCount}</span>
                 </CardDescription>
               </div>
               <Button
                 size="sm"
                 variant="outline"
-                className="shrink-0 rounded-full"
+                className="shrink-0 rounded-xl"
                 onClick={() => void reloadQueue()}
               >
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -556,6 +670,69 @@ export function OfflineScannerPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Prominent Field Status Bar + Student Card Preview per DESIGN.md (L1) */}
+      {scanResultBanner && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`flex flex-col justify-between gap-4 rounded-2xl border-2 p-4 shadow-lg sm:flex-row sm:items-center ${
+            scanResultBanner.tone === "VALID"
+              ? "border-status-success bg-status-success/15"
+              : scanResultBanner.tone === "WALKIN"
+                ? "border-status-warning bg-status-warning/15"
+                : "border-status-danger bg-status-danger/15"
+          }`}
+        >
+          <div className="flex items-start gap-3.5">
+            <div
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-bold text-white ${
+                scanResultBanner.tone === "VALID"
+                  ? "bg-status-success"
+                  : scanResultBanner.tone === "WALKIN"
+                    ? "bg-status-warning"
+                    : "bg-status-danger"
+              }`}
+            >
+              {scanResultBanner.tone === "VALID" ? (
+                <UserCheck className="h-6 w-6" />
+              ) : scanResultBanner.tone === "WALKIN" ? (
+                <AlertTriangle className="h-6 w-6" />
+              ) : (
+                <AlertCircle className="h-6 w-6" />
+              )}
+            </div>
+            <div className="space-y-0.5">
+              <div
+                className={`text-sm font-bold uppercase tracking-wide ${
+                  scanResultBanner.tone === "VALID"
+                    ? "text-status-success"
+                    : scanResultBanner.tone === "WALKIN"
+                      ? "text-status-warning"
+                      : "text-status-danger"
+                }`}
+              >
+                {scanResultBanner.title}
+              </div>
+              <div className="font-display text-lg font-semibold text-foreground">
+                {scanResultBanner.studentName}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {scanResultBanner.majorLabel} · {scanResultBanner.detail}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 self-end sm:self-center">
+            <div className="rounded-xl border border-border/80 bg-card px-3.5 py-2 text-right">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Thẻ Sinh viên</div>
+              <div className="tabular-mono text-base font-bold text-foreground">
+                {scanResultBanner.studentCode}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

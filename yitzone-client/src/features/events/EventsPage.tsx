@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
+  Award,
   CalendarDays,
   CheckCircle2,
+  ClipboardList,
   Clock,
   MapPin,
   QrCode,
@@ -175,14 +177,66 @@ export function EventsPage(){
       {/* Shared Unified Full-Bleed Hero Banner across all roles */}
       <HomeHeroBanner />
 
+      {/* Actionable Personal Strip for Authenticated Students (A6) */}
+      {isAuthenticated && (
+        <section aria-label="Việc của tôi hôm nay" className="grid gap-3.5 sm:grid-cols-3">
+          <Link
+            to={`/scanner?tab=ticket&eventId=${spotlightEvent?.id ?? "EVT-2026-CLOUD"}`}
+            className="liquid-glass-card flex items-center justify-between gap-3 rounded-[20px] p-4 transition-colors hover:border-primary/45"
+          >
+            <div className="space-y-0.5">
+              <div className="text-xs font-semibold text-primary">1. Vé sự kiện sắp tới</div>
+              <div className="text-sm font-medium text-foreground">
+                {spotlightEvent?.title ?? "Hội thảo Cloud Native & DevOps 2026"}
+              </div>
+              <div className="text-xs text-muted-foreground">Mở Vé QR cá nhân 15 giây</div>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+              <QrCode className="h-5 w-5" />
+            </span>
+          </Link>
+
+          <Link
+            to="/surveys"
+            className="liquid-glass-card flex items-center justify-between gap-3 rounded-[20px] p-4 transition-colors hover:border-primary/45"
+          >
+            <div className="space-y-0.5">
+              <div className="text-xs font-semibold text-status-warning">2. Khảo sát mở khóa E-Cert</div>
+              <div className="text-sm font-medium text-foreground">1 khảo sát đang chờ hoàn thành</div>
+              <div className="text-xs text-muted-foreground">Hoàn tất trong 24h sau sự kiện</div>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-warning/15 text-status-warning">
+              <ClipboardList className="h-5 w-5" />
+            </span>
+          </Link>
+
+          <Link
+            to="/me/certificates"
+            className="liquid-glass-card flex items-center justify-between gap-3 rounded-[20px] p-4 transition-colors hover:border-primary/45"
+          >
+            <div className="space-y-0.5">
+              <div className="text-xs font-semibold text-status-success">3. Ví Chứng nhận E-Certificate</div>
+              <div className="text-sm font-medium text-foreground">3 chứng nhận đã cấp chính thức</div>
+              <div className="text-xs text-muted-foreground">Tra cứu nhãn Cộng ĐRL / CTXH / CĐDN</div>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-success/15 text-status-success">
+              <Award className="h-5 w-5" />
+            </span>
+          </Link>
+        </section>
+      )}
+
       {/* Tier 1: Asymmetric 65 / 35 Flagship Event Registration + Weekly 6-Color Schedule */}
       <section id="events-spotlight" className="grid gap-5 lg:grid-cols-12">
         <div className="liquid-glass-card relative overflow-hidden rounded-[22px] p-5 sm:p-8 lg:col-span-8">
           <div className="flex h-full flex-col justify-between gap-6">
             <div className="space-y-3.5">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="default" className="rounded-full">Cộng ĐRL</Badge>
-                <Badge variant="secondary" className="rounded-full">Cộng CĐDN</Badge>
+                {(spotlightEvent?.benefits ?? ["Cộng ĐRL", "Cộng CĐDN"]).map((b) => (
+                  <Badge key={b} variant="default" className="rounded-full">
+                    {b}
+                  </Badge>
+                ))}
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-status-info/30 bg-status-info/10 px-3 py-1 text-xs font-medium text-status-info sm:ml-auto">
                   <Sparkles className="h-3.5 w-3.5" />
                   Đang mở đăng ký
@@ -190,23 +244,29 @@ export function EventsPage(){
               </div>
 
               <h2 className="max-w-xl font-display text-2xl font-medium leading-[1.2] tracking-tight text-foreground sm:text-3xl">
-                <Link to="/events/EVT-2026-CLOUD" className="transition-colors hover:text-primary">
-                  Hội thảo Cloud Native &amp; DevOps 2026
+                <Link
+                  to={`/events/${spotlightEvent?.id ?? "EVT-2026-CLOUD"}`}
+                  className="transition-colors hover:text-primary"
+                >
+                  {spotlightEvent?.title ?? "Hội thảo Cloud Native & DevOps 2026"}
                 </Link>
               </h2>
 
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Chuyên đề kiến trúc Kubernetes, CI/CD thực chiến và giao lưu định hướng nghề nghiệp cùng kỹ sư doanh nghiệp đối tác Khoa CNTT.
+                {spotlightEvent?.subtitle ??
+                  "Chuyên đề kiến trúc Kubernetes, CI/CD thực chiến và giao lưu định hướng nghề nghiệp cùng kỹ sư doanh nghiệp đối tác Khoa CNTT."}
               </p>
 
               <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">
                   <CalendarDays className="h-4 w-4 text-primary" />
-                  <span className="tabular-mono">Thứ 7, 28/11 · 08:00</span>
+                  <span className="tabular-mono">
+                    {spotlightEvent?.dateSummary ?? "Thứ 7, 28/11 · 08:00"}
+                  </span>
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin className="h-4 w-4 text-primary" />
-                  <span>Hội trường Lớn HCM-UTE</span>
+                  <span>{spotlightEvent?.location ?? "Hội trường Lớn HCM-UTE"}</span>
                 </span>
               </div>
             </div>
@@ -236,7 +296,7 @@ export function EventsPage(){
                       <span>Đăng nhập để đăng ký</span>
                     </Link>
                     <Link
-                      to="/events/EVT-2026-CLOUD"
+                      to={`/events/${spotlightEvent?.id ?? "EVT-2026-CLOUD"}`}
                       className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-background/80 px-5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary sm:w-auto"
                     >
                       <span>Xem chi tiết</span>
@@ -246,7 +306,7 @@ export function EventsPage(){
                 ) : registered ? (
                   <>
                     <Link
-                      to="/scanner?tab=ticket"
+                      to={`/scanner?tab=ticket&eventId=${spotlightEvent?.id ?? "EVT-2026-CLOUD"}`}
                       className="liquid-glass-btn-cobalt inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold text-white transition-all active:scale-[0.98] sm:w-auto"
                     >
                       <QrCode className="h-4 w-4" />
@@ -287,7 +347,7 @@ export function EventsPage(){
                       </span>
                     </button>
                     <Link
-                      to="/events/EVT-2026-CLOUD"
+                      to={`/events/${spotlightEvent?.id ?? "EVT-2026-CLOUD"}`}
                       className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-background/80 px-5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary sm:w-auto"
                     >
                       <span>Xem chi tiết</span>

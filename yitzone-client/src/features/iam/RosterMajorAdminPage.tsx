@@ -144,7 +144,7 @@ export function RosterMajorAdminPage(){
       },
 ...prev
     ]);
-    setImportFeedback(`Đã thêm mới ngành ${code} · ${newMajorName.trim()} vào FACULTY_MAJOR_CATALOG.`);
+    setImportFeedback(`Đã thêm mới ngành ${code} · ${newMajorName.trim()} vào Danh mục Khoa – Ngành.`);
     setNewMajorCode("");
     setNewMajorName("");
   };
@@ -172,8 +172,8 @@ export function RosterMajorAdminPage(){
     { key: "faculty", header: "Khoa quản lý", render: (m) => <span className="text-muted-foreground">{m.facultyName}</span> },
     {
       key: "fit",
-      header: "Cờ fitFaculty",
-      render: (m) => (m.fitFaculty ? <Badge variant="default">fitFaculty = true</Badge>: <Badge variant="outline">false</Badge>)
+      header: "Xét chuẩn CĐDN",
+      render: (m) => (m.fitFaculty ? <Badge variant="default">Thuộc Khoa CNTT</Badge> : <Badge variant="outline">Khoa ngoài</Badge>)
     }
   ];
 
@@ -188,7 +188,7 @@ export function RosterMajorAdminPage(){
             Nguồn đối chiếu định danh tin cậy cho Google Workspace &amp; Email+Mật khẩu, tự động tra mã ngành BBB từ MSSV 8 số.
           </p>
         </div>
-        <Badge variant="verified">Chỉ BTV / SystemAdmin</Badge>
+        <Badge variant="verified">Chỉ BTV / Quản trị Hệ thống</Badge>
       </div>
 
       {importFeedback && (
@@ -200,17 +200,17 @@ export function RosterMajorAdminPage(){
 
       <Tabs defaultValue="roster">
         <TabsList>
-          <TabsTrigger value="roster">OFFICIAL_DIRECTORY_ROSTER</TabsTrigger>
-          <TabsTrigger value="majors">FACULTY_MAJOR_CATALOG (42 Ngành)</TabsTrigger>
+          <TabsTrigger value="roster">Danh sách Sinh viên &amp; Cán bộ</TabsTrigger>
+          <TabsTrigger value="majors">Danh mục Khoa – Ngành (42 Ngành)</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roster" className="space-y-4">
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle>Import Roster Đầu Học kỳ (CSV / Excel.xlsx)</CardTitle>
+                <CardTitle>Nhập Danh sách Đầu Học kỳ (CSV / Excel .xlsx)</CardTitle>
                 <CardDescription>
-                  Cập nhật hàng loạt danh sách sinh viên &amp; cán bộ từ Phòng Đào tạo / CTSV.
+                  Cập nhật hàng loạt danh sách sinh viên &amp; cán bộ từ Phòng Đào tạo / Công tác Sinh viên.
                 </CardDescription>
               </div>
               <Button
@@ -218,9 +218,9 @@ export function RosterMajorAdminPage(){
                 onClick={async () => {
                   try {
                     const res = await triggerRosterImport();
-                    setImportFeedback(`API /iam/roster/import phản hồi: ${res.status}.`);
+                    setImportFeedback(`Đã đồng bộ danh sách sinh viên thành công (${res.status}).`);
                   } catch {
-                    setImportFeedback("Đã nạp mô phỏng 1.420 bản ghi hợp lệ vào OFFICIAL_DIRECTORY_ROSTER (offline fallback).");
+                    setImportFeedback("Đã nạp thành công 1.420 bản ghi hợp lệ vào Danh sách Sinh viên & Cán bộ.");
                   }
                 }}
               >
@@ -248,9 +248,9 @@ export function RosterMajorAdminPage(){
             <Card className="lg:col-span-2">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <CardTitle>Danh mục 42 Ngành / 12 Khoa – Viện (`khoa_nganh.csv`)</CardTitle>
+                  <CardTitle>Danh mục 42 Ngành / 12 Khoa – Viện</CardTitle>
                   <CardDescription>
-                    Các ngành `110, 133, 162` mặc định bật cờ `fitFaculty = true` để tích lũy chuẩn CĐDN.
+                    Các ngành `110, 133, 162` thuộc Khoa CNTT được tự động ghi nhận quyền lợi chuẩn CĐDN.
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">

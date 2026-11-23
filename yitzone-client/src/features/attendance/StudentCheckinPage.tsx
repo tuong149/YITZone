@@ -26,6 +26,7 @@ import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { createCanonicalDevicePop, getCurrentOfflineBucket } from "@/lib/webcrypto";
 import { useAuthStore } from "@/stores/auth-store";
+import { useEventStore } from "@/stores/event-store";
 
 interface RegisteredTicket {
   id: string;
@@ -90,15 +91,45 @@ const INITIAL_HISTORY: CheckinHistoryItem[] = [
 export function StudentCheckinPage() {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") === "ticket" ? "ticket" : "scan";
+  const queryEventId = searchParams.get("eventId");
 
   const userId = useAuthStore((s) => s.userId) ?? "22110418";
   const fullName = useAuthStore((s) => s.fullName) ?? "Sinh viên Khoa CNTT";
   const email = useAuthStore((s) => s.email) ?? "22110418@student.hcmute.edu.vn";
   const authorities = useAuthStore((s) => s.authorities);
   const canOperateStaffScanner = hasAnyPermission(authorities, PERMISSIONS.ADMIN_ATTENDANCE);
+  const storedEvents = useEventStore((s) => s.events);
+  const storedRegistrations = useEventStore((s) => s.registrations);
+
+  const registeredTickets = useMemo<RegisteredTicket[]>(() => {
+    const fromStore: RegisteredTicket[] = [];
+    for (const [evId, reg] of Object.entries(storedRegistrations)) {
+      if (!reg) continue;
+      const ev = storedEvents.find((e) => e.id === evId);
+      if (!ev) continue;
+      if (REGISTERED_TICKETS.some((t) => t.eventId === ev.id)) continue;
+      fromStore.push({
+        id: `TKT-${ev.id}`,
+        eventId: ev.id,
+        title: ev.title,
+        timeLabel: ev.dateSummary,
+        location: ev.location,
+        benefits: ev.benefits,
+        status: "SAN_SANG"
+      });
+    }
+    return [...fromStore, ...REGISTERED_TICKETS];
+  }, [storedEvents, storedRegistrations]);
 
   const [activeTab, setActiveTab] = useState<"scan" | "ticket">(initialTab);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>(REGISTERED_TICKETS[0]!.id);
+  const [selectedTicketId, setSelectedTicketId] = useState<string>(() => {
+    if (queryEventId) {
+      const matched = REGISTERED_TICKETS.find((t) => t.eventId === queryEventId);
+      if (matched) return matched.id;
+      return `TKT-${queryEventId}`;
+    }
+    return REGISTERED_TICKETS[0]!.id;
+  });
   const [bucket, setBucket] = useState<number>(() => getCurrentOfflineBucket());
   const [secondsLeft, setSecondsLeft] = useState<number>(() => 15 - (Math.floor(Date.now() / 1000) % 15));
 
@@ -116,8 +147,10 @@ export function StudentCheckinPage() {
   const [history, setHistory] = useState<CheckinHistoryItem[]>(INITIAL_HISTORY);
 
   const activeTicket = useMemo(
-    () => REGISTERED_TICKETS.find((t) => t.id === selectedTicketId) ?? REGISTERED_TICKETS[0]!,
-    [selectedTicketId]
+    () =>
+      registeredTickets.find((t) => t.id === selectedTicketId || t.eventId === queryEventId) ??
+      registeredTickets[0]!,
+    [registeredTickets, selectedTicketId, queryEventId]
   );
 
   // Rotating 15s dynamic QR payload (prevents static screenshot sharing)
@@ -319,7 +352,7 @@ export function StudentCheckinPage() {
 
           {canOperateStaffScanner && (
             <Button asChild variant="outline" className="h-10 w-full rounded-full sm:w-auto">
-              <Link to="/admin/scanner">
+              <Link to="/staff/scanner">
                 <ScanLine className="h-4 w-4 text-primary" />
                 <span>Chuyển sang Máy Soát vé BTC</span>
               </Link>
@@ -412,26 +445,28 @@ export function StudentCheckinPage() {
                   </div>
                 )}
 
-                {/* Fallback manual PIN entry */}
+                {/* Fallback manual 6-digit PIN entry */}
                 <div className="space-y-2 border-t border-border/70 pt-4">
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                     <KeyRound className="h-3.5 w-3.5 text-primary" />
-                    <span>Không quét được camera? Nhập mã phiên trên màn hình LED:</span>
+                    <span>Không quét được camera? Nhập mã PIN 6 số hiển thị trên màn hình LED:</span>
                   </div>
                   <form onSubmit={handleManualSubmit} className="flex flex-col gap-2.5 sm:flex-row">
                     <Input
                       value={manualCode}
-                      onChange={(e) => setManualCode(e.target.value)}
-                      placeholder="VD: 482910 hoặc YIT-CLOUD-2026"
-                      className="tabular-mono h-12 flex-1 rounded-xl text-base uppercase sm:h-11 sm:text-sm"
-                      aria-label="Mã phiên điểm danh"
+                      onChange={(e) => setManualCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="Nhập 6 chữ số PIN trên màn hình LED (VD: 482910)"
+                      className="tabular-mono h-12 flex-1 rounded-xl text-base tracking-widest sm:h-11 sm:text-sm"
+                      aria-label="Mã PIN 6 số trên màn hình LED"
                     />
                     <Button
                       type="submit"
-                      disabled={submitting || !manualCode.trim()}
+                      disabled={submitting || manualCode.replace(/\D/g, "").length !== 6}
                       className="liquid-glass-btn-cobalt h-12 w-full shrink-0 rounded-full px-6 sm:h-11 sm:w-auto"
                     >
-                      {submitting ? "Đang gửi..." : "Xác nhận điểm danh"}
+                      {submitting ? "Đang gửi..." : "Xác nhận PIN 6 số"}
                     </Button>
                   </form>
                 </div>
@@ -440,10 +475,18 @@ export function StudentCheckinPage() {
                   <div
                     role="status"
                     aria-live="polite"
-                    className="flex items-center gap-2.5 rounded-xl border border-status-success/35 bg-status-success/10 px-3.5 py-3 text-sm text-status-success"
+                    className="space-y-2.5 rounded-xl border border-status-success/35 bg-status-success/10 px-4 py-3 text-sm text-status-success"
                   >
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span>{checkinSuccess}</span>
+                    <div className="flex items-center gap-2 font-medium">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <span>{checkinSuccess}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-status-success/20 pt-2 text-xs text-foreground">
+                      <span>Còn 1 bước sau sự kiện: Làm khảo sát chất lượng để mở khóa E-Certificate.</span>
+                      <Button asChild size="sm" variant="outline" className="h-8 rounded-full">
+                        <Link to="/surveys">Làm khảo sát ngay</Link>
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -575,14 +618,14 @@ export function StudentCheckinPage() {
             <Card className="rounded-[20px] lg:col-span-5">
               <CardHeader className="pb-3">
                 <CardTitle className="font-display text-xl font-medium">
-                  Vé sự kiện đã đăng ký ({REGISTERED_TICKETS.length})
+                  Vé sự kiện đã đăng ký ({registeredTickets.length})
                 </CardTitle>
                 <CardDescription>
                   Chọn sự kiện để xuất trình mã QR tương ứng tại bàn Lễ tân.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2.5">
-                {REGISTERED_TICKETS.map((ticket) => {
+                {registeredTickets.map((ticket) => {
                   const selected = ticket.id === activeTicket.id;
                   return (
                     <button

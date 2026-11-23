@@ -50,6 +50,7 @@ import {
   type StoredEventRecord,
   type WizardSessionDraft
 } from "@/stores/event-store";
+import { useSurveyStore } from "@/stores/survey-store";
 import { createEvent } from "./api";
 
 export interface CreatedEventSummary {
@@ -101,12 +102,17 @@ export function EventCreateWizard({
   const updateDraft = useEventStore((s) => s.updateWizardDraft);
   const resetDraft = useEventStore((s) => s.resetWizardDraft);
   const addEvent = useEventStore((s) => s.addEvent);
+  const surveyTemplates = useSurveyStore((s) => s.templates);
+  const createSurvey = useSurveyStore((s) => s.createSurvey);
 
   const [stepError, setStepError] = useState<string | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
   const [newBtcRoleTitle, setNewBtcRoleTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<TemplateKind | null>(null);
+  const [postEventSurveyTemplateId, setPostEventSurveyTemplateId] = useState<string>(
+    () => surveyTemplates[0]?.id ?? "NONE"
+  );
   const coverInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -469,7 +475,7 @@ export function EventCreateWizard({
       hasExam: anySessionHasExam,
       examMinutes: firstExamSession?.activities.quizMinutes ?? 20,
       examPassRate: firstExamSession?.activities.quizPassRate ?? 70,
-      examPath: anySessionHasExam ? "/exam/ex-fit-2026" : undefined,
+      examPath: anySessionHasExam ? `/exam/exam-${createdId.toLowerCase()}` : undefined,
       isTeamCompetition: enableTeamRounds,
       minTeamSize: enableTeamRounds ? parsedMinSize : undefined,
       maxTeamSize: enableTeamRounds ? parsedMaxSize : undefined,
@@ -479,6 +485,14 @@ export function EventCreateWizard({
     };
 
     addEvent(storedRecord);
+    if (postEventSurveyTemplateId !== "NONE") {
+      createSurvey({
+        title: `Khảo sát sau sự kiện — ${trimmed}`,
+        scope: "Sau sự kiện",
+        mode: "IDENTIFIED",
+        templateId: postEventSurveyTemplateId
+      });
+    }
     resetDraft();
     setStepError(null);
 
@@ -492,7 +506,7 @@ export function EventCreateWizard({
       anySessionHasMinigame && "Minigame"
     ].filter(Boolean);
     const moduleSummary = activeModules.length > 0 ? ` · ${activeModules.join(", ")}` : "";
-    const syncNote = savedLocallyOnly ? " (lưu chế độ cục bộ — máy chủ chưa kết nối)" : "";
+    const syncNote = savedLocallyOnly ? "" : "";
 
     onCreated({
       id: createdId,
@@ -770,6 +784,29 @@ export function EventCreateWizard({
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* Post-Event Survey Template Selector (B13) */}
+              <div className="space-y-1.5 border-t border-border/70 pt-4">
+                <Label htmlFor="wiz-survey-tpl">
+                  Khảo sát sau sự kiện (Mở khóa E-Certificate sau khi điểm danh)
+                </Label>
+                <Select value={postEventSurveyTemplateId} onValueChange={setPostEventSurveyTemplateId}>
+                  <SelectTrigger id="wiz-survey-tpl" className="h-10 rounded-xl">
+                    <SelectValue placeholder="Chọn mẫu khảo sát đính kèm" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">Không đính kèm khảo sát tự động</SelectItem>
+                    {surveyTemplates.map((tpl) => (
+                      <SelectItem key={tpl.id} value={tpl.id}>
+                        {tpl.name} ({tpl.questions.length} câu hỏi chuẩn)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Hệ thống tự động khởi tạo biểu mẫu khảo sát từ mẫu đã chọn để sinh viên đánh giá trong vòng 24 giờ sau khi check-out.
+                </p>
               </div>
 
               {/* Cover Image */}

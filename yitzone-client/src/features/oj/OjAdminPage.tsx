@@ -192,7 +192,7 @@ export function OjAdminPage(){
             Quản trị Online Judge &amp; Kỳ thi ICPC/IOI
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Soạn đề bài, tải Testcase `.zip`, Re-judge bài nộp, quét trùng lặp AST/Token và CRUD Thẻ thuật toán.
+            Soạn đề bài, tải Testcase `.zip`, chấm lại bài nộp, quét trùng lặp AST/Token và quản lý Thẻ thuật toán.
           </p>
         </div>
         <Button asChild size="sm" variant="outline">
@@ -211,9 +211,9 @@ export function OjAdminPage(){
 
       <Tabs defaultValue="problems" className="min-h-[460px]">
         <TabsList className="justify-start">
-          <TabsTrigger value="problems">Ngân hàng Đề &amp; Re-judge ({problems.length})</TabsTrigger>
+          <TabsTrigger value="problems">Ngân hàng Đề &amp; Chấm lại ({problems.length})</TabsTrigger>
           <TabsTrigger value="plagiarism">Contest &amp; Quét AST/Token</TabsTrigger>
-          <TabsTrigger value="tags">CRUD Thẻ Thuật toán ({tags.length})</TabsTrigger>
+          <TabsTrigger value="tags">Danh mục Thẻ Thuật toán ({tags.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="problems" className="mt-4 space-y-4">

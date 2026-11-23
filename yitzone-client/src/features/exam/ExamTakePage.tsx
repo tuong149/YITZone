@@ -18,8 +18,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useEventStore } from "@/stores/event-store";
 
 interface ExamQuestion {
   id: string;
@@ -88,6 +90,14 @@ export function ExamTakePage() {
   const { id } = useParams();
   const examCode = id ?? "ex-fit-2026";
   const userId = useAuthStore((s) => s.userId) ?? "guest";
+  const authorities = useAuthStore((s) => s.authorities);
+  const canManageExam = hasAnyPermission(authorities, PERMISSIONS.ADMIN_EXAMS_MINIGAME);
+  const events = useEventStore((s) => s.events);
+  const matchedEvent = events.find(
+    (e) =>
+      e.examPath === `/exam/${examCode}` ||
+      `exam-${e.id.toLowerCase()}` === examCode.toLowerCase()
+  );
   const draftStorageKey = `yitzone-exam-draft:${userId}:${examCode}`;
 
   const [phase, setPhase] = useState<"gate" | "taking" | "submitted">("gate");
@@ -210,7 +220,7 @@ export function ExamTakePage() {
           {
             at: now,
             type: "MOBILE_LOG_ONLY",
-            note: "Chuyển ứng dụng trên Mobile — ghi LOG_ONLY, không thu bài oan."
+            note: "Chuyển ứng dụng trên điện thoại — ghi nhận nhật ký hậu kiểm, không tự động thu bài."
           },
           ...prev
         ]);
@@ -314,9 +324,16 @@ export function ExamTakePage() {
               </>
             )}
           </Badge>
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link to="/admin/exams">Phòng Coi thi (Admin)</Link>
-          </Button>
+          {matchedEvent && (
+            <Badge variant="outline" className="rounded-full">
+              {matchedEvent.title}
+            </Badge>
+          )}
+          {canManageExam && (
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link to="/admin/exams">Phòng Coi thi (Admin)</Link>
+            </Button>
+          )}
         </div>
       </section>
 
@@ -349,47 +366,49 @@ export function ExamTakePage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="text-xs font-semibold text-foreground">Chọn chế độ thiết bị kiểm thử giám sát:</div>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeviceMode("DESKTOP")}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl border p-3.5 text-left text-sm transition-colors",
-                      deviceMode === "DESKTOP"
-                        ? "border-primary bg-primary/10"
-: "border-border bg-card hover:bg-muted/40"
-                    )}
-                  >
-                    <Laptop className="h-5 w-5 text-primary" />
-                    <div>
-                      <div className="font-semibold text-foreground">Desktop (Khuyến nghị)</div>
-                      <div className="text-xs text-muted-foreground">
-                        Fullscreen + Thu bài khi rời tab đủ {MAX_DESKTOP_VIOLATIONS} lần
+              {import.meta.env.DEV && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-foreground">Chọn chế độ thiết bị kiểm thử giám sát (Dev):</div>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeviceMode("DESKTOP")}
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl border p-3.5 text-left text-sm transition-colors",
+                        deviceMode === "DESKTOP"
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card hover:bg-muted/40"
+                      )}
+                    >
+                      <Laptop className="h-5 w-5 text-primary" />
+                      <div>
+                        <div className="font-semibold text-foreground">Máy tính (Khuyến nghị)</div>
+                        <div className="text-xs text-muted-foreground">
+                          Toàn màn hình + Thu bài khi rời tab đủ {MAX_DESKTOP_VIOLATIONS} lần
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeviceMode("MOBILE")}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl border p-3.5 text-left text-sm transition-colors",
-                      deviceMode === "MOBILE"
-                        ? "border-primary bg-primary/10"
-: "border-border bg-card hover:bg-muted/40"
-                    )}
-                  >
-                    <Smartphone className="h-5 w-5 text-primary" />
-                    <div>
-                      <div className="font-semibold text-foreground">Mobile (LOG_ONLY)</div>
-                      <div className="text-xs text-muted-foreground">
-                        Chỉ ghi log hậu kiểm, không tự thu bài oan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeviceMode("MOBILE")}
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl border p-3.5 text-left text-sm transition-colors",
+                        deviceMode === "MOBILE"
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card hover:bg-muted/40"
+                      )}
+                    >
+                      <Smartphone className="h-5 w-5 text-primary" />
+                      <div>
+                        <div className="font-semibold text-foreground">Điện thoại / Máy tính bảng</div>
+                        <div className="text-xs text-muted-foreground">
+                          Ghi nhật ký hậu kiểm khi chuyển ứng dụng, không tự động thu bài
+                        </div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="rounded-lg border border-status-warning/30 bg-status-warning/10 px-3.5 py-2.5 text-xs text-status-warning">
                 Khi bấm <strong>Bắt đầu làm bài</strong>, tài khoản của bạn sẽ tự động khóa quyền truy cập <strong>YITBot AI</strong> cho tới khi nộp bài hoàn tất.
@@ -587,10 +606,10 @@ export function ExamTakePage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-base">
-                  <span>Giám sát ({deviceMode})</span>
+                  <span>Giám sát ({deviceMode === "DESKTOP" ? "Máy tính" : "Di động"})</span>
                   <Badge
                     variant={
-                      desktopBlurCount >= 2 ? "danger": desktopBlurCount === 1 ? "warning": "success"
+                      desktopBlurCount >= 2 ? "danger" : desktopBlurCount === 1 ? "warning" : "success"
                     }
                     className="tabular-mono"
                   >
@@ -599,16 +618,18 @@ export function ExamTakePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2.5">
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" onClick={handleSimulateBlur}>
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    Mô phỏng rời tab
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" onClick={handleSimulateHeartbeatGap}>
-                    <WifiOff className="h-3.5 w-3.5" />
-                    Đứt Heartbeat &gt;15s
-                  </Button>
-                </div>
+                {import.meta.env.DEV && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={handleSimulateBlur}>
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Mô phỏng rời tab
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={handleSimulateHeartbeatGap}>
+                      <WifiOff className="h-3.5 w-3.5" />
+                      Đứt Heartbeat &gt;15s
+                    </Button>
+                  </div>
+                )}
 
                 {violations.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Chưa ghi nhận cảnh báo giám sát nào.</p>

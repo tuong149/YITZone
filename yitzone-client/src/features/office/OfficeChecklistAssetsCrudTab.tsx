@@ -146,12 +146,12 @@ export function OfficeChecklistAssetsCrudTab({ onNotify }: { onNotify: (msg: str
           </CardContent>
         </Card>
 
-        {/* CRUD & Thanh lý Tài sản (DISPOSED) */}
+        {/* Quản lý & Thanh lý Tài sản */}
         <Card className="lg:col-span-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <PackagePlus className="h-4 w-4 text-primary" />
-              <span>Thêm mới &amp; Thanh lý Tài sản (`DISPOSED`)</span>
+              <span>Thêm mới &amp; Thanh lý Tài sản</span>
             </CardTitle>
             <CardDescription>
               Chặn thanh lý tài sản đang có phiếu mượn chưa trả. Mọi thao tác thanh lý ghi Audit Log.

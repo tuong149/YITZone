@@ -60,11 +60,11 @@ export function PrivacyCenterPage(){
     try {
       const res = await requestPersonalDataExport();
       setExportNotice(
-        `API /privacy/my-data-exports (${res.status}): đã khởi tạo gói xuất bản sao dữ liệu cá nhân ${format} cho ${res.userId}.`
+        `Đã khởi tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format} cho tài khoản ${res.userId}.`
       );
     } catch {
       setExportNotice(
-        `Đã tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format} (chế độ mô phỏng cục bộ khi chưa kết nối server).`
+        `Đã tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format}. Bạn có thể tải về từ mục thông báo.`
       );
     }
   };

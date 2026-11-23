@@ -17,6 +17,8 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { hasAnyPermission } from "@/lib/permissions";
+import { useAuthStore } from "@/stores/auth-store";
 import { StoreCatalogCrudTab } from "./StoreCatalogCrudTab";
 
 interface ReconciliationRow {
@@ -114,6 +116,12 @@ function formatVnd(amount: number): string {
 }
 
 export function StoreAdminPage(){
+  const authorities = useAuthStore((s) => s.authorities);
+  const canManageStoreFinance = hasAnyPermission(authorities, [
+    "ROLE_STANDING_COMMITTEE",
+    "MOD_STORE_MANAGER",
+    "store:manage"
+  ]);
   const [reconRows, setReconRows] = useState<ReconciliationRow[]>(INITIAL_RECON);
   const [supportRows, setSupportRows] = useState<SupportTicketRow[]>(INITIAL_SUPPORTS);
   const [codRows, setCodRows] = useState<CodHandoverRow[]>(INITIAL_COD);
@@ -335,12 +343,18 @@ export function StoreAdminPage(){
         </div>
       )}
 
-      <Tabs defaultValue="reconcile" className="space-y-5">
+      <Tabs defaultValue={canManageStoreFinance ? "reconcile" : "cod"} className="space-y-5">
         <TabsList>
-          <TabsTrigger value="reconcile">Đối soát VietQR &amp; Hỗ trợ Đơn</TabsTrigger>
+          {canManageStoreFinance && (
+            <TabsTrigger value="reconcile">Đối soát VietQR &amp; Hỗ trợ Đơn</TabsTrigger>
+          )}
           <TabsTrigger value="cod">Bàn Phát hàng &amp; Phiếu COD</TabsTrigger>
-          <TabsTrigger value="finance">Lợi nhuận Quỹ &amp; Giá vốn</TabsTrigger>
-          <TabsTrigger value="catalog">CRUD Danh mục, SP &amp; Voucher</TabsTrigger>
+          {canManageStoreFinance && (
+            <TabsTrigger value="finance">Lợi nhuận Quỹ &amp; Giá vốn</TabsTrigger>
+          )}
+          {canManageStoreFinance && (
+            <TabsTrigger value="catalog">Danh mục, Sản phẩm &amp; Voucher</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="reconcile" className="space-y-5">
@@ -367,7 +381,7 @@ export function StoreAdminPage(){
                 <span>Bàn Phát vật phẩm (Quét QR Đơn hàng / Mã vạch 1D Thẻ SV)</span>
               </CardTitle>
               <CardDescription>
-                Xác nhận giao hàng và chuyển đơn sang Đã giao / COD_CONFIRMED (tự cộng vào Phiếu bàn giao cuối ca).
+                Xác nhận giao hàng và chuyển đơn sang trạng thái Đã giao &amp; Đã thu tiền mặt (tự cộng vào Phiếu bàn giao cuối ca).
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-3 sm:items-end">
@@ -392,7 +406,7 @@ export function StoreAdminPage(){
               <Button
                 onClick={() =>
                   setNotice(
-                    `Đã giao đơn ${handoverScan} (đối chiếu MSSV ${studentCard1D}) → Trạng thái COD_CONFIRMED.`
+                    `Đã giao đơn ${handoverScan} (đối chiếu MSSV ${studentCard1D}) và ghi nhận vào Phiếu bàn giao COD cuối ca.`
                   )
                 }
               >
@@ -405,7 +419,7 @@ export function StoreAdminPage(){
           <div className="space-y-2">
             <h2 className="font-display text-lg font-medium text-foreground flex items-center gap-2">
               <Banknote className="h-5 w-5 text-primary" />
-              <span>Phiếu Bàn giao Tiền mặt Cuối ca (COD_CASH_HANDOVERS)</span>
+              <span>Phiếu Bàn giao Tiền mặt Cuối ca</span>
             </h2>
             <DataTable columns={codCols} data={codRows} />
           </div>
@@ -414,8 +428,8 @@ export function StoreAdminPage(){
         <TabsContent value="finance" className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-xs">
             <span className="font-medium text-foreground">
-              Phạm vi hạch toán: <strong>Đợt Gây quỹ Xuân Tình Nguyện 2027 (XTN-2027)</strong>Tách biệt với
-              doanh thu Vật phẩm thường trực của Khoa (<span className="tabular-mono">FACULTY_MERCH</span>).
+              Phạm vi hạch toán: <strong>Đợt Gây quỹ Xuân Tình Nguyện 2027 (XTN-2027)</strong> · Tách biệt với
+              doanh thu Vật phẩm thường trực của Khoa.
             </span>
             <Badge variant="calDeadline">Hạn chót: 25/11/2026</Badge>
           </div>
@@ -432,7 +446,7 @@ export function StoreAdminPage(){
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Tổng Giá vốn (costPrice) &amp; Hoàn tiền</CardDescription>
+                <CardDescription>Tổng Giá vốn sản xuất &amp; Hoàn tiền</CardDescription>
                 <CardTitle className="tabular-mono text-2xl">7.820.000đ</CardTitle>
               </CardHeader>
               <CardContent className="text-xs text-muted-foreground">

@@ -66,9 +66,9 @@ export function PwaSettingsPage(){
         keys: { p256dh: vapidData?.publicKey || "demo-p256dh", auth: "demo-auth" },
         deviceName: navigator.userAgent.slice(0, 64)
       });
-      setSyncNotice("API /pwa/push-subscriptions: đã đăng ký Web Push hợp lệ (Allowlist FCM/APNs/Mozilla/WNS).");
+      setSyncNotice("Đã đăng ký nhận thông báo đẩy Web Push thành công trên thiết bị này.");
     } catch {
-      setSyncNotice("Đã bật Web Push ở chế độ cục bộ (chưa kết nối yitzone-server).");
+      setSyncNotice("Đã bật thông báo đẩy Web Push trên trình duyệt này.");
     }
     setPushStatus("GRANTED");
   };
@@ -219,10 +219,12 @@ export function PwaSettingsPage(){
                 <CloudUpload className="h-4 w-4" />
                 Đồng bộ ngay ({pendingCount})
               </Button>
-              <Button type="button" variant="outline" onClick={addSampleOfflineItem}>
-                <Plus className="h-4 w-4" />
-                Mô phỏng thêm mục ngoại tuyến
-              </Button>
+              {import.meta.env.DEV && (
+                <Button type="button" variant="outline" onClick={addSampleOfflineItem}>
+                  <Plus className="h-4 w-4" />
+                  Mô phỏng thêm mục ngoại tuyến
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

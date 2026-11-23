@@ -1,11 +1,25 @@
 import { lazy, Suspense, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import {
+  AlertTriangle,
+  Award,
+  Banknote,
+  CalendarCheck2,
+  Clock,
+  Inbox,
+  MonitorPlay,
+  QrCode,
+  ScanLine,
+  ShieldAlert
+} from "lucide-react";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { AppErrorBoundary } from "@/components/layout/AppErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { FieldLayout } from "@/components/layout/FieldLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { StageLayout } from "@/components/layout/StageLayout";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EventsPage } from "@/features/events/EventsPage";
@@ -16,7 +30,6 @@ import { ALL_ADMIN_AUTHORITIES, PERMISSIONS } from "@/lib/permissions";
 import { queryClient } from "@/lib/query-client";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { useAuthStore } from "@/stores/auth-store";
-import { useThemeStore } from "@/stores/theme-store";
 
 // Lazy-loaded pages (route-level code splitting for mobile PWA performance)
 const ArtsAdminPage = lazy(() => import("@/features/arts/ArtsAdminPage").then((m) => ({ default: m.ArtsAdminPage })));
@@ -44,6 +57,9 @@ const EventManagePage = lazy(() => import("@/features/events/EventManagePage").t
 const EventsCatalogPage = lazy(() => import("@/features/events/EventsCatalogPage").then((m) => ({ default: m.EventsCatalogPage })));
 const ExamAdminPage = lazy(() => import("@/features/exam/ExamAdminPage").then((m) => ({ default: m.ExamAdminPage })));
 const ExamTakePage = lazy(() => import("@/features/exam/ExamTakePage").then((m) => ({ default: m.ExamTakePage })));
+const ExamListPage = lazy(() => import("@/features/FirstEntryPages").then((m) => ({ default: m.ExamListPage })));
+const LiveQaJoinPage = lazy(() => import("@/features/FirstEntryPages").then((m) => ({ default: m.LiveQaJoinPage })));
+const SurveyListPage = lazy(() => import("@/features/FirstEntryPages").then((m) => ({ default: m.SurveyListPage })));
 const OrgRbacAdminPage = lazy(() => import("@/features/iam/OrgRbacAdminPage").then((m) => ({ default: m.OrgRbacAdminPage })));
 const PrivacyCenterPage = lazy(() => import("@/features/iam/PrivacyCenterPage").then((m) => ({ default: m.PrivacyCenterPage })));
 const ProfileSecurityPage = lazy(() => import("@/features/iam/ProfileSecurityPage").then((m) => ({ default: m.ProfileSecurityPage })));
@@ -67,7 +83,9 @@ const PublicPortalPage = lazy(() => import("@/features/public/PublicPortalPage")
 const PwaSettingsPage = lazy(() => import("@/features/pwa/PwaSettingsPage").then((m) => ({ default: m.PwaSettingsPage })));
 const InboxAdminPage = lazy(() => import("@/features/qachat/InboxAdminPage").then((m) => ({ default: m.InboxAdminPage })));
 const MessengerPage = lazy(() => import("@/features/qachat/MessengerPage").then((m) => ({ default: m.MessengerPage })));
+const StageHubPage = lazy(() => import("@/features/stage/StageHubPage").then((m) => ({ default: m.StageHubPage })));
 const StoreAdminPage = lazy(() => import("@/features/store/StoreAdminPage").then((m) => ({ default: m.StoreAdminPage })));
+const StoreBoothPage = lazy(() => import("@/features/store/StoreBoothPage").then((m) => ({ default: m.StoreBoothPage })));
 const StoreCartPage = lazy(() => import("@/features/store/StoreCartPage").then((m) => ({ default: m.StoreCartPage })));
 const StoreCheckoutPage = lazy(() => import("@/features/store/StoreCheckoutPage").then((m) => ({ default: m.StoreCheckoutPage })));
 const StoreOrdersPage = lazy(() => import("@/features/store/StoreOrdersPage").then((m) => ({ default: m.StoreOrdersPage })));
@@ -101,49 +119,179 @@ function RouteLoadingFallback() {
   );
 }
 
+/**
+ * Actionable Operational Dashboard for /admin (fixes A5)
+ */
 function AdminOverviewPage() {
+  const activeScopeId = useAuthStore((s) => s.activeScopeId);
+  const roleScopes = useAuthStore((s) => s.roleScopes);
+  const activeScopeLabel =
+    roleScopes.find((s) => s.scopeId === activeScopeId)?.label.replace(/\s*\(FACULTY\)/gi, "") ??
+    (activeScopeId === "FACULTY" ? "Toàn Khoa CNTT" : activeScopeId);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-medium text-foreground">
-          Không gian Quản trị BCH / BTV / 4 Ban – 9 Tổ
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Shell quản trị mật độ cao với Context &amp; Unit Switcher cố định trên Sidebar để cô lập dữ liệu đúng đơn vị.
-        </p>
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="info">Đơn vị đang thao tác: {activeScopeLabel}</Badge>
+            <Badge variant="outline">Cập nhật thời gian thực</Badge>
+          </div>
+          <h1 className="mt-2 font-display text-2xl font-medium text-foreground sm:text-3xl">
+            Việc Cần Xử lý Hôm nay
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tổng hợp các đầu việc vận hành ưu tiên, cảnh báo SLA 24h và hàng đợi phê duyệt theo phạm vi đơn vị.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm" className="rounded-full">
+            <Link to="/staff/scanner">
+              <ScanLine className="h-4 w-4 text-primary" />
+              <span>Máy Soát vé Hiện trường</span>
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="rounded-full">
+            <Link to="/stage">
+              <MonitorPlay className="h-4 w-4 text-primary" />
+              <span>Màn chiếu LED 16:9</span>
+            </Link>
+          </Button>
+        </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Hậu kiểm Điểm danh 48h</CardTitle>
-            <CardDescription>Chấm điểm rủi ro trọng số</CardDescription>
+
+      {/* 5 Actionable Operational Queue Cards (A5) */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="border-status-warning/35">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <Badge variant="warning" className="gap-1">
+                <Clock className="h-3 w-3" />
+                <span>Còn 41h 20p</span>
+              </Badge>
+              <span className="tabular-mono text-2xl font-bold text-status-warning">4 ca</span>
+            </div>
+            <CardTitle className="mt-2 text-base">1. Hậu kiểm Điểm danh 48 giờ</CardTitle>
+            <CardDescription className="text-xs">
+              2 ca cảnh báo nhẹ (+1đ) và 2 ca tín hiệu mạnh (+2đ) đang chặn nút chốt cấp E-Certificate.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/scanner">Mở màn hình Soát vé</Link>
+            <Button asChild size="sm" className="w-full rounded-full">
+              <Link to="/admin/attendance">
+                <QrCode className="h-3.5 w-3.5" />
+                <span>Xử lý Hậu kiểm 48h</span>
+              </Link>
             </Button>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader>
-            <CardTitle>Điều phối 20 Phân hệ</CardTitle>
-            <CardDescription>Theo dõi lộ trình P0 → P3 theo USECASE_YITZone</CardDescription>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <Badge variant="info">Chờ BTV thẩm định</Badge>
+              <span className="tabular-mono text-2xl font-bold text-primary">1 sự kiện</span>
+            </div>
+            <CardTitle className="mt-2 text-base">2. Sự kiện Chờ Duyệt Xuất bản</CardTitle>
+            <CardDescription className="text-xs">
+              UTE Hackathon 2026: Smart Campus đang chờ Ban Thường vụ phê duyệt quyền lợi Cộng ĐRL &amp; CĐDN.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/modules">Xem danh mục phân hệ</Link>
+            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
+              <Link to="/admin/events">
+                <CalendarCheck2 className="h-3.5 w-3.5" />
+                <span>Thẩm định &amp; Xuất bản</span>
+              </Link>
             </Button>
           </CardContent>
         </Card>
+
+        <Card className="border-status-danger/35">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <Badge variant="danger" className="gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                <span>Quá SLA 24h</span>
+              </Badge>
+              <span className="tabular-mono text-2xl font-bold text-status-danger">1 hội thoại</span>
+            </div>
+            <CardTitle className="mt-2 text-base">3. Hộp thư Sinh viên Quá hạn SLA</CardTitle>
+            <CardDescription className="text-xs">
+              Thắc mắc về tiêu chí Tình nguyện SV5T đã chờ 29 giờ chưa có cán bộ chuyên trách phản hồi.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
+              <Link to="/admin/inbox">
+                <Inbox className="h-3.5 w-3.5" />
+                <span>Mở Hộp thư SLA 24h</span>
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-status-danger/35">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <Badge variant="danger" className="gap-1">
+                <ShieldAlert className="h-3 w-3" />
+                <span>1 phiếu &gt; 24h</span>
+              </Badge>
+              <span className="tabular-mono text-2xl font-bold text-foreground">2 phiếu</span>
+            </div>
+            <CardTitle className="mt-2 text-base">4. Phiếu Tiền mặt COD Chưa Bàn giao</CardTitle>
+            <CardDescription className="text-xs">
+              Tổng 2.280.000đ tiền mặt thu hộ tại bàn trực đang chờ Thủ quỹ kiểm đếm và ký nhận cuối ca.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
+              <Link to="/admin/store">
+                <Banknote className="h-3.5 w-3.5" />
+                <span>Ký nhận Bàn giao COD</span>
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary">Đợt xét cấp Khoa</Badge>
+              <span className="tabular-mono text-2xl font-bold text-primary">3 hồ sơ</span>
+            </div>
+            <CardTitle className="mt-2 text-base">5. Hồ sơ SV5T &amp; Đơn Phúc khảo</CardTitle>
+            <CardDescription className="text-xs">
+              Rà soát minh chứng 5 tiêu chí và giải quyết đơn phúc khảo trong cửa sổ 7 ngày công bố.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
+              <Link to="/admin/sv5t">
+                <Award className="h-3.5 w-3.5" />
+                <span>Mở Hội đồng SV5T</span>
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
         {import.meta.env.DEV && (
-          <Card>
-            <CardHeader>
-              <CardTitle>UI Kit &amp; Audit Dialog</CardTitle>
-              <CardDescription>Kiểm thử bảng dữ liệu và thành phần kiểm toán (Dev)</CardDescription>
+          <Card className="border-dashed">
+            <CardHeader className="pb-2">
+              <Badge variant="outline" className="w-fit">Chế độ Phát triển (Dev)</Badge>
+              <CardTitle className="mt-2 text-base">Danh mục 20 Phân hệ &amp; UI Kit</CardTitle>
+              <CardDescription className="text-xs">
+                Chỉ hiển thị trong môi trường phát triển cục bộ để kiểm thử nhanh.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button asChild size="sm">
-                <Link to="/design-system">Mở UI Kit</Link>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button asChild size="sm" variant="outline" className="rounded-full">
+                <Link to="/modules">Danh mục 20 Phân hệ</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" className="rounded-full">
+                <Link to="/design-system">UI Kit</Link>
               </Button>
             </CardContent>
           </Card>
@@ -153,44 +301,13 @@ function AdminOverviewPage() {
   );
 }
 
-function StagePreviewPage() {
-  return (
-    <div className="grid gap-8 lg:grid-cols-12">
-      <div className="flex flex-col justify-between rounded-xl border border-white/15 bg-[#0e1529] p-8 lg:col-span-8">
-        <div>
-          <span className="inline-flex rounded-full border border-sky-400/40 bg-sky-400/15 px-3 py-1 text-xs font-semibold text-sky-300">
-            LIVE Q&amp;A · ĐANG GIẢI ĐÁP
-          </span>
-          <h1 className="mt-6 font-display text-4xl font-medium leading-tight text-white lg:text-5xl">
-            Sinh viên chuyển ngành vào Khoa CNTT nhưng giữ MSSV cũ có được ghi nhận chuẩn CĐDN không?
-          </h1>
-        </div>
-        <div className="mt-10 flex items-center justify-between border-t border-white/10 pt-5 text-sm text-slate-300">
-          <span>Sinh viên Khoa CNTT (Ẩn danh)</span>
-          <span className="tabular-mono text-lg font-semibold text-sky-300">42 lượt ủng hộ</span>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center justify-center rounded-xl border border-white/15 bg-[#0e1529] p-8 text-center lg:col-span-4">
-        <div className="rounded-lg bg-white p-4">
-          <div className="flex h-44 w-44 items-center justify-center rounded border-2 border-dashed border-slate-300 text-xs font-semibold text-slate-600">
-            VÙNG MÃ QR ĐỘNG 10s
-          </div>
-        </div>
-        <div className="mt-6 text-xs font-semibold uppercase tracking-widest text-slate-400">
-          Mã PIN Tham gia
-        </div>
-        <div className="mt-1 tabular-mono text-4xl font-semibold tracking-widest text-white">
-          482 910
-        </div>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Deterministic Layout Selection by Authentication State (fixes A4)
+ * Authenticated users always stay inside AppLayout; guests see PublicLayout.
+ */
 function SharedSurfaceLayout() {
-  const surface = useThemeStore((s) => s.surface);
-  return surface === "public" ? <PublicLayout /> : <AppLayout />;
+  const isAuthenticated = useAuthStore((s) => Boolean(s.accessToken));
+  return isAuthenticated ? <AppLayout /> : <PublicLayout />;
 }
 
 function ScrollToTop() {
@@ -249,10 +366,23 @@ export function App() {
                 <Route path="/p/:username" element={<PublicPortfolioPage />} />
               </Route>
 
+              {/* Dedicated Mobile-First Field Shell for on-site CTV/BTC operations (L2, L3) */}
+              <Route element={<ProtectedRoute requireAuth={true} />}>
+                <Route element={<FieldLayout />}>
+                  <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_ATTENDANCE} />}>
+                    <Route path="/staff/scanner" element={<OfflineScannerPage />} />
+                    <Route path="/admin/scanner" element={<OfflineScannerPage />} />
+                    <Route path="/protected-scanner" element={<OfflineScannerPage />} />
+                  </Route>
+                  <Route path="/staff/store-booth" element={<StoreBoothPage />} />
+                </Route>
+              </Route>
+
               {/* Protected Admin Workspace — every route enforces auth + module permissions */}
               <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={ALL_ADMIN_AUTHORITIES} />}>
                 <Route element={<AdminLayout />}>
                   <Route path="/admin" element={<AdminOverviewPage />} />
+                  <Route path="/admin/calendar" element={<CalendarPage />} />
 
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_IAM_ROSTER} />}>
                     <Route path="/admin/iam/roster" element={<RosterMajorAdminPage />} />
@@ -276,7 +406,6 @@ export function App() {
 
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_ATTENDANCE} />}>
                     <Route path="/admin/attendance" element={<AttendanceReviewPage />} />
-                    <Route path="/admin/scanner" element={<OfflineScannerPage />} />
                   </Route>
 
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_CERTIFICATES} />}>
@@ -287,6 +416,7 @@ export function App() {
                   </Route>
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_CMS} />}>
                     <Route path="/admin/cms" element={<CmsAdminPage />} />
+                    <Route path="/admin/cms/compose" element={<NewsComposePage />} />
                   </Route>
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_SV5T} />}>
                     <Route path="/admin/sv5t" element={<Sv5tAdminPage />} />
@@ -307,7 +437,8 @@ export function App() {
                     <Route path="/admin/store" element={<StoreAdminPage />} />
                   </Route>
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_EXAMS_MINIGAME} />}>
-                    <Route path="/admin/exams" element={<ExamAdminPage />} />
+                    <Route path="/admin/exams" element={<ExamAdminPage mode="exam" />} />
+                    <Route path="/admin/minigame" element={<ExamAdminPage mode="minigame" />} />
                   </Route>
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_YITBOT} />}>
                     <Route path="/admin/yitbot" element={<YitBotAdminPage />} />
@@ -324,11 +455,17 @@ export function App() {
                 </Route>
               </Route>
 
-              <Route element={<StageLayout />}>
-                <Route path="/stage" element={<StagePreviewPage />} />
-                <Route path="/stage/qa" element={<LiveQaStagePage />} />
-                <Route path="/stage/voting" element={<VotingStagePage />} />
-                <Route path="/stage/minigame" element={<MinigameStagePage />} />
+              {/* Protected 16:9 LED Stage & Kiosk Shell (A1, M1, M3) */}
+              <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.STAGE_CONTROL} />}>
+                <Route element={<StageLayout />}>
+                  <Route path="/stage" element={<StageHubPage mode="hub" />} />
+                  <Route path="/stage/checkin" element={<StageHubPage mode="checkin" />} />
+                  <Route path="/stage/qa" element={<LiveQaStagePage />} />
+                  <Route path="/stage/live-qa" element={<LiveQaStagePage />} />
+                  <Route path="/stage/voting" element={<VotingStagePage />} />
+                  <Route path="/stage/minigame" element={<MinigameStagePage />} />
+                  <Route path="/kiosk/voting" element={<VotingKioskPage />} />
+                </Route>
               </Route>
 
               <Route element={<SharedSurfaceLayout />}>
@@ -346,10 +483,12 @@ export function App() {
                 <Route path="/events" element={<EventsCatalogPage />} />
                 <Route path="/events/:eventId" element={<EventDetailPage />} />
                 <Route path="/sv5t" element={<Sv5tPortalPage />} />
+                <Route path="/surveys" element={<SurveyListPage />} />
                 <Route path="/surveys/:id" element={<SurveyTakePage />} />
+                <Route path="/live-qa" element={<LiveQaJoinPage />} />
                 <Route path="/live-qa/:pin" element={<LiveQaAudiencePage />} />
-                <Route path="/kiosk/voting" element={<VotingKioskPage />} />
                 <Route path="/minigame" element={<MinigamePlayerPage />} />
+                <Route path="/exams" element={<ExamListPage />} />
                 <Route path="/exam/:id" element={<ExamTakePage />} />
                 <Route path="/oj" element={<OjHomePage />} />
                 <Route path="/oj/problems/:id" element={<OjProblemDetailPage />} />
@@ -360,7 +499,7 @@ export function App() {
                 <Route path="/scanner" element={<StudentCheckinPage />} />
                 <Route path="/voting" element={<VotingPage />} />
                 <Route path="/yitbot" element={<YitBotPage />} />
-                <Route path="/modules" element={<ModuleDirectoryPage />} />
+                {import.meta.env.DEV && <Route path="/modules" element={<ModuleDirectoryPage />} />}
                 {import.meta.env.DEV && <Route path="/design-system" element={<DesignSystemPage />} />}
 
                 {/* Authenticated Personal & Contributor Routes */}
@@ -370,6 +509,7 @@ export function App() {
                   <Route path="/portfolio" element={<PortfolioEditorPage />} />
                   <Route path="/office-duty" element={<OfficeDutyPage />} />
                   <Route path="/certificates" element={<MyCertificatesPage />} />
+                  <Route path="/me/certificates" element={<MyCertificatesPage />} />
                   <Route path="/notifications" element={<NotificationsPage />} />
                   <Route path="/profile" element={<ProfileSecurityPage />} />
                   <Route path="/privacy" element={<PrivacyCenterPage />} />
@@ -377,9 +517,6 @@ export function App() {
 
                 <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ARTS_LEAD_PORTAL} />}>
                   <Route path="/arts" element={<ArtsPortalPage />} />
-                </Route>
-                <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_ATTENDANCE} />}>
-                  <Route path="/protected-scanner" element={<OfflineScannerPage />} />
                 </Route>
 
                 <Route path="/403" element={<ForbiddenPage />} />

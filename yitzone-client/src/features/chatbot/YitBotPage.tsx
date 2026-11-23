@@ -48,7 +48,7 @@ interface ChatMessage {
 
 const QUICK_PROMPTS = [
   { label: "Điều kiện đạt Sinh viên 5 tốt cấp Khoa?", kind: "RAG" as const },
-  { label: "Tra cứu điểm ĐRL / CTXH & đơn hàng của tôi", kind: "PERSONAL" as const },
+  { label: "Quyền lợi đã ghi nhận & đơn hàng của tôi", kind: "PERSONAL" as const },
   { label: "Gợi ý hướng giải bài OJ: Tìm đường đi ngắn nhất (Dijkstra)", kind: "OJ" as const },
   { label: "Lịch nghỉ Tết năm 2028 của Khoa CNTT?", kind: "UNKNOWN" as const }
 ];
@@ -92,11 +92,11 @@ function buildLocalFallback(
     };
   }
 
-  if (lower.includes("đrl") || lower.includes("ctxh") || lower.includes("đơn hàng") || lower.includes("của tôi")) {
-    const identity = userId ?? "22110418 (Phiên mẫu)";
+  if (lower.includes("đrl") || lower.includes("ctxh") || lower.includes("quyền lợi") || lower.includes("đơn hàng") || lower.includes("của tôi")) {
+    const identity = userId ?? "22110418";
     return {
       modeTag: "Tra cứu Cá nhân",
-      content: `Kết quả truy vấn chỉ theo định danh phiên hiện tại (\`${identity}\` — đã chặn Prompt Injection tại server):\n\n- **Điểm rèn luyện (HK1 2026–2027):** \`86/100\` (Loại Tốt)\n- **Ngày CTXH tích lũy:** \`14.5 / 15 ngày\`\n- **Sự kiện sắp tới đã đăng ký:** *FIT Tech Talk: Distributed Systems* (Thứ 7, 08:30)\n- **Đơn hàng Cửa hàng FIT:** \`#ORD-2026-084\` — Áo Khoa CNTT (Size L) · *Sẵn sàng nhận tại bàn trực OFIT*.`
+      content: `Kết quả tra cứu theo tài khoản đang đăng nhập (\`${identity}\`):\n\n- **Sự kiện đã ghi nhận quyền lợi (HK1 2026–2027):**\n  - *Hội thảo Cloud Native & DevOps 2026* — Đã cấp E-Cert · Nhãn quyền lợi: \`Cộng ĐRL\`, \`Cộng CĐDN\`\n  - *Ngày hội Tình nguyện Mùa Hè Xanh FIT* — Đã cấp E-Cert · Nhãn quyền lợi: \`Cộng CTXH\`\n- **Sự kiện sắp tới đã đăng ký:** *FIT Tech Talk: Distributed Systems* (Thứ 7, 08:30 · Hội trường A5)\n- **Đơn hàng Cửa hàng FIT:** \`#ORD-2026-084\` — Áo Khoa CNTT (Size L) · *Sẵn sàng nhận tại bàn trực Văn phòng OFIT*.`
     };
   }
 
@@ -277,44 +277,46 @@ export function YitBotPage(){
           <span className="tabular-mono font-medium text-muted-foreground">
             Hạn mức hôm nay: <strong className="text-foreground">18 / 30 câu</strong>
           </span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setExamLocked((v) => !v)}
-              className={cn(
-                "rounded-full border px-3 py-1 font-medium transition-colors",
-                examLocked
-                  ? "border-status-danger/40 bg-status-danger/10 text-status-danger"
-: "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {examLocked ? "Đang khóa (Thi Trắc nghiệm)": "Mô phỏng khóa khi Thi"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCircuitBreaker((v) => !v)}
-              className={cn(
-                "rounded-full border px-3 py-1 font-medium transition-colors",
-                circuitBreaker
-                  ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-: "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {circuitBreaker ? "Circuit Breaker: FAQ Tĩnh": "Mô phỏng vượt ngân sách"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setInOjContest((v) => !v)}
-              className={cn(
-                "rounded-full border px-3 py-1 font-medium transition-colors",
-                inOjContest
-                  ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-: "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {inOjContest ? "Đang thi Contest OJ": "Mô phỏng Contest OJ"}
-            </button>
-          </div>
+          {import.meta.env.DEV && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setExamLocked((v) => !v)}
+                className={cn(
+                  "rounded-full border px-3 py-1 font-medium transition-colors",
+                  examLocked
+                    ? "border-status-danger/40 bg-status-danger/10 text-status-danger"
+                    : "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {examLocked ? "Đang khóa (Thi Trắc nghiệm)" : "Mô phỏng khóa khi Thi"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCircuitBreaker((v) => !v)}
+                className={cn(
+                  "rounded-full border px-3 py-1 font-medium transition-colors",
+                  circuitBreaker
+                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
+                    : "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {circuitBreaker ? "Circuit Breaker: FAQ Tĩnh" : "Mô phỏng vượt ngân sách"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setInOjContest((v) => !v)}
+                className={cn(
+                  "rounded-full border px-3 py-1 font-medium transition-colors",
+                  inOjContest
+                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
+                    : "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {inOjContest ? "Đang thi Contest OJ" : "Mô phỏng Contest OJ"}
+              </button>
+            </div>
+          )}
         </div>
       </section>
 

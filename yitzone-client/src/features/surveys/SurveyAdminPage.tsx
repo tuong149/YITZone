@@ -65,8 +65,9 @@ function statusBadge(status: SurveyStatus) {
   return <Badge variant="outline">Đã đóng</Badge>;
 }
 
-export function SurveyAdminPage() {
-  const surveys = useSurveyStore((s) => s.surveys);
+export function SurveyAdminPage({ embeddedEventId }: { embeddedEventId?: string } = {}) {
+  const allSurveys = useSurveyStore((s) => s.surveys);
+  const surveys = embeddedEventId ? allSurveys : allSurveys;
   const templates = useSurveyStore((s) => s.templates);
   const createSurvey = useSurveyStore((s) => s.createSurvey);
   const updateSurvey = useSurveyStore((s) => s.updateSurvey);
@@ -81,6 +82,11 @@ export function SurveyAdminPage() {
   const [selectedAnalyticsId, setSelectedAnalyticsId] = useState<string>(
     () => surveys[1]?.id ?? surveys[0]?.id ?? ""
   );
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<
+    | { kind: "SURVEY"; id: string; title: string }
+    | { kind: "TEMPLATE"; id: string; title: string }
+    | null
+  >(null);
 
   // Create new survey dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -279,7 +285,8 @@ export function SurveyAdminPage() {
               onClick={() => {
                 const copy = duplicateSurvey(row.id);
                 if (copy) {
-                  setNotice(`Đã nhân bản "${row.title}" sang Bản nháp (0 phản hồi — có thể chỉnh sửa câu hỏi).`);
+                  setBuilderTarget({ kind: "SURVEY", id: copy.id });
+                  setNotice(`Đã nhân bản "${row.title}" sang Bản nháp và mở trình biên tập câu hỏi.`);
                 }
               }}
             >
@@ -295,8 +302,7 @@ export function SurveyAdminPage() {
                 className="text-brand-crimson hover:bg-brand-crimson/10 hover:text-brand-crimson"
                 onClick={() => {
                   setErrorMsg(null);
-                  const ok = deleteSurvey(row.id);
-                  if (ok) setNotice(`Đã xóa biểu mẫu nháp "${row.title}".`);
+                  setDeleteConfirmTarget({ kind: "SURVEY", id: row.id, title: row.title });
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -505,8 +511,7 @@ export function SurveyAdminPage() {
                         aria-label={`Xóa mẫu ${tpl.name}`}
                         className="text-brand-crimson hover:bg-brand-crimson/10 hover:text-brand-crimson"
                         onClick={() => {
-                          deleteTemplate(tpl.id);
-                          setNotice(`Đã xóa mẫu "${tpl.name}".`);
+                          setDeleteConfirmTarget({ kind: "TEMPLATE", id: tpl.id, title: tpl.name });
                         }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -806,6 +811,47 @@ export function SurveyAdminPage() {
             )}
             <Button type="button" onClick={() => setBuilderTarget(null)}>
               Xong
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirm Delete Survey or Template (B13) */}
+      <Dialog
+        open={Boolean(deleteConfirmTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirmTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Xác nhận xóa {deleteConfirmTarget?.kind === "TEMPLATE" ? "mẫu khảo sát" : "biểu mẫu nháp"}
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa <strong>{deleteConfirmTarget?.title}</strong>? Thao tác này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteConfirmTarget(null)}>
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (!deleteConfirmTarget) return;
+                if (deleteConfirmTarget.kind === "SURVEY") {
+                  const ok = deleteSurvey(deleteConfirmTarget.id);
+                  if (ok) setNotice(`Đã xóa biểu mẫu nháp "${deleteConfirmTarget.title}".`);
+                } else {
+                  deleteTemplate(deleteConfirmTarget.id);
+                  setNotice(`Đã xóa mẫu chuẩn "${deleteConfirmTarget.title}".`);
+                }
+                setDeleteConfirmTarget(null);
+              }}
+            >
+              Xác nhận xóa
             </Button>
           </DialogFooter>
         </DialogContent>

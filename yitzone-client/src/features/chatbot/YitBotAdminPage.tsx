@@ -367,7 +367,7 @@ export function YitBotAdminPage(){
 
           <Card>
             <CardHeader>
-              <CardTitle>Sổ cái Chi phí AI (`AI_USAGE_LEDGER`)</CardTitle>
+              <CardTitle>Sổ cái Chi phí AI Theo Ngày</CardTitle>
             </CardHeader>
             <CardContent>
               <DataTable columns={ledgerCols} data={USAGE_LEDGER} />

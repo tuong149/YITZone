@@ -454,7 +454,7 @@ export function CmsAdminPage(){
     },
     {
       key: "actions",
-      header: "Quản trị (CRUD)",
+      header: "Thao tác",
       align: "right",
       render: (row) => (
         <div className="flex justify-end gap-1.5">
@@ -512,7 +512,7 @@ export function CmsAdminPage(){
             Quản trị Bản tin &amp; Tòa soạn Truyền thông
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Quy trình biên tập, tiếp nhận bài cộng tác sinh viên, hẹn giờ xuất bản và CRUD chuyên mục.
+            Quy trình biên tập, tiếp nhận bài cộng tác sinh viên, hẹn giờ xuất bản và quản lý chuyên mục.
           </p>
         </div>
 
@@ -521,10 +521,16 @@ export function CmsAdminPage(){
             <ShieldCheck className="h-3.5 w-3.5" />
             <span>Tòa soạn Tổ Truyền thông (EMFIT)</span>
           </Badge>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm" className="rounded-full">
             <Link to="/news">
               <ExternalLink className="h-3.5 w-3.5" />
               <span>Xem trang Bản tin</span>
+            </Link>
+          </Button>
+          <Button asChild size="sm" className="rounded-full">
+            <Link to="/admin/cms/compose">
+              <Plus className="h-3.5 w-3.5" />
+              <span>Soạn bài viết mới</span>
             </Link>
           </Button>
         </div>
@@ -592,7 +598,6 @@ export function CmsAdminPage(){
       <Tabs defaultValue="queue" className="min-h-[480px]">
         <TabsList className="justify-start">
           <TabsTrigger value="queue">Hàng chờ Biên tập ({queueItems.length})</TabsTrigger>
-          <TabsTrigger value="compose">Soạn thảo Nội bộ</TabsTrigger>
           <TabsTrigger value="live">Đã lên lịch &amp; Xuất bản ({liveItems.length})</TabsTrigger>
           <TabsTrigger value="categories">Quản lý Chuyên mục ({categories.length})</TabsTrigger>
         </TabsList>
