@@ -58,7 +58,7 @@ Kiến trúc của YITZone được thiết kế để giải quyết 6 thách t
 
 ### 2.1. Mô hình Client - Server Tách biệt & Modular Monolith
 Hệ thống tuân thủ kiến trúc **Decoupled Client-Server**:
-* **Tầng Client (`yitzone-client`):** Ứng dụng Single Page Application (SPA) tích hợp **Progressive Web App (React.js + TypeScript Strict Mode + Vite + Workbox Service Worker + IndexedDB)**. Sử dụng **TypeScript** giúp kiểm soát chặt chẽ hợp đồng dữ liệu cho 20 phân hệ qua các nhiệm kỳ thay đổi nhân sự phát triển. Client giao tiếp với Server qua **HTTPS RESTful JSON**, **Server-Sent Events (SSE)** cho AI streaming và **WSS (STOMP over WebSocket)** cho tương tác thời gian thực; đồng thời tích hợp **chế độ Máy Soát vé BTC Ngoại tuyến (`Offline Scanner`)** hỗ trợ cả **Vé QR 2D ký số** lẫn **Mã vạch 1D trên Thẻ sinh viên vật lý (`Camera` & `USB/Bluetooth HID Scanner`)** ngay trên PWA.
+* **Tầng Client (`yitzone-client`):** Ứng dụng Single Page Application (SPA) tích hợp **Progressive Web App (React.js + JavaScript ES2022+/JSX + Vite + Workbox Service Worker + IndexedDB)**. Sử dụng **JavaScript (ES2022+ / JSX)** kèm **JSDoc, ESLint và Zod** giúp đội dự án phát triển nhanh, dễ tiếp cận qua các nhiệm kỳ đồng thời vẫn kiểm soát lỗi tĩnh và xác thực cấu trúc dữ liệu runtime khi trao đổi với Spring Boot API. Client giao tiếp với Server qua **HTTPS RESTful JSON**, **Server-Sent Events (SSE)** cho AI streaming và **WSS (STOMP over WebSocket)** cho tương tác thời gian thực; đồng thời tích hợp **chế độ Máy Soát vé BTC Ngoại tuyến (`Offline Scanner`)** hỗ trợ cả **Vé QR 2D ký số** lẫn **Mã vạch 1D trên Thẻ sinh viên vật lý (`Camera` & `USB/Bluetooth HID Scanner`)** ngay trên PWA.
 * **Tầng Server (`yitzone-server`):** Ứng dụng **Spring Boot 3.x (Java 21 LTS)** tổ chức theo kiến trúc **Modular Monolith (Package-by-Feature)** với 20+ module nghiệp vụ (`iam`, `event`, `attendance`, `certificate`, `cms`, `minigame`, `exam`, `award`, `oj`, `store`, `chatbot`, `office`, `arts`, `calendar`, `survey`, `voting`, `portfolio`, `liveqa`, `qachat`, `pwa`, `privacy`, `audit`) giao tiếp nội bộ qua Spring Application Events và Service Interfaces.
 
 ### 2.2. Sơ đồ Kiến trúc Container & Hạ tầng (System Container Diagram)
@@ -73,7 +73,7 @@ flowchart TB
         Admin["BCH / BTV / Ban Giám khảo / SystemAdmin"]
     end
 
-    subgraph ClientLayer["Tầng Client (React.js + TypeScript SPA & Installable PWA)"]
+    subgraph ClientLayer["Tầng Client (React.js + JavaScript ES2022+ SPA & Installable PWA)"]
         ReactApp["React PWA Application\n(Vite + Workbox SW + IndexedDB Vault + WebCrypto ECDSA P-256 Keys + Live Voting UI)"]
         OfflineScanner["BTC Offline Scanner & Barcode Engine\n(ECDSA P-256 Verifier 15s + Encrypted Bundle + 1D Barcode Camera/HID Wedge + Scan Queue)"]
     end
@@ -291,7 +291,7 @@ flowchart TB
 | Thành phần | Công nghệ / Thư viện chuẩn | Phiên bản khuyến nghị | Mục đích sử dụng trong YITZone |
 | :--- | :--- | :---: | :--- |
 | **Core Library & Build Tool** | **React.js** + **Vite** | React `18.3+` / `19.x` + Vite `6.x` | Xây dựng SPA tốc độ cao, tách biệt hoàn toàn với Backend. |
-| **Ngôn ngữ & Kiểm tra Kiểu** | **TypeScript (Strict Mode)** + **ESLint** + **Zod** | TypeScript `5.x` | Đảm bảo an toàn kiểu dữ liệu xuyên suốt 20 phân hệ khi bàn giao qua nhiều nhiệm kỳ phát triển, kết hợp Zod xác thực runtime DTO. |
+| **Ngôn ngữ** | **JavaScript (ES2022+ / JSX)** *(kèm JSDoc & ESLint)* | `ES2022+` | Phát triển nhanh, dễ tiếp cận cho đội dự án; kết hợp **ESLint** kiểm soát lỗi tĩnh và **Zod** xác thực cấu trúc dữ liệu runtime khi trao đổi với Spring Boot API. |
 | **PWA, Offline & Chữ ký Vé `ECDSA P-256`** | **`vite-plugin-pwa` (Workbox)** + **`Dexie.js` (IndexedDB)** + **WebCrypto API (`ECDSA P-256` & `AES-GCM`)** + **Web Push API** | Workbox `7.x` + Dexie `4.x` | Đóng gói PWA (Android Chrome $\ge 110$ & iOS Safari $\ge 16.4$), giữ khóa riêng **`ECDSA P-256` (`extractable: false`)** cho Vé QR bất đối xứng (bucket 15s) & bằng chứng sở hữu thiết bị (`PoP`), mã hóa `AES-GCM` & tự xóa gói dữ liệu trên **Máy Soát vé BTC Ngoại tuyến** (`A9`, `A10`, `A14`). |
 | **Định tuyến & UI** | **React Router** + **Tailwind CSS** + **Shadcn/UI (Radix UI Primitives)** + **Lucide Icons** + **Recharts** | Router `v7`/`v6.28+` · Tailwind `3.4+` | Điều hướng `ProtectedRoute` theo RBAC, bộ component tùy biến theo Design Token YITZone (`DESIGN.md` — hỗ trợ Light/Dark theo hệ thống & Dark Stage LED), biểu đồ thống kê và giao diện đáp ứng **WCAG 2.1 Level AA**. |
 | **Data Fetching & State** | **TanStack Query** + **Axios** + **Zustand** | v5 | Quản lý API, tự động xoay vòng Refresh Token, caching và trạng thái Minigame/Live Q&A/Live Voting. |
@@ -395,6 +395,6 @@ flowchart LR
 | :--- | :--- | :--- |
 | **Tổ chức Mã nguồn & Container** | **2 Modules (`yitzone-client` & `yitzone-server`)** + Docker Compose | Cố định phiên bản toàn bộ Docker image (đặc biệt `pgsty/silo`). Tuân thủ điều khoản **AGPLv3** của Silo bằng cách dùng nguyên bản như dịch vụ lưu trữ tách biệt. |
 | **Bắt buộc HTTPS (Secure Context)** | **Nginx + Cloudflare SSL/WAF** | Bắt buộc HTTPS hợp lệ để trình duyệt di động cấp quyền Camera (`getUserMedia`), `Geolocation`, `WebCrypto`, `Service Worker` và `VAPID Web Push`. |
-| **CI/CD Pipeline** | **GitHub Actions** | Backend: `mvn test` (JUnit 5 + Testcontainers MongoDB/Redis). Frontend: **`tsc --noEmit` (TypeScript strict check)** + `eslint` + `vite build`. |
+| **CI/CD Pipeline** | **GitHub Actions** | Backend: `mvn test` (JUnit 5 + Testcontainers MongoDB/Redis). Frontend: **`eslint` (ES2022+/JSX static check)** + `vite build`. |
 | **Sao lưu & Diễn tập Khôi phục** | `mongodump` / Oplog Incremental + Silo Sync + External Hash Anchor | Tự động sao lưu mỗi **`1 giờ`** cho điểm danh/thanh toán (`RPO ≤ 1h`), hằng ngày toàn hệ thống (`RPO ≤ 24h`) và neo hash Audit Log ra vùng lưu trữ WORM tách biệt; diễn tập khôi phục định kỳ mỗi học kỳ (`RTO ≤ 4h`). |
 | **Logging & Monitoring** | **SLF4J + Logback** + **Spring Boot Actuator** + **Prometheus & Grafana** | Log có cấu trúc kèm `traceId`/`userId` (**không ghi PII nhạy cảm, token hay payload bỏ phiếu kín `/cast-ballot` vào file log**); theo dõi Virtual Threads, độ trễ STOMP, tỷ lệ hàng đợi hậu kiểm, ngân sách AI (`AI_USAGE_LEDGER`) và cảnh báo lỗi `< 0.5%`. |

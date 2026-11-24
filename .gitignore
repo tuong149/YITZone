@@ -109,13 +109,16 @@ nbdist/
 .impeccable/hook.cache.json
 
 # ------------------------------------------------------------------------------
-# Project Documents (only allow SRS, HLD, LLD, USECASE, and UITagline/)
+# Project Documents (allow core specs, design brief, API overview, UI progress, and UITagline/)
 # ------------------------------------------------------------------------------
 document/*
 !document/SRS_YITZone.md
 !document/HLD_YITZone.md
 !document/LLD_YITZone.md
 !document/USECASE_YITZone.md
+!document/API_Overview_YITZone.md
+!document/UI_PROGRESS_YITZone.md
+!document/DESIGN_BRIEF_YITZone.md
 !document/UITagline/
 !document/UITagline/**
 

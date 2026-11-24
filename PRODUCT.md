@@ -37,7 +37,7 @@ Khác với các cổng quản lý sự kiện hoặc LMS đại trà, YITZone g
 
 ## Capabilities and Constraints
 
-- **Stack Frontend đã khóa (`yitzone-client`):** React 18, TypeScript (Strict), Vite 6, Tailwind CSS 3.4, **Radix UI / Shadcn/UI** (tùy biến theo Design Token YITZone), Lucide Icons, React Router v7, TanStack Query v5, Zustand, React Hook Form + Zod, `vite-plugin-pwa` (Workbox) + Dexie.js, `@stomp/stompjs`, `@zxing/browser`, `qrcode.react`, KaTeX, Tiptap 2.x, FullCalendar v6, Recharts, React-Leaflet, Monaco Editor (P3).
+- **Stack Frontend đã khóa (`yitzone-client`):** React 18, JavaScript (ES2022+ / JSX kèm JSDoc & ESLint), Vite 6, Tailwind CSS 3.4, **Radix UI / Shadcn/UI** (tùy biến theo Design Token YITZone), Lucide Icons, React Router v7, TanStack Query v5, Zustand, React Hook Form + Zod, `vite-plugin-pwa` (Workbox) + Dexie.js, `@stomp/stompjs`, `@zxing/browser`, `qrcode.react`, KaTeX, Tiptap 2.x, FullCalendar v6, Recharts, React-Leaflet, Monaco Editor (P3).
 - **Kiến trúc điều hướng thống nhất:** Một ứng dụng web duy nhất với **Bộ chuyển ngữ cảnh (Context Switcher)** cho người dùng đa chức vụ (`UC-IAM-09`): *Cổng Sinh viên* ↔ *Không gian Quản trị (chọn đúng Đơn vị Ban/Tổ/BCH/BTV)* ↔ *Chế độ Màn hình LED / Kiosk*.
 - **Ngôn ngữ hiển thị:** Tiếng Việt (`vi`) xuyên suốt toàn hệ thống.
 - **Ràng buộc màu ngữ nghĩa từ SRS (bắt buộc bảo toàn):**

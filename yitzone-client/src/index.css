@@ -63,6 +63,17 @@
     /* Auditorium LED Stage Tokens */
     --stage-obsidian: 228 60% 5%;
     --stage-panel: 224 49% 11%;
+
+    /* Motion System Tokens (Refractive Glass & Connected Grid) */
+    --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --motion-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+    --motion-duration-instant: 120ms;
+    --motion-duration-fast: 180ms;
+    --motion-duration-normal: 240ms;
+    --motion-duration-overlay: 250ms;
+    --motion-duration-exit: 150ms;
+    --motion-duration-focal: 620ms;
   }
 
   .dark,
@@ -347,6 +358,79 @@
     display: none;
   }
 
+  /* True iOS 26/27 Liquid Glass Toggle Switch */
+  .liquid-switch-track {
+    background: linear-gradient(
+      180deg,
+      rgba(15, 23, 42, 0.14) 0%,
+      rgba(15, 23, 42, 0.08) 100%
+    );
+    backdrop-filter: blur(14px) saturate(180%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    box-shadow:
+      inset 0 2px 4px rgba(15, 23, 42, 0.14),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.85),
+      0 1px 2px rgba(15, 23, 42, 0.04);
+    transition:
+      background 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .dark .liquid-switch-track {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      rgba(255, 255, 255, 0.14) 100%
+    );
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.55),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.12);
+  }
+
+  .liquid-switch-track[data-state="checked"] {
+    background: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12);
+  }
+
+  .dark .liquid-switch-track[data-state="checked"] {
+    background: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+
+  .liquid-switch-thumb {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.99) 0%,
+      rgba(238, 244, 255, 0.92) 100%
+    );
+    border: 0.5px solid rgba(255, 255, 255, 0.95);
+    box-shadow:
+      inset 0 1.5px 1px rgba(255, 255, 255, 1),
+      inset 0 -1px 1px rgba(30, 58, 123, 0.1),
+      0 3px 8px rgba(15, 23, 42, 0.24),
+      0 1px 2px rgba(15, 23, 42, 0.14);
+    transition:
+      transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      width 160ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms ease;
+  }
+
+  .dark .liquid-switch-thumb {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(226, 236, 255, 0.9) 100%
+    );
+    box-shadow:
+      inset 0 1.5px 1px rgba(255, 255, 255, 1),
+      0 3px 10px rgba(0, 0, 0, 0.55);
+  }
+
   .scroll-x-pills {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -355,6 +439,258 @@
   }
   .scroll-x-pills::-webkit-scrollbar {
     display: none;
+  }
+
+  /* =====================================================================
+     YITZone Motion Primitives (CSS-first, 0-dependency, GPU-composited)
+     ===================================================================== */
+
+  /* Hero focal sequence: optical focus settlement + staggered copy arrival */
+  .yit-hero-media {
+    animation: yit-hero-media-in var(--motion-duration-focal) var(--motion-ease-out) both;
+  }
+
+  .yit-hero-stagger-1 {
+    animation: yit-hero-copy-in 480ms var(--motion-ease-out) 40ms both;
+  }
+
+  .yit-hero-stagger-2 {
+    animation: yit-hero-copy-in 480ms var(--motion-ease-out) 110ms both;
+  }
+
+  .yit-hero-stagger-3 {
+    animation: yit-hero-copy-in 480ms var(--motion-ease-out) 180ms both;
+  }
+
+  /* Edge-safe hover lift: hit-box stays stationary, inner surface carries motion */
+  .yit-hover-hit {
+    position: relative;
+  }
+
+  .yit-hover-surface {
+    transition:
+      transform var(--motion-duration-fast) var(--motion-ease-out),
+      border-color var(--motion-duration-fast) ease,
+      box-shadow var(--motion-duration-fast) var(--motion-ease-out),
+      background-color var(--motion-duration-fast) ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .yit-hover-hit:hover > .yit-hover-surface {
+      transform: translateY(-2px);
+    }
+  }
+
+  .yit-hover-hit:active > .yit-hover-surface {
+    transform: translateY(0) scale(0.992);
+    transition-duration: var(--motion-duration-instant);
+  }
+
+  /* Tactile control feedback without shifting hit-box on hover */
+  .yit-pressable {
+    transition:
+      transform var(--motion-duration-instant) var(--motion-ease-out),
+      background-color var(--motion-duration-fast) ease,
+      border-color var(--motion-duration-fast) ease,
+      color var(--motion-duration-fast) ease,
+      box-shadow var(--motion-duration-fast) var(--motion-ease-out);
+  }
+
+  .yit-pressable:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Radix Dialog Overlay & Content (enter slower than exit) */
+  .yit-overlay-motion[data-state="open"] {
+    animation: yit-overlay-in var(--motion-duration-overlay) var(--motion-ease-out) both;
+  }
+
+  .yit-overlay-motion[data-state="closed"] {
+    animation: yit-overlay-out var(--motion-duration-exit) var(--motion-ease-in) both;
+  }
+
+  .yit-dialog-motion[data-state="open"] {
+    animation: yit-dialog-in var(--motion-duration-overlay) var(--motion-ease-out) both;
+  }
+
+  .yit-dialog-motion[data-state="closed"] {
+    animation: yit-dialog-out var(--motion-duration-exit) var(--motion-ease-in) both;
+  }
+
+  /* Radix DropdownMenu, Select & Floating Popover */
+  .yit-popover-motion {
+    transform-origin: var(
+      --radix-dropdown-menu-content-transform-origin,
+      var(--radix-select-content-transform-origin, top center)
+    );
+  }
+
+  .yit-popover-motion[data-state="open"] {
+    animation: yit-popover-in 210ms var(--motion-ease-out) both;
+  }
+
+  .yit-popover-motion[data-state="closed"] {
+    animation: yit-popover-out 130ms var(--motion-ease-in) both;
+  }
+
+  .yit-popover-enter {
+    transform-origin: top right;
+    animation: yit-popover-in 210ms var(--motion-ease-out) both;
+  }
+
+  /* Mobile Slide-over Drawer */
+  .yit-drawer-backdrop {
+    animation: yit-overlay-in 220ms var(--motion-ease-out) both;
+  }
+
+  .yit-drawer-panel {
+    animation: yit-drawer-in 260ms var(--motion-ease-out) both;
+  }
+
+  /* System Toast arrival */
+  .yit-toast-motion {
+    animation: yit-toast-in 240ms var(--motion-ease-out) both;
+  }
+
+  /* Tab Content subtle continuity */
+  .yit-tab-content-motion[data-state="active"] {
+    animation: yit-tab-panel-in 190ms var(--motion-ease-out) both;
+  }
+
+  /* Filtered list item arrival (capped stagger via --stagger-index) */
+  .yit-list-item-motion {
+    animation: yit-list-item-in 240ms var(--motion-ease-out) both;
+    animation-delay: calc(var(--stagger-index, 0) * 35ms);
+  }
+}
+
+@keyframes yit-hero-media-in {
+  from {
+    opacity: 0.92;
+    transform: scale(1.035);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes yit-hero-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes yit-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes yit-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes yit-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes yit-dialog-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 4px)) scale(0.985);
+  }
+}
+
+@keyframes yit-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes yit-popover-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.985);
+  }
+}
+
+@keyframes yit-drawer-in {
+  from {
+    opacity: 0.5;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes yit-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes yit-tab-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes yit-list-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -370,7 +706,8 @@
   .liquid-glass,
   .liquid-glass-card,
   .liquid-glass-pill,
-  .liquid-glass-on-dark {
+  .liquid-glass-on-dark,
+  .liquid-switch-track {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     background: hsl(var(--card));
@@ -386,17 +723,53 @@
   -webkit-backdrop-filter: none;
 }
 
+/* Intentional prefers-reduced-motion: remove spatial movement & blur, preserve meaningful opacity/color feedback */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-instant: 90ms;
+    --motion-duration-fast: 120ms;
+    --motion-duration-normal: 140ms;
+    --motion-duration-overlay: 140ms;
+    --motion-duration-exit: 100ms;
+    --motion-duration-focal: 160ms;
+  }
+
   html {
     scroll-behavior: auto;
   }
 
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  .yit-hero-media,
+  .yit-hero-stagger-1,
+  .yit-hero-stagger-2,
+  .yit-hero-stagger-3,
+  .yit-popover-enter,
+  .yit-drawer-panel,
+  .yit-toast-motion,
+  .yit-list-item-motion {
+    animation-name: yit-overlay-in !important;
+    animation-delay: 0ms !important;
+  }
+
+  .yit-dialog-motion[data-state="open"],
+  .yit-popover-motion[data-state="open"],
+  .yit-tab-content-motion[data-state="active"] {
+    animation-name: yit-overlay-in !important;
+  }
+
+  .yit-dialog-motion[data-state="closed"],
+  .yit-popover-motion[data-state="closed"] {
+    animation-name: yit-overlay-out !important;
+  }
+
+  .yit-hover-hit:hover > .yit-hover-surface,
+  .yit-hover-hit:active > .yit-hover-surface,
+  .yit-pressable:active:not(:disabled) {
+    transform: none !important;
+  }
+
+  .animate-pulse,
+  .animate-bounce,
+  .animate-ping {
+    animation: none !important;
   }
 }
