@@ -2,31 +2,13 @@ import { Award, Building2, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-const TERM_HISTORY = [
-  {
-    id: "th-1",
-    role: "Phó Ban Văn phòng (OFIT)",
-    unit: "Ban Văn phòng Khoa CNTT",
-    period: "09/2025 → Hiện tại",
-    status: "Đang tại nhiệm"
-  },
-  {
-    id: "th-2",
-    role: "Tổ trưởng Tổ Hậu cần",
-    unit: "Ban Sự kiện – Truyền thông (EMFIT)",
-    period: "09/2024 → 08/2025",
-    status: "Hoàn thành nhiệm kỳ"
-  },
-  {
-    id: "th-3",
-    role: "Cộng tác viên",
-    unit: "Ban Văn phòng (OFIT)",
-    period: "10/2023 → 08/2024",
-    status: "Hoàn thành nhiệm kỳ"
-  }
-];
+const INITIAL_TERM_HISTORY = [];
 
-export function ProfileRolesSection({ roleScopes = [], authorities = [] }) {
+export function ProfileRolesSection({
+  roleScopes = [],
+  authorities = [],
+  termHistory = INITIAL_TERM_HISTORY
+}) {
   const permissionCodes = authorities.filter((a) => a.startsWith("MOD_") || a.startsWith("ROLE_"));
 
   return (
@@ -40,7 +22,6 @@ export function ProfileRolesSection({ roleScopes = [], authorities = [] }) {
         </p>
       </section>
 
-      {/* Active Role Scopes & Permission Packages */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -90,7 +71,6 @@ export function ProfileRolesSection({ roleScopes = [], authorities = [] }) {
         </CardContent>
       </Card>
 
-      {/* Immutable Term History */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -102,25 +82,31 @@ export function ProfileRolesSection({ roleScopes = [], authorities = [] }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <ul className="divide-y divide-border border-t border-border">
-            {TERM_HISTORY.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col justify-between gap-2 px-5 py-4 sm:flex-row sm:items-center"
-              >
-                <div className="space-y-0.5">
-                  <div className="text-sm font-semibold text-foreground">{item.role}</div>
-                  <div className="text-xs text-muted-foreground">{item.unit}</div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="tabular-mono text-xs text-muted-foreground">{item.period}</span>
-                  <Badge variant={item.status === "Đang tại nhiệm" ? "success" : "secondary"}>
-                    {item.status}
-                  </Badge>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {termHistory.length === 0 ? (
+            <div className="border-t border-border p-6 text-center text-xs text-muted-foreground">
+              Chưa có lịch sử nhiệm kỳ nào được ghi nhận cho tài khoản này.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border border-t border-border">
+              {termHistory.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-col justify-between gap-2 px-5 py-4 sm:flex-row sm:items-center"
+                >
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-semibold text-foreground">{item.role}</div>
+                    <div className="text-xs text-muted-foreground">{item.unit}</div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="tabular-mono text-xs text-muted-foreground">{item.period}</span>
+                    <Badge variant={item.status === "Đang tại nhiệm" ? "success" : "secondary"}>
+                      {item.status}
+                    </Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -36,11 +36,11 @@ export function VotingKioskPage() {
   );
 
   const [selectedCampaignId, setSelectedCampaignId] = useState(
-    () => publicOpenCampaigns[0]?.id ?? activeStageCampaignId ?? campaigns[0]?.id ?? "gala-fit-2026"
+    () => publicOpenCampaigns[0]?.id ?? activeStageCampaignId ?? campaigns[0]?.id ?? ""
   );
 
   const activeCampaign = useMemo(
-    () => campaigns.find((c) => c.id === selectedCampaignId) ?? campaigns[0],
+    () => campaigns.find((c) => c.id === selectedCampaignId) ?? campaigns[0] ?? null,
     [campaigns, selectedCampaignId]
   );
 
@@ -54,13 +54,13 @@ export function VotingKioskPage() {
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
 
-  const votedStudents = votedByCampaign[activeCampaign.id] ?? [];
+  const votedStudents = activeCampaign ? votedByCampaign[activeCampaign.id] ?? [] : [];
 
   useEffect(() => {
-    if (!activeMssv && !activeCampaign.isSecretBallot) {
+    if (activeCampaign && !activeMssv && !activeCampaign.isSecretBallot) {
       inputRef.current?.focus();
     }
-  }, [activeMssv, activeCampaign.isSecretBallot]);
+  }, [activeCampaign, activeMssv]);
 
   useEffect(() => {
     if (!activeMssv) return;
@@ -79,6 +79,7 @@ export function VotingKioskPage() {
   }, [activeMssv]);
 
   const activateForCode = (rawCode) => {
+    if (!activeCampaign) return;
     setError(null);
     setMessage(null);
     if (activeCampaign.isSecretBallot) {
@@ -101,7 +102,7 @@ export function VotingKioskPage() {
   };
 
   useHidBarcodeScanner({
-    enabled: !activeMssv && !activeCampaign.isSecretBallot,
+    enabled: Boolean(activeCampaign) && !activeMssv && !activeCampaign.isSecretBallot,
     maxCharIntervalMs: 50,
     onScan: (code) => {
       activateForCode(code);
@@ -112,7 +113,7 @@ export function VotingKioskPage() {
   });
 
   const handleConfirmVote = () => {
-    if (!activeMssv || !selectedCandidateId) return;
+    if (!activeCampaign || !activeMssv || !selectedCandidateId) return;
 
     updateCampaign(activeCampaign.id, (c) => ({
       ...c,
@@ -136,7 +137,20 @@ export function VotingKioskPage() {
     <div className="grid gap-8 lg:grid-cols-12">
       {/* 70% Main Kiosk Workspace — Exact 8/4 parity with VotingStagePage & DESIGN.md Section 4 */}
       <div className="flex flex-col justify-between rounded-[20px] border border-white/15 bg-[#0E1529] p-8 lg:col-span-8 lg:p-10">
-        {activeCampaign.isSecretBallot ? (
+        {!activeCampaign ? (
+          <div className="flex flex-1 flex-col items-center justify-center space-y-5 py-10 text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-400/15 px-4 py-1.5 text-xs font-semibold tracking-wider text-sky-200">
+              <Vote className="h-4 w-4" />
+              <span>QUẦY KIOSK BÌNH CHỌN 60 GIÂY</span>
+            </span>
+            <h1 className="font-display text-3xl font-medium text-white sm:text-4xl">
+              Chưa có chiến dịch bình chọn nào đang mở tại Quầy Kiosk
+            </h1>
+            <p className="max-w-xl text-sm leading-relaxed text-slate-300">
+              Vui lòng khởi tạo và mở cổng một chiến dịch bình chọn định danh trong trang Quản trị trước khi quét thẻ sinh viên.
+            </p>
+          </div>
+        ) : activeCampaign.isSecretBallot ? (
           <div className="flex flex-1 flex-col items-center justify-center space-y-6 py-10 text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/15 px-4 py-1.5 text-xs font-semibold tracking-wider text-amber-200">
               <Lock className="h-4 w-4" />
@@ -378,31 +392,37 @@ export function VotingKioskPage() {
             <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">
               Chiến dịch tại Quầy Kiosk
             </div>
-            <Select
-              value={activeCampaign.id}
-              onValueChange={(val) => {
-                setSelectedCampaignId(val);
-                setActiveMssv(null);
-                setSelectedCandidateId("");
-                setError(null);
-                setMessage(null);
-              }}
-            >
-              <SelectTrigger
-                aria-label="Chọn chiến dịch bình chọn"
-                className="h-11 rounded-xl border-white/15 bg-[#050814] text-sm font-medium text-white"
+            {campaigns.length > 0 && activeCampaign ? (
+              <Select
+                value={activeCampaign.id}
+                onValueChange={(val) => {
+                  setSelectedCampaignId(val);
+                  setActiveMssv(null);
+                  setSelectedCandidateId("");
+                  setError(null);
+                  setMessage(null);
+                }}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {campaigns.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.title}
-                    {c.isSecretBallot ? " (Bỏ phiếu kín)" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <SelectTrigger
+                  aria-label="Chọn chiến dịch bình chọn"
+                  className="h-11 rounded-xl border-white/15 bg-[#050814] text-sm font-medium text-white"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {campaigns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.title}
+                      {c.isSecretBallot ? " (Bỏ phiếu kín)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="rounded-xl border border-white/15 bg-[#050814] px-4 py-3 text-xs text-slate-400">
+                Chưa có chiến dịch bình chọn
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-white/15 bg-white/5 p-5 text-center">
@@ -425,7 +445,7 @@ export function VotingKioskPage() {
               <span className="text-slate-400">Súng quét 1D (HID)</span>
               <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-300">
                 <Radio className="h-3.5 w-3.5" />
-                {activeCampaign.isSecretBallot
+                {!activeCampaign || activeCampaign.isSecretBallot
                   ? "Đang khóa"
                   : activeMssv
                     ? "Đang thao tác"
@@ -439,7 +459,7 @@ export function VotingKioskPage() {
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Tổng lượt chiến dịch</span>
               <span className="tabular-mono font-semibold text-sky-300">
-                {activeCampaign.voterCount} lượt
+                {activeCampaign?.voterCount ?? 0} lượt
               </span>
             </div>
           </div>

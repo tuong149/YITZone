@@ -76,13 +76,25 @@ export async function recordPrivacyConsent(purpose, granted) {
   return res.data.data;
 }
 
-export async function requestPersonalDataExport(){
+export async function requestPersonalDataExport() {
   const res = await apiClient.post("/privacy/my-data-exports");
   if (!res.data.success) throw new Error(res.data.detail);
   return res.data.data;
 }
 
-export function useOrgUnits(){
+export async function setupTotpMfa() {
+  const res = await apiClient.post("/iam/auth/mfa/setup");
+  if (!res.data.success) throw new Error(res.data.detail);
+  return res.data.data;
+}
+
+export async function verifyTotpMfa(code) {
+  const res = await apiClient.post("/iam/auth/mfa/verify", { code });
+  if (!res.data.success) throw new Error(res.data.detail);
+  return res.data.data;
+}
+
+export function useOrgUnits() {
   return useQuery({
     queryKey: ["iam", "org-units"],
     queryFn: fetchOrgUnits,
@@ -93,7 +105,7 @@ export function useOrgUnits(){
 export function useMajors(fitOnly) {
   return useQuery({
     queryKey: ["iam", "majors", fitOnly ?? false],
-    queryFn: () => fetchMajors(fitOnly ? { fitOnly: true }: undefined),
+    queryFn: () => fetchMajors(fitOnly ? { fitOnly: true } : undefined),
     retry: false
   });
 }

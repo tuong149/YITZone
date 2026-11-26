@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Archive,
@@ -25,68 +25,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEventStore } from "@/stores/event-store";
 
-const INITIAL_BANK = [
-  {
-    id: "Q-001",
-    stem: "Cơ chế chữ ký số nào dùng cho mã QR điểm danh ngoại tuyến của YITZone?",
-    difficulty: "Nhận biết",
-    usedInExam: true,
-    archived: false
-  },
-  {
-    id: "Q-002",
-    stem: "Quy định xử lý đơn xin vắng trực Văn phòng gửi trước ≥ 2 giờ kèm ca bù hợp lệ?",
-    difficulty: "Thông hiểu",
-    usedInExam: true,
-    archived: false
-  },
-  {
-    id: "Q-003",
-    stem: "Cách xử lý khi kiểm kê tài sản OFIT phát hiện số lượng thực tế nhiều hơn sổ sách?",
-    difficulty: "Vận dụng",
-    usedInExam: false,
-    archived: false
-  }
-];
+const INITIAL_BANK = [];
 
-const INITIAL_CANDIDATES = [
-  {
-    id: "s1",
-    mssv: "22110345",
-    fullName: "Nguyễn Minh Khôi",
-    device: "Chrome · Windows 11",
-    score: 95,
-    durationSec: 642,
-    violations: 0,
-    flags: [],
-    status: "SUBMITTED",
-    deviceTransferred: false
-  },
-  {
-    id: "s2",
-    mssv: "22110418",
-    fullName: "Trần Đức Thịnh",
-    device: "Edge · Windows 11",
-    score: 88,
-    durationSec: 710,
-    violations: 1,
-    flags: ["Gián đoạn kết nối > 15s (Chỉ ghi nhật ký)"],
-    status: "IN_PROGRESS",
-    deviceTransferred: false
-  },
-  {
-    id: "s3",
-    mssv: "23110219",
-    fullName: "Lê Hoàng Nam",
-    device: "Safari · iOS Mobile",
-    score: 80,
-    durationSec: 890,
-    violations: 2,
-    flags: ["Chuyển ứng dụng trên điện thoại ×2 (Chỉ ghi nhật ký)"],
-    status: "SUBMITTED",
-    deviceTransferred: false
-  }
-];
+const INITIAL_CANDIDATES = [];
 
 export function ExamAdminPage({ mode = "exam" } = {}) {
   const [searchParams] = useSearchParams();
@@ -97,10 +38,10 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
   );
 
   const [selectedEventId, setSelectedEventId] = useState(
-    () => searchParams.get("eventId") ?? examEvents[0]?.id ?? events[0]?.id ?? "EVT-2026-CLOUD"
+    () => searchParams.get("eventId") ?? examEvents[0]?.id ?? events[0]?.id ?? ""
   );
   const selectedEvent = useMemo(
-    () => events.find((e) => e.id === selectedEventId) ?? examEvents[0] ?? events[0],
+    () => events.find((e) => e.id === selectedEventId) ?? examEvents[0] ?? events[0] ?? null,
     [events, examEvents, selectedEventId]
   );
 
@@ -109,6 +50,7 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
   const [newStem, setNewStem] = useState("");
   const [newDifficulty, setNewDifficulty] = useState("Nhận biết");
   const [importFeedback, setImportFeedback] = useState(null);
+  const excelInputRef = useRef(null);
 
   const [matrix, setMatrix] = useState({
     know: 40,
@@ -121,7 +63,8 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
   const eventDurationMin = selectedEvent?.examMinutes ?? 20;
   const eventPassRate = selectedEvent?.examPassRate ?? 75;
   const eventExamPath =
-    selectedEvent?.examPath ?? `/exam/exam-${(selectedEvent?.id ?? "ex-fit-2026").toLowerCase()}`;
+    selectedEvent?.examPath ??
+    (selectedEvent?.id ? `/exam/exam-${selectedEvent.id.toLowerCase()}` : "/exam");
 
   const [auditTarget, setAuditTarget] = useState(null);
 
@@ -130,7 +73,7 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
     if (!newStem.trim()) return;
     setBank((prev) => [
       {
-        id: `Q-00${prev.length + 1}`,
+        id: `Q-${String(prev.length + 1).padStart(3, "0")}`,
         stem: newStem.trim(),
         difficulty: newDifficulty,
         usedInExam: false,
@@ -141,25 +84,13 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
     setNewStem("");
   };
 
-  const handleSimulateExcelImport = () => {
-    const imported = [
-      {
-        id: `Q-IMP-${bank.length + 1}`,
-        stem: "Điều kiện điểm sàn để mở khóa E-Certificate bài thu hoạch sự kiện là gì?",
-        difficulty: "Nhận biết",
-        usedInExam: false,
-        archived: false
-      },
-      {
-        id: `Q-IMP-${bank.length + 2}`,
-        stem: "Quy trình khử định danh 2 bước trước khi tóm tắt khảo sát bằng AI hoạt động như thế nào?",
-        difficulty: "Vận dụng",
-        usedInExam: false,
-        archived: false
-      }
-    ];
-    setBank((prev) => [...imported, ...prev]);
-    setImportFeedback("Đã nhập thành công 2 câu hỏi mới từ tệp Excel mẫu (0 lỗi định dạng).");
+  const handleExcelFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFeedback(
+      `Đã chọn tệp "${file.name}" — tệp sẽ được tải lên máy chủ để kiểm tra định dạng và nhập câu hỏi.`
+    );
+    e.target.value = "";
   };
 
   const handleAuditConfirm = () => {
@@ -397,44 +328,14 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
               Hỗ trợ 1 đáp án, Nhiều đáp án (chọn đủ), Đúng/Sai · Thời gian 10/20/30/60s · Điểm 1000/2000.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-display text-base font-medium text-foreground">
-                  Đấu trường Công nghệ FIT 2026
-                </div>
-                <Badge variant="success">10 câu · Đang mở (PIN 739 204)</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Chế độ Khách mời: Bật (có lọc từ ngữ nhạy cảm) · Hiển thị LED che 5 số đầu MSSV.
+          <CardContent>
+            <div className="rounded-xl border border-dashed border-border bg-muted/25 px-6 py-10 text-center">
+              <p className="text-sm font-medium text-foreground">
+                Chưa có phòng Minigame nào được tạo
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild size="sm" className="rounded-full">
-                  <Link to="/stage/minigame">Chiếu LED Sân khấu (PIN 739 204)</Link>
-                </Button>
-                <Button asChild size="sm" variant="outline" className="rounded-full">
-                  <Link to="/minigame?pin=739204">Vào thử với PIN</Link>
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-display text-base font-medium text-foreground">
-                  Hành trang Tân Sinh viên IT
-                </div>
-                <Badge variant="info">8 câu · Mở tự do (PIN 518 092)</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Không yêu cầu điểm danh sự kiện · Thưởng chuỗi thắng Streak tối đa +500đ.
+              <p className="mt-1 text-xs text-muted-foreground">
+                Các phòng Minigame gắn sự kiện hoặc tạo mới từ máy chủ sẽ hiển thị tại đây kèm mã PIN 6 số.
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild size="sm" variant="outline" className="rounded-full">
-                  <Link to="/stage/minigame">Xem trước Sân khấu LED</Link>
-                </Button>
-                <Button asChild size="sm" variant="outline" className="rounded-full">
-                  <Link to="/minigame?pin=518092">Vào thử với PIN</Link>
-                </Button>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -454,20 +355,22 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="w-64">
-            <Select value={selectedEvent?.id ?? ""} onValueChange={setSelectedEventId}>
-              <SelectTrigger className="h-9 rounded-full text-xs">
-                <SelectValue placeholder="Chọn sự kiện gắn kỳ thi" />
-              </SelectTrigger>
-              <SelectContent>
-                {events.map((ev) => (
-                  <SelectItem key={ev.id} value={ev.id}>
-                    {ev.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {events.length > 0 && selectedEvent && (
+            <div className="w-64">
+              <Select value={selectedEvent.id} onValueChange={setSelectedEventId}>
+                <SelectTrigger className="h-9 rounded-full text-xs">
+                  <SelectValue placeholder="Chọn sự kiện gắn kỳ thi" />
+                </SelectTrigger>
+                <SelectContent>
+                  {events.map((ev) => (
+                    <SelectItem key={ev.id} value={ev.id}>
+                      {ev.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Button asChild size="sm" className="rounded-full">
             <Link to={eventExamPath}>Xem thử Phòng thi</Link>
           </Button>
@@ -490,10 +393,24 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
                   Câu hỏi đã từng dùng trong kỳ thi bị chặn xóa cứng — chỉ cho phép Lưu trữ kèm Audit Log.
                 </CardDescription>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={handleSimulateExcelImport}>
-                <FileSpreadsheet className="h-4 w-4" />
-                Import Excel mẫu (+2 câu)
-              </Button>
+              <div>
+                <input
+                  ref={excelInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleExcelFileSelect}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => excelInputRef.current?.click()}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Nhập từ tệp Excel / CSV
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {importFeedback && (
@@ -531,7 +448,12 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
                 </div>
               </form>
 
-              <DataTable columns={bankCols} data={bank} />
+              <DataTable
+                columns={bankCols}
+                data={bank}
+                emptyTitle="Ngân hàng câu hỏi đang trống"
+                emptyDescription="Thêm câu hỏi mới hoặc nhập từ tệp Excel/CSV để xây dựng đề thi."
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -545,7 +467,8 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
                   Ma trận Rút đề Ngẫu nhiên &amp; Thông số Sự kiện
                 </CardTitle>
                 <CardDescription>
-                  Thời lượng và điểm sàn E-Cert được đồng bộ một nguồn duy nhất từ sự kiện <strong>{selectedEvent?.title}</strong>.
+                  Thời lượng và điểm sàn E-Cert được đồng bộ một nguồn duy nhất từ sự kiện{" "}
+                  <strong>{selectedEvent?.title ?? "chưa được chọn"}</strong>.
                 </CardDescription>
               </div>
               {selectedEvent && (
@@ -628,7 +551,12 @@ export function ExamAdminPage({ mode = "exam" } = {}) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable columns={candidateCols} data={candidates} />
+              <DataTable
+                columns={candidateCols}
+                data={candidates}
+                emptyTitle="Chưa có thí sinh nào trong phòng thi"
+                emptyDescription="Danh sách thí sinh đang làm bài và nhật ký giám sát sẽ hiển thị theo thời gian thực khi kỳ thi diễn ra."
+              />
             </CardContent>
           </Card>
         </TabsContent>

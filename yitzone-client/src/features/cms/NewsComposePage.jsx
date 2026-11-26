@@ -176,7 +176,7 @@ function ArticlePreview({
           idx++;
         }
         const parsedRows = tableLines
-          .filter((row) => !/^\|\s*[-:|\s]+\|$/.test(row))
+          .filter((row) => !/^\|\s*(?:[-:|]|\s)+\|$/.test(row))
           .map((row) =>
             row
               .slice(1, -1)
@@ -313,6 +313,7 @@ export function NewsComposePage() {
   const isAuthenticated = useAuthStore((s) => Boolean(s.accessToken));
   const authorities = useAuthStore((s) => s.authorities);
   const userId = useAuthStore((s) => s.userId);
+  const fullName = useAuthStore((s) => s.fullName);
 
   const canContribute = isAuthenticated && hasAnyPermission(authorities, PERMISSIONS.CMS_CONTRIBUTE);
 
@@ -321,7 +322,7 @@ export function NewsComposePage() {
     [categories]
   );
 
-  const defaultCatId = activeCategories[0]?.id ?? "cat-hoc-thuat";
+  const defaultCatId = activeCategories[0]?.id ?? "";
   const initialDraft = useMemo(() => loadDraft(defaultCatId), [defaultCatId]);
 
   const [title, setTitle] = useState(initialDraft.title);
@@ -598,9 +599,9 @@ export function NewsComposePage() {
       categoryId,
       tags: tags.length > 0 ? tags : ["Chia sẻ"],
       coverImage: coverImage || "/images/card-hackathon.jpg",
-      authorName: userId ? `CTV · ${userId}` : "Cộng tác viên Truyền thông",
+      authorName: fullName || (userId ? `CTV · ${userId}` : "Cộng tác viên Truyền thông"),
       authorRole: "CTV Truyền thông · Khoa CNTT",
-      authorMssv: userId ?? "22110345",
+      authorMssv: userId ?? undefined,
       source: "STUDENT_CONTRIBUTION",
       status: "PENDING_REVIEW",
       publishedAt: "Vừa gửi biên tập",

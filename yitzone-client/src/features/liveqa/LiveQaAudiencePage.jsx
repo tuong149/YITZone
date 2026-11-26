@@ -23,8 +23,8 @@ import { DEFAULT_QA_SESSION, useLiveQaStore } from "@/stores/liveqa-store";
 export function LiveQaAudiencePage() {
   const { pin } = useParams();
   const authorities = useAuthStore((s) => s.authorities);
-  const fullName = useAuthStore((s) => s.fullName) ?? "Nguyễn Minh Khôi";
-  const userId = useAuthStore((s) => s.userId) ?? "22110418";
+  const fullName = useAuthStore((s) => s.fullName) ?? "";
+  const userId = useAuthStore((s) => s.userId) ?? "";
   const canControlStage = hasAnyPermission(authorities, PERMISSIONS.STAGE_CONTROL);
 
   const questions = useLiveQaStore((s) => s.questions);
@@ -42,29 +42,52 @@ export function LiveQaAudiencePage() {
 
   const cleanPin = (pin ?? "").replace(/\D/g, "");
   const formattedPin =
-    cleanPin.length === 6 ? `${cleanPin.slice(0, 3)} ${cleanPin.slice(3)}` : "482 910";
+    cleanPin.length === 6 ? `${cleanPin.slice(0, 3)} ${cleanPin.slice(3)}` : cleanPin || "Chưa có PIN";
 
-  const isKnownPin = useMemo(() => {
-    if (!cleanPin) return true;
-    if (cleanPin === DEFAULT_QA_SESSION.pin.replace(/\D/g, "")) return true;
-    if (cleanPin === "482910") return true;
-    return events.some((ev) => {
-      const derived = ((ev.id.replace(/\D/g, "") || "482") + "910").slice(0, 6);
-      return derived === cleanPin;
-    });
+  const matchedSession = useMemo(() => {
+    if (!cleanPin) return null;
+    const defaultDigits = (DEFAULT_QA_SESSION.pin ?? "").replace(/\D/g, "");
+    if (defaultDigits && cleanPin === defaultDigits) {
+      return DEFAULT_QA_SESSION;
+    }
+    for (const evt of events) {
+      for (const ses of evt.sessions ?? []) {
+        if (!ses.activities?.liveQa) continue;
+        const derivedPin = String(
+          400000 + ((evt.id.length * 7919 + ses.id.length * 104729) % 599999)
+        );
+        if (derivedPin === cleanPin) {
+          return {
+            id: `qa-${evt.id}-${ses.id}`,
+            eventId: evt.id,
+            label: `${evt.title} · ${ses.name}`,
+            pin: derivedPin
+          };
+        }
+      }
+    }
+    return null;
   }, [cleanPin, events]);
+
+  const isKnownPin = Boolean(matchedSession);
+  const targetSessionId = matchedSession?.id || activeSessionId || DEFAULT_QA_SESSION.id || "default-qa";
 
   // Audience wall only displays APPROVED or ANSWERED questions (never PENDING or REJECTED)
   const visibleQuestions = useMemo(
-    () => questions.filter((q) => q.status === "APPROVED" || q.status === "ANSWERED"),
-    [questions]
+    () =>
+      questions.filter(
+        (q) =>
+          (q.status === "APPROVED" || q.status === "ANSWERED") &&
+          (!matchedSession?.id || q.sessionId === matchedSession.id)
+      ),
+    [questions, matchedSession?.id]
   );
 
   const sorted = useMemo(() => {
     return [...visibleQuestions].sort((a, b) => {
       if (a.onStage && !b.onStage) return -1;
       if (!a.onStage && b.onStage) return 1;
-      if (sortBy === "TOP") return b.upvoterIds.length - a.upvoterIds.length;
+      if (sortBy === "TOP") return (b.upvoterIds?.length ?? 0) - (a.upvoterIds?.length ?? 0);
       return b.id.localeCompare(a.id);
     });
   }, [visibleQuestions, sortBy]);
@@ -86,12 +109,19 @@ export function LiveQaAudiencePage() {
       return;
     }
 
+    const authorDisplay = anonymous
+      ? "Sinh viên Khoa CNTT (Ẩn danh)"
+      : fullName
+        ? `${fullName} · SV Khoa CNTT`
+        : "Sinh viên Khoa CNTT";
+    const realIdentity = [userId, fullName].filter(Boolean).join(" · ") || "Khán giả trực tuyến";
+
     submitAudienceQuestion({
-      sessionId: activeSessionId,
+      sessionId: targetSessionId,
       content: trimmed,
       anonymous,
-      authorDisplay: anonymous ? "Sinh viên Khoa CNTT (Ẩn danh)" : `${fullName} · SV Khoa CNTT`,
-      realIdentity: `${userId} · ${fullName}`
+      authorDisplay,
+      realIdentity
     });
     setDraft("");
     setNotice(
@@ -118,7 +148,7 @@ export function LiveQaAudiencePage() {
             </Badge>
           </div>
           <h1 className="mt-2 font-display text-2xl font-medium text-foreground sm:text-3xl">
-            {DEFAULT_QA_SESSION.label}
+            {matchedSession?.label || DEFAULT_QA_SESSION.label || "Tường Hỏi - Đáp Trực tiếp (Live Q&A)"}
           </h1>
           <p className="text-sm text-muted-foreground">
             Đặt câu hỏi trực tiếp cho diễn giả và bình chọn (Upvote) các câu hỏi bạn quan tâm nhất.
@@ -239,44 +269,55 @@ export function LiveQaAudiencePage() {
       </div>
 
       {/* Question Feed */}
-      <div className="space-y-3">
-        {sorted.map((q) => {
-          const isPinned = q.onStage;
-          const isAnswered = q.status === "ANSWERED";
-          const upvotedByMe = q.upvoterIds.includes(userId);
-          return (
-            <div
-              key={q.id}
-              className={`flex items-start justify-between gap-4 rounded-2xl border p-4 transition-colors ${
-                isPinned ? "border-primary/45 bg-primary/[0.04]" : "border-border bg-card"
-              }`}
-            >
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  {isPinned && <Badge variant="default">Đang chiếu LED sân khấu</Badge>}
-                  {isAnswered && <Badge variant="success">Đã giải đáp</Badge>}
-                  <span className="text-xs text-muted-foreground">{q.authorDisplay}</span>
-                </div>
-                <p className="text-sm font-medium leading-relaxed text-foreground">{q.content}</p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toggleUpvote(q.id, userId)}
-                aria-label={`Ủng hộ câu hỏi (${q.upvoterIds.length})`}
-                className={`flex shrink-0 flex-col items-center justify-center rounded-xl border px-3 py-2 transition-colors ${
-                  upvotedByMe
-                    ? "border-primary bg-primary/12 text-primary"
-                    : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+      {sorted.length === 0 ? (
+        <Card>
+          <CardContent className="px-6 py-10 text-center text-sm text-muted-foreground">
+            Chưa có câu hỏi nào được công bố trong phiên này. Hãy gửi câu hỏi đầu tiên cho diễn giả ở khung phía trên.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {sorted.map((q) => {
+            const isPinned = q.onStage;
+            const isAnswered = q.status === "ANSWERED";
+            const voterKey = userId || "anon";
+            const upvotedByMe = (q.upvoterIds ?? []).includes(voterKey);
+            return (
+              <div
+                key={q.id}
+                className={`flex items-start justify-between gap-4 rounded-2xl border p-4 transition-colors ${
+                  isPinned ? "border-primary/45 bg-primary/[0.04]" : "border-border bg-card"
                 }`}
               >
-                <ThumbsUp className="h-4 w-4" />
-                <span className="mt-1 tabular-mono text-xs font-semibold">{q.upvoterIds.length}</span>
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isPinned && <Badge variant="default">Đang chiếu LED sân khấu</Badge>}
+                    {isAnswered && <Badge variant="success">Đã giải đáp</Badge>}
+                    <span className="text-xs text-muted-foreground">{q.authorDisplay}</span>
+                  </div>
+                  <p className="text-sm font-medium leading-relaxed text-foreground">{q.content}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => toggleUpvote(q.id, voterKey)}
+                  aria-label={`Ủng hộ câu hỏi (${q.upvoterIds?.length ?? 0})`}
+                  className={`flex shrink-0 flex-col items-center justify-center rounded-xl border px-3 py-2 transition-colors ${
+                    upvotedByMe
+                      ? "border-primary bg-primary/12 text-primary"
+                      : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <ThumbsUp className="h-4 w-4" />
+                  <span className="mt-1 tabular-mono text-xs font-semibold">
+                    {q.upvoterIds?.length ?? 0}
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

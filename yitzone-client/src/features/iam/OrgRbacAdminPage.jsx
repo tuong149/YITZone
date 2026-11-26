@@ -57,7 +57,7 @@ const ORG_TREE = [
   }
 ];
 
-const SAMPLE_MODULES = [
+const RBAC_MODULES = [
   { id: "m1", code: "MOD_EVENT_OPS", label: "Điều phối Sự kiện & BTC", nonDelegable: false, note: "Gắn phạm vi Sự kiện hoặc Toàn Khoa" },
   { id: "m2", code: "MOD_ATTENDANCE_STAFF", label: "Lễ tân Soát vé QR / Barcode 1D", nonDelegable: false, note: "Ủy quyền tạm thời theo sự kiện" },
   { id: "m3", code: "MOD_UNIT_HR_INTERNAL", label: "Quản lý Nhân sự Nội bộ Ban/Tổ", nonDelegable: false, note: "Tách biệt hoàn toàn khỏi 4 gói MOD_DEPT_*" },
@@ -67,36 +67,28 @@ const SAMPLE_MODULES = [
   { id: "m7", code: "MOD_AUDIT_VIEWER", label: "Tra cứu Audit Log Hash-chain (Chỉ đọc)", nonDelegable: true, note: "Dành cho BTV & SystemAdmin" }
 ];
 
-const INITIAL_GRANTS = [
-  {
-    id: "g-1",
-    userCode: "22110412",
-    userName: "Trần Thảo Vy",
-    moduleCode: "MOD_ATTENDANCE_STAFF",
-    scopeLabel: "Sự kiện: Cloud Native 2026",
-    expiresAt: "28/11/2026 18:00"
-  },
-  {
-    id: "g-2",
-    userCode: "23110188",
-    userName: "Lê Hoàng Nam",
-    moduleCode: "MOD_QUIZ_EXAM_HOST",
-    scopeLabel: "Sự kiện: Đấu trường Code UTE",
-    expiresAt: "12/12/2026 22:00"
-  }
-];
+const INITIAL_GRANTS = [];
 
-export function OrgRbacAdminPage(){
+export function OrgRbacAdminPage() {
   const [grants, setGrants] = useState(INITIAL_GRANTS);
-  const [targetUser, setTargetUser] = useState("22110345");
+  const [targetUser, setTargetUser] = useState("");
   const [selectedModule, setSelectedModule] = useState("MOD_ATTENDANCE_STAFF");
-  const [scopeText, setScopeText] = useState("Sự kiện: Cloud Native 2026");
+  const [scopeText, setScopeText] = useState("");
   const [grantMsg, setGrantMsg] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
 
   const handleGrant = (e) => {
     e.preventDefault();
-    const mod = SAMPLE_MODULES.find((m) => m.code === selectedModule);
+    const cleanedUser = targetUser.trim();
+    const cleanedScope = scopeText.trim();
+    if (!cleanedUser || !cleanedScope) {
+      setGrantMsg({
+        type: "err",
+        text: "Vui lòng nhập đầy đủ MSSV người nhận và phạm vi áp dụng trước khi cấp quyền."
+      });
+      return;
+    }
+    const mod = RBAC_MODULES.find((m) => m.code === selectedModule);
     if (mod?.nonDelegable) {
       setGrantMsg({
         type: "err",
@@ -107,17 +99,17 @@ export function OrgRbacAdminPage(){
     setGrants((prev) => [
       {
         id: `g-${Date.now()}`,
-        userCode: targetUser,
-        userName: `Cán bộ / CTV (${targetUser})`,
+        userCode: cleanedUser,
+        userName: `Cán bộ / CTV (${cleanedUser})`,
         moduleCode: selectedModule,
-        scopeLabel: scopeText,
-        expiresAt: "30/12/2026 23:59"
+        scopeLabel: cleanedScope,
+        expiresAt: "Theo thời hạn sự kiện"
       },
-...prev
+      ...prev
     ]);
     setGrantMsg({
       type: "ok",
-      text: `Đã cấp gói ${selectedModule} phạm vi "${scopeText}" cho ${targetUser} và ghi nhận Audit Log.`
+      text: `Đã cấp gói ${selectedModule} phạm vi "${cleanedScope}" cho ${cleanedUser} và ghi nhận Audit Log.`
     });
   };
 
@@ -133,7 +125,7 @@ export function OrgRbacAdminPage(){
             <Lock className="h-3 w-3" />
             Non-delegable (BTV)
           </Badge>
-        ): (
+        ) : (
           <Badge variant="success">Ủy quyền theo Scope/TTL</Badge>
         )
     },
@@ -141,7 +133,15 @@ export function OrgRbacAdminPage(){
   ];
 
   const grantCols = [
-    { key: "user", header: "Người nhận", render: (g) => <span className="font-medium">{g.userName} <span className="tabular-mono text-xs text-muted-foreground">({g.userCode})</span></span> },
+    {
+      key: "user",
+      header: "Người nhận",
+      render: (g) => (
+        <span className="font-medium">
+          {g.userName} <span className="tabular-mono text-xs text-muted-foreground">({g.userCode})</span>
+        </span>
+      )
+    },
     { key: "mod", header: "Gói Quyền", render: (g) => <Badge variant="default" className="tabular-mono">{g.moduleCode}</Badge> },
     { key: "scope", header: "Phạm vi (Scope)", render: (g) => <span className="text-sm">{g.scopeLabel}</span> },
     { key: "exp", header: "Hết hạn (TTL)", render: (g) => <span className="tabular-mono text-xs text-muted-foreground">{g.expiresAt}</span> },
@@ -194,6 +194,7 @@ export function OrgRbacAdminPage(){
                   <Input
                     id="grant-user"
                     value={targetUser}
+                    placeholder="Nhập MSSV..."
                     onChange={(e) => setTargetUser(e.target.value)}
                     className="tabular-mono"
                   />
@@ -205,9 +206,9 @@ export function OrgRbacAdminPage(){
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {SAMPLE_MODULES.map((m) => (
+                      {RBAC_MODULES.map((m) => (
                         <SelectItem key={m.code} value={m.code}>
-                          {m.code} {m.nonDelegable ? "(Non-delegable)": ""}
+                          {m.code} {m.nonDelegable ? "(Non-delegable)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -215,7 +216,12 @@ export function OrgRbacAdminPage(){
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="grant-scope">Phạm vi (Toàn Khoa / Ban / Sự kiện)</Label>
-                  <Input id="grant-scope" value={scopeText} onChange={(e) => setScopeText(e.target.value)} />
+                  <Input
+                    id="grant-scope"
+                    value={scopeText}
+                    placeholder="VD: FACULTY, OFIT hoặc mã sự kiện"
+                    onChange={(e) => setScopeText(e.target.value)}
+                  />
                 </div>
                 <div className="flex items-end">
                   <Button type="submit" className="w-full">
@@ -230,7 +236,7 @@ export function OrgRbacAdminPage(){
                   className={`mt-4 flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-xs font-medium ${
                     grantMsg.type === "ok"
                       ? "border-status-success/30 bg-status-success/10 text-status-success"
-: "border-status-danger/30 bg-status-danger/10 text-status-danger"
+                      : "border-status-danger/30 bg-status-danger/10 text-status-danger"
                   }`}
                 >
                   <ShieldAlert className="h-4 w-4 shrink-0" />
@@ -296,7 +302,7 @@ export function OrgRbacAdminPage(){
         </TabsContent>
 
         <TabsContent value="modules">
-          <DataTable columns={moduleCols} data={SAMPLE_MODULES} />
+          <DataTable columns={moduleCols} data={RBAC_MODULES} />
         </TabsContent>
       </Tabs>
 
@@ -308,7 +314,7 @@ export function OrgRbacAdminPage(){
         title="Thu hồi Gói Quyền Tức thì (≤ 5 giây)"
         description="Hệ thống sẽ tăng permissionVersion và phát tín hiệu Redis Pub/Sub rbac:invalidate để mọi API kế tiếp của tài khoản này bị chặn 403 ngay lập tức."
         targetSummary={
-          revokeTarget ? `${revokeTarget.userName} · ${revokeTarget.moduleCode} (${revokeTarget.scopeLabel})`: ""
+          revokeTarget ? `${revokeTarget.userName} · ${revokeTarget.moduleCode} (${revokeTarget.scopeLabel})` : ""
         }
         actionCode="RBAC_GRANT_REVOKE"
         confirmLabel="Thu hồi ngay & Ghi Audit Log"

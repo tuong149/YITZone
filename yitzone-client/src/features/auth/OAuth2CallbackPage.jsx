@@ -1,63 +1,108 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AlertCircle, CheckCircle2, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isOnboardingCompleted } from "@/features/iam/data/onboarding-storage";
+import { apiClient, extractApiErrorMessage } from "@/lib/api-client";
 import { getOrCreateDeviceKeyPair } from "@/lib/webcrypto";
 import { AUTH_REDIRECT_STORAGE_KEY, useAuthStore } from "@/stores/auth-store";
-
-const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
 export function OAuth2CallbackPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const setSession = useAuthStore((s) => s.setSession);
-  const [statusText, setStatusText] = useState("Đang xác minh tài khoản Google Workspace và thông tin sinh viên...");
+  const [verifying, setVerifying] = useState(true);
+  const [resolvedUserId, setResolvedUserId] = useState(null);
+  const [statusText, setStatusText] = useState(
+    "Đang xác minh phiên Google Workspace và đồng bộ hồ sơ sinh viên từ máy chủ..."
+  );
   const [authError, setAuthError] = useState(null);
 
   const savedRedirect =
     typeof window !== "undefined" ? window.sessionStorage.getItem(AUTH_REDIRECT_STORAGE_KEY) : null;
   const successTarget = savedRedirect && savedRedirect !== "/login" ? savedRedirect : "/";
-  const demoUserId = "22110345";
-  const needsOnboarding = !authError && !isOnboardingCompleted(demoUserId);
+  const needsOnboarding =
+    !verifying && !authError && Boolean(resolvedUserId) && !isOnboardingCompleted(resolvedUserId);
 
   useEffect(() => {
     let active = true;
-    const run = async () => {
-      try {
-        await getOrCreateDeviceKeyPair();
-      } catch {
-        // Non-blocking in unsupported environments
-      }
-      if (!active) return;
 
-      if (!IS_DEMO_MODE) {
-        setAuthError(
-          "Đăng nhập Google Workspace cần kết nối máy chủ OIDC đang hoạt động. Vui lòng đăng nhập lại khi backend sẵn sàng."
-        );
+    const run = async () => {
+      const oauthError = params.get("error");
+      if (oauthError) {
+        if (!active) return;
+        setAuthError(params.get("error_description") ?? "Đăng nhập Google Workspace bị từ chối hoặc bị hủy.");
+        setVerifying(false);
         return;
       }
 
-      setStatusText("Đã xác thực tài khoản Google Workspace, liên kết tài khoản và thiết lập phiên bảo mật.");
-      setSession({
-        userId: "22110345",
-        email: "22110345@student.hcmute.edu.vn",
-        fullName: "Nguyễn Minh Khoa (Google Workspace)",
-        accessToken: "demo-local-offline-token",
-        authProvider: "google",
-        authorities: ["event:view", "attendance:check_in", "store:view", "voting:cast"],
-        roleScopes: []
-      });
+      try {
+        const tokenFromQuery = params.get("token") ?? params.get("accessToken");
+        let accessToken = tokenFromQuery;
+        let authPayload = null;
+
+        if (!accessToken) {
+          const refreshRes = await apiClient.post("/iam/auth/refresh");
+          if (refreshRes.data?.success && refreshRes.data?.data?.accessToken) {
+            accessToken = refreshRes.data.data.accessToken;
+            authPayload = refreshRes.data.data;
+          }
+        }
+
+        if (!accessToken) {
+          throw new Error("MISSING_TOKEN");
+        }
+
+        const meRes = await apiClient.get("/iam/me", {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+
+        const meData = meRes.data?.data ?? authPayload ?? {};
+        const userId = meData.userId ?? authPayload?.userId;
+        if (!userId) {
+          throw new Error("INVALID_ME");
+        }
+
+        if (!active) return;
+
+        setSession({
+          userId,
+          email: meData.email ?? authPayload?.email ?? null,
+          fullName: meData.fullName ?? authPayload?.fullName ?? null,
+          accessToken,
+          authProvider: "google",
+          authorities: Array.isArray(meData.authorities) ? meData.authorities : [],
+          roleScopes: Array.isArray(meData.roleScopes) ? meData.roleScopes : []
+        });
+
+        try {
+          const { publicKeyJwk } = await getOrCreateDeviceKeyPair();
+          await apiClient.post("/iam/device-tokens", { publicKeyJwk });
+        } catch {
+          // Non-blocking
+        }
+
+        if (!active) return;
+        setResolvedUserId(userId);
+        setStatusText("Đã xác thực tài khoản Google Workspace và thiết lập phiên bảo mật thành công.");
+      } catch (err) {
+        if (!active) return;
+        setAuthError(
+          extractApiErrorMessage(
+            err,
+            "Không thể hoàn tất đăng nhập Google Workspace. Vui lòng kiểm tra cấu hình OIDC trên máy chủ và thử lại."
+          )
+        );
+      } finally {
+        if (active) setVerifying(false);
+      }
     };
 
-    const timer = window.setTimeout(() => {
-      void run();
-    }, 450);
+    void run();
     return () => {
       active = false;
-      window.clearTimeout(timer);
     };
-  }, [setSession]);
+  }, [params, setSession]);
 
   return (
     <div className="mx-auto max-w-lg py-12">
@@ -66,13 +111,25 @@ export function OAuth2CallbackPage() {
           className={
             authError
               ? "mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-danger/15 text-status-danger"
-              : "mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-success/15 text-status-success"
+              : verifying
+                ? "mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary"
+                : "mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-success/15 text-status-success"
           }
         >
-          {authError ? <AlertCircle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
+          {authError ? (
+            <AlertCircle className="h-6 w-6" />
+          ) : verifying ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : (
+            <CheckCircle2 className="h-6 w-6" />
+          )}
         </div>
         <h1 className="font-display text-2xl font-medium text-foreground">
-          {authError ? "Không thể hoàn tất đăng nhập Google" : "Liên kết Google Workspace hoàn tất"}
+          {authError
+            ? "Không thể hoàn tất đăng nhập Google"
+            : verifying
+              ? "Đang xác thực Google Workspace..."
+              : "Liên kết Google Workspace hoàn tất"}
         </h1>
         <p role={authError ? "alert" : "status"} className="text-sm text-muted-foreground">
           {authError ?? statusText}
@@ -88,6 +145,7 @@ export function OAuth2CallbackPage() {
         </div>
         <Button
           type="button"
+          disabled={verifying}
           className="w-full rounded-xl"
           onClick={() => {
             if (authError) {
@@ -113,11 +171,13 @@ export function OAuth2CallbackPage() {
         >
           {authError
             ? "Quay lại trang Đăng nhập"
-            : needsOnboarding
-              ? "Hoàn tất thiết lập tài khoản (1 phút)"
-              : successTarget === "/"
-                ? "Vào Trang chủ YITZone"
-                : "Tiếp tục trang trước đó"}
+            : verifying
+              ? "Đang đồng bộ phiên..."
+              : needsOnboarding
+                ? "Hoàn tất thiết lập tài khoản (1 phút)"
+                : successTarget === "/"
+                  ? "Vào Trang chủ YITZone"
+                  : "Tiếp tục trang trước đó"}
         </Button>
       </div>
     </div>

@@ -20,63 +20,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const INITIAL_DOCS = [
-  {
-    id: "DOC-01",
-    title: "Quy chế Xét chọn Sinh viên 5 tốt Khoa CNTT (Số 12/QC-HSV)",
-    version: "v2.1 · 2026–2027",
-    kind: "Quy chế RAG",
-    curator: "MOD_YITBOT_CURATOR (BCH)",
-    status: "ACTIVE_RAG",
-    updatedAt: "18/11/2026"
-  },
-  {
-    id: "DOC-02",
-    title: "Quy định Điểm danh Đa lớp & Hậu kiểm 48h",
-    version: "v1.4 · 2026",
-    kind: "Quy chế RAG",
-    curator: "MOD_YITBOT_CURATOR (BCH)",
-    status: "ACTIVE_RAG",
-    updatedAt: "12/11/2026"
-  },
-  {
-    id: "DOC-03",
-    title: "Dự thảo Hướng dẫn Quy đổi Điểm CTXH Chiến dịch Xuân Tình nguyện 2027",
-    version: "v1.0 · Draft",
-    kind: "Quy chế RAG",
-    curator: "MOD_YITBOT_CURATOR (BCH)",
-    status: "PENDING_BTV",
-    updatedAt: "21/11/2026"
-  },
-  {
-    id: "DOC-04",
-    title: "FAQ Tĩnh: Quy trình đổi size Áo Khoa CNTT tại Văn phòng OFIT",
-    version: "v1.2",
-    kind: "FAQ Tĩnh",
-    curator: "Ban OFIT",
-    status: "ACTIVE_RAG",
-    updatedAt: "19/11/2026"
-  }
-];
+const INITIAL_DOCS = [];
 
-const USAGE_LEDGER = [
-  { id: "l-1", date: "21/11/2026", role: "Sinh viên", queries: 412, tokens: "584,200", costVnd: 148_000 },
-  { id: "l-2", date: "20/11/2026", role: "Sinh viên", queries: 389, tokens: "512,900", costVnd: 132_000 },
-  { id: "l-3", date: "20/11/2026", role: "Khách (Guest)", queries: 74, tokens: "68,400", costVnd: 19_000 },
-  { id: "l-4", date: "19/11/2026", role: "CTV / BCH", queries: 126, tokens: "198,100", costVnd: 51_000 }
-];
+const USAGE_LEDGER = [];
 
-export function YitBotAdminPage(){
+export function YitBotAdminPage() {
   const [docs, setDocs] = useState(INITIAL_DOCS);
   const [newTitle, setNewTitle] = useState("");
-  const [newVersion, setNewVersion] = useState("v1.0 · 2026");
+  const [newVersion, setNewVersion] = useState("v1.0");
   const [newKind, setNewKind] = useState("Quy chế RAG");
   const [revokeTarget, setRevokeTarget] = useState(null);
   const [reindexingId, setReindexingId] = useState(null);
 
   const [budgetCeiling, setBudgetCeiling] = useState(1_500_000);
   const [quotas, setQuotas] = useState({ guest: 5, student: 30, ctv: 60, bch: 150 });
-  const spentMonth = 942_000;
+  const spentMonth = USAGE_LEDGER.reduce((sum, r) => sum + r.costVnd, 0);
   const spentPct = Math.min(100, Math.round((spentMonth / Math.max(1, budgetCeiling)) * 100));
 
   const handleAddDoc = (e) => {
@@ -84,15 +42,15 @@ export function YitBotAdminPage(){
     if (!newTitle.trim()) return;
     setDocs((prev) => [
       {
-        id: `DOC-0${prev.length + 1}`,
+        id: `DOC-${String(prev.length + 1).padStart(2, "0")}`,
         title: newTitle.trim(),
         version: newVersion.trim() || "v1.0",
         kind: newKind,
         curator: "MOD_YITBOT_CURATOR",
         status: "PENDING_BTV",
-        updatedAt: "21/11/2026"
+        updatedAt: new Date().toLocaleDateString("vi-VN")
       },
-...prev
+      ...prev
     ]);
     setNewTitle("");
   };
@@ -270,7 +228,12 @@ export function YitBotAdminPage(){
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <DataTable columns={docCols} data={docs} />
+              <DataTable
+                columns={docCols}
+                data={docs}
+                emptyTitle="Kho tri thức RAG đang trống"
+                emptyDescription="Tải lên văn bản quy chế hoặc FAQ tĩnh mới để trình Ban Thường vụ phê duyệt nạp RAG."
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -290,7 +253,7 @@ export function YitBotAdminPage(){
               <CardContent className="space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Đã sử dụng tháng 11/2026</span>
+                    <span className="text-muted-foreground">Đã sử dụng trong tháng hiện tại</span>
                     <span className="tabular-mono font-semibold text-foreground">
                       {spentMonth.toLocaleString("vi-VN")} / {budgetCeiling.toLocaleString("vi-VN")} ₫ ({spentPct}%)
                     </span>
@@ -349,7 +312,12 @@ export function YitBotAdminPage(){
               <CardTitle>Sổ cái Chi phí AI Theo Ngày</CardTitle>
             </CardHeader>
             <CardContent>
-              <DataTable columns={ledgerCols} data={USAGE_LEDGER} />
+              <DataTable
+                columns={ledgerCols}
+                data={USAGE_LEDGER}
+                emptyTitle="Chưa có dữ liệu sổ cái chi phí AI"
+                emptyDescription="Thống kê token và chi phí theo ngày sẽ tự động đồng bộ từ máy chủ YITBot."
+              />
             </CardContent>
           </Card>
         </TabsContent>

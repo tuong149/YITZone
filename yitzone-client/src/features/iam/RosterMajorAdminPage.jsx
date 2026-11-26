@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { CheckCircle2, FileSpreadsheet, Search, Upload } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { AlertCircle, CheckCircle2, FileSpreadsheet, Search, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,67 +7,33 @@ import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { triggerRosterImport, useMajors } from "./api";
+import { extractApiErrorMessage } from "@/lib/api-client";
+import { importMajorsCsv, triggerRosterImport, useMajors } from "./api";
 import {
   FACULTY_MAJOR_CATALOG,
   formatFacultyDisplayName,
   isAmbiguousMajorCode
 } from "./data/faculty-major-catalog";
 
-const SAMPLE_ROSTER = [
-  {
-    id: "r-1",
-    code: "22110345",
-    fullName: "Nguyễn Minh Khoa",
-    email: "22110345@student.hcmute.edu.vn",
-    userType: "STUDENT",
-    majorCode: "110",
-    fitFaculty: true
-  },
-  {
-    id: "r-2",
-    code: "23133018",
-    fullName: "Phạm Quỳnh Anh",
-    email: "23133018@student.hcmute.edu.vn",
-    userType: "STUDENT",
-    majorCode: "133",
-    fitFaculty: true
-  },
-  {
-    id: "r-3",
-    code: "23162044",
-    fullName: "Đỗ Gia Huy",
-    email: "23162044@student.hcmute.edu.vn",
-    userType: "STUDENT",
-    majorCode: "162",
-    fitFaculty: true
-  },
-  {
-    id: "r-4",
-    code: "22146091",
-    fullName: "Võ Thanh Tùng",
-    email: "22146091@student.hcmute.edu.vn",
-    userType: "STUDENT",
-    majorCode: "146",
-    fitFaculty: false
-  }
-];
+const INITIAL_ROSTER = [];
 
-export function RosterMajorAdminPage(){
+export function RosterMajorAdminPage() {
   const [majors, setMajors] = useState(FACULTY_MAJOR_CATALOG);
   const [newMajorCode, setNewMajorCode] = useState("");
   const [newMajorName, setNewMajorName] = useState("");
   const [newFacultyName, setNewFacultyName] = useState("Khoa Công nghệ Thông tin");
   const [rosterSearch, setRosterSearch] = useState("");
   const [fitOnly, setFitOnly] = useState(false);
-  const [resolveInput, setResolveInput] = useState("22110345");
+  const [resolveInput, setResolveInput] = useState("");
   const [importFeedback, setImportFeedback] = useState(null);
+  const [importError, setImportError] = useState(null);
+  const csvInputRef = useRef(null);
   const { data: apiMajors } = useMajors(fitOnly);
 
   const effectiveMajors = useMemo(() => {
     if (apiMajors && apiMajors.length > 0) {
       return apiMajors.map((m) => ({
-        id: m.id ?? `m-${m.majorCode}`,
+        id: m.id ?? `m-${m.majorCode}-${m.facultyName}`,
         facultyName: m.facultyName,
         majorCode: m.majorCode,
         majorName: m.majorName,
@@ -77,8 +43,9 @@ export function RosterMajorAdminPage(){
     return majors;
   }, [apiMajors, majors]);
 
-  const filteredRoster = useMemo(() =>
-      SAMPLE_ROSTER.filter(
+  const filteredRoster = useMemo(
+    () =>
+      INITIAL_ROSTER.filter(
         (r) =>
           r.code.includes(rosterSearch) ||
           r.fullName.toLowerCase().includes(rosterSearch.toLowerCase()) ||
@@ -87,7 +54,8 @@ export function RosterMajorAdminPage(){
     [rosterSearch]
   );
 
-  const filteredMajors = useMemo(() => effectiveMajors.filter((m) => (!fitOnly ? true: m.fitFaculty)),
+  const filteredMajors = useMemo(
+    () => effectiveMajors.filter((m) => (!fitOnly ? true : m.fitFaculty)),
     [effectiveMajors, fitOnly]
   );
 
@@ -105,11 +73,14 @@ export function RosterMajorAdminPage(){
     const code = newMajorCode.trim();
     const fac = newFacultyName.trim();
     if (!/^[0-9]{3}$/.test(code) || !newMajorName.trim() || !fac) return;
+    setImportError(null);
     if (majors.some((m) => m.majorCode === code && m.facultyName.toLowerCase() === fac.toLowerCase())) {
-      setImportFeedback(`Cặp ${fac} · mã ngành ${code} đã tồn tại trong danh mục.`);
+      setImportError(`Cặp ${fac} · mã ngành ${code} đã tồn tại trong danh mục.`);
       return;
     }
-    const isFit = fac.toLowerCase() === "công nghệ thông tin" || fac.toLowerCase() === "khoa công nghệ thông tin";
+    const isFit =
+      fac.toLowerCase() === "công nghệ thông tin" ||
+      fac.toLowerCase() === "khoa công nghệ thông tin";
     setMajors((prev) => [
       {
         id: `m-${code}-${Date.now()}`,
@@ -120,9 +91,29 @@ export function RosterMajorAdminPage(){
       },
       ...prev
     ]);
-    setImportFeedback(`Đã thêm mới ngành ${code} · ${newMajorName.trim()} (${fac}) vào Danh mục Khoa – Ngành.`);
+    setImportFeedback(
+      `Đã thêm mới ngành ${code} · ${newMajorName.trim()} (${fac}) vào Danh mục Khoa – Ngành.`
+    );
     setNewMajorCode("");
     setNewMajorName("");
+  };
+
+  const handleCsvFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportFeedback(null);
+    setImportError(null);
+    try {
+      const res = await importMajorsCsv(file);
+      setImportFeedback(
+        `Đã nhập thành công ${res.importedCount} dòng danh mục Khoa – Ngành (${res.status}).`
+      );
+    } catch (err) {
+      setImportError(
+        extractApiErrorMessage(err, "Không thể nhập tệp CSV danh mục Khoa – Ngành lên máy chủ.")
+      );
+    }
   };
 
   const rosterCols = [
@@ -136,7 +127,7 @@ export function RosterMajorAdminPage(){
       render: (r) =>
         r.fitFaculty ? (
           <Badge variant="success">Thuộc Khoa CNTT (CĐDN)</Badge>
-        ): (
+        ) : (
           <Badge variant="secondary">Khoa khác</Badge>
         )
     }
@@ -160,7 +151,12 @@ export function RosterMajorAdminPage(){
     {
       key: "fit",
       header: "Xét chuẩn CĐDN",
-      render: (m) => (m.fitFaculty ? <Badge variant="default">Thuộc Khoa CNTT</Badge> : <Badge variant="outline">Khoa ngoài</Badge>)
+      render: (m) =>
+        m.fitFaculty ? (
+          <Badge variant="default">Thuộc Khoa CNTT</Badge>
+        ) : (
+          <Badge variant="outline">Khoa ngoài</Badge>
+        )
     }
   ];
 
@@ -185,6 +181,16 @@ export function RosterMajorAdminPage(){
         </div>
       )}
 
+      {importError && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-xl border border-status-danger/30 bg-status-danger/10 px-4 py-3 text-xs font-medium text-status-danger"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{importError}</span>
+        </div>
+      )}
+
       <Tabs defaultValue="roster">
         <TabsList>
           <TabsTrigger value="roster">Danh sách Sinh viên &amp; Cán bộ</TabsTrigger>
@@ -203,11 +209,18 @@ export function RosterMajorAdminPage(){
               <Button
                 type="button"
                 onClick={async () => {
+                  setImportFeedback(null);
+                  setImportError(null);
                   try {
                     const res = await triggerRosterImport();
                     setImportFeedback(`Đã đồng bộ danh sách sinh viên thành công (${res.status}).`);
-                  } catch {
-                    setImportFeedback("Đã nạp thành công 1.420 bản ghi hợp lệ vào Danh sách Sinh viên & Cán bộ.");
+                  } catch (err) {
+                    setImportError(
+                      extractApiErrorMessage(
+                        err,
+                        "Chưa thể đồng bộ danh sách Roster từ máy chủ. Vui lòng thử lại sau."
+                      )
+                    );
                   }
                 }}
               >
@@ -241,15 +254,21 @@ export function RosterMajorAdminPage(){
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant={fitOnly ? "default": "outline"} size="sm" onClick={() => setFitOnly((v) => !v)}>
-                    {fitOnly ? "Đang lọc: Khoa CNTT": "Lọc ngành Khoa CNTT"}
+                  <Button variant={fitOnly ? "default" : "outline"} size="sm" onClick={() => setFitOnly((v) => !v)}>
+                    {fitOnly ? "Đang lọc: Khoa CNTT" : "Lọc ngành Khoa CNTT"}
                   </Button>
+                  <input
+                    ref={csvInputRef}
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => void handleCsvFileChange(e)}
+                  />
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      setImportFeedback("Đã đồng bộ 55 dòng (42 mã ngành / 13 Khoa-Viện) từ khoa_nganh.csv vào FACULTY_MAJOR_CATALOG.")
-                    }
+                    onClick={() => csvInputRef.current?.click()}
                   >
                     <FileSpreadsheet className="h-4 w-4" />
                     Import CSV
@@ -303,12 +322,13 @@ export function RosterMajorAdminPage(){
                     id="resolve-mssv"
                     maxLength={8}
                     value={resolveInput}
+                    placeholder="Nhập 8 chữ số MSSV..."
                     onChange={(e) => setResolveInput(e.target.value)}
                     className="tabular-mono"
                     error={
                       resolveInput && !/^[0-9]{8}$/.test(resolveInput)
-                        ? "MSSV phải đúng 8 chữ số (VD: 22110345)."
-: undefined
+                        ? "MSSV phải đúng 8 chữ số."
+                        : undefined
                     }
                   />
                 </div>

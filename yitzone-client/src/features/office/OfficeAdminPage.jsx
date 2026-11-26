@@ -20,103 +20,22 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfficeChecklistAssetsCrudTab } from "./OfficeChecklistAssetsCrudTab";
 
-const INITIAL_EXCEPTIONS = [
-  {
-    id: "ex-1",
-    ctvName: "Trần Thị Minh Anh",
-    mssv: "23110142",
-    shift: "Thứ 6 · Ca 5 (14:30–16:30)",
-    minutesBefore: 45,
-    reason: "Xe hư trên đường đến trường, có ảnh gửi trưởng ca",
-    status: "PENDING"
-  }
-];
+const INITIAL_EXCEPTIONS = [];
 
-const ATTENDANCE_STATS = [
-  {
-    id: "st-1",
-    ctvName: "Nguyễn Hoàng Nam",
-    mssv: "23110218",
-    unit: "Ban OFIT",
-    shiftsRatio: "8 / 8",
-    totalHours: 16,
-    onTime: 7,
-    late: 1,
-    excused: 0,
-    unexcused: 0,
-    missingCheckout: 0
-  },
-  {
-    id: "st-2",
-    ctvName: "Lê Quốc Bảo",
-    mssv: "22110389",
-    unit: "Ban EMFIT",
-    shiftsRatio: "6 / 8",
-    totalHours: 12,
-    onTime: 5,
-    late: 1,
-    excused: 1,
-    unexcused: 2,
-    missingCheckout: 1
-  },
-  {
-    id: "st-3",
-    ctvName: "Phạm Thảo Vy",
-    mssv: "24110095",
-    unit: "Ban ARTIT",
-    shiftsRatio: "8 / 8",
-    totalHours: 16,
-    onTime: 8,
-    late: 0,
-    excused: 0,
-    unexcused: 0,
-    missingCheckout: 0
-  }
-];
+const ATTENDANCE_STATS = [];
 
-const INITIAL_ASSETS = [
-  {
-    id: "as-1",
-    code: "OFIT-MIC-01",
-    name: "Bộ Micro không dây Shure (2 tay mic)",
-    type: "REUSABLE",
-    goodQty: 3,
-    damagedQty: 1,
-    borrower: "23110218 · UTE Hackathon (Chưa trả)"
-  },
-  {
-    id: "as-2",
-    code: "OFIT-LOA-02",
-    name: "Loa kéo sự kiện Sony 120W",
-    type: "REUSABLE",
-    goodQty: 2,
-    damagedQty: 0
-  },
-  {
-    id: "as-3",
-    code: "OFIT-PIN-AA",
-    name: "Pin AA Alkaline (Hộp 24 viên)",
-    type: "CONSUMABLE",
-    goodQty: 1,
-    damagedQty: 0,
-    minThreshold: 3
-  }
-];
+const INITIAL_ASSETS = [];
 
-const INITIAL_INVENTORY = [
-  { id: "inv-1", code: "OFIT-MIC-01", name: "Bộ Micro không dây Shure", bookQty: 4, actualQty: 4 },
-  { id: "inv-2", code: "OFIT-HDMI-10M", name: "Cáp HDMI 10m bọc lưới", bookQty: 3, actualQty: 5 },
-  { id: "inv-3", code: "OFIT-STANDEE", name: "Khung Standee chữ X 60x160", bookQty: 6, actualQty: 5 }
-];
+const INITIAL_INVENTORY = [];
 
-export function OfficeAdminPage(){
-  const [published, setPublished] = useState(true);
+export function OfficeAdminPage() {
+  const [published, setPublished] = useState(false);
   const [suspendedRange, setSuspendedRange] = useState(null);
   const [exceptions, setExceptions] = useState(INITIAL_EXCEPTIONS);
   const [assets, setAssets] = useState(INITIAL_ASSETS);
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
-  const [scanQrInput, setScanQrInput] = useState("OFIT-LOA-02");
-  const [scanBarcodeInput, setScanBarcodeInput] = useState("22110345");
+  const [scanQrInput, setScanQrInput] = useState("");
+  const [scanBarcodeInput, setScanBarcodeInput] = useState("");
   const [notice, setNotice] = useState(null);
 
   const [auditTarget, setAuditTarget] = useState(null);
@@ -413,7 +332,12 @@ export function OfficeAdminPage(){
         </TabsList>
 
         <TabsContent value="exceptions" className="space-y-4">
-          <DataTable columns={exceptionCols} data={exceptions} />
+          <DataTable
+            columns={exceptionCols}
+            data={exceptions}
+            emptyTitle="Không có đơn xin vắng ngoại lệ nào"
+            emptyDescription="Các đơn xin vắng cận giờ (< 2 giờ) chờ Trưởng/Phó Ban OFIT duyệt sẽ hiển thị tại đây."
+          />
         </TabsContent>
 
         <TabsContent value="attendance" className="space-y-4">
@@ -424,13 +348,19 @@ export function OfficeAdminPage(){
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setNotice("Đã xuất file Excel thống kê chuyên cần toàn Khoa (HK1-2026.xlsx).")}
+              disabled={ATTENDANCE_STATS.length === 0}
+              onClick={() => setNotice("Đã xuất file Excel thống kê chuyên cần toàn Khoa.")}
             >
               <Download className="h-4 w-4" />
               <span>Xuất Excel Chuyên cần</span>
             </Button>
           </div>
-          <DataTable columns={statCols} data={ATTENDANCE_STATS} />
+          <DataTable
+            columns={statCols}
+            data={ATTENDANCE_STATS}
+            emptyTitle="Chưa có dữ liệu thống kê chuyên cần"
+            emptyDescription="Số liệu điểm danh đầu/cuối ca sẽ tự động tổng hợp khi chu kỳ trực bắt đầu."
+          />
         </TabsContent>
 
         <TabsContent value="assets" className="space-y-5">
@@ -451,6 +381,7 @@ export function OfficeAdminPage(){
                   id="asset-qr"
                   value={scanQrInput}
                   onChange={(e) => setScanQrInput(e.target.value)}
+                  placeholder="Quét hoặc nhập mã QR tài sản..."
                   className="tabular-mono"
                 />
               </div>
@@ -460,17 +391,23 @@ export function OfficeAdminPage(){
                   id="borrower-1d"
                   value={scanBarcodeInput}
                   onChange={(e) => setScanBarcodeInput(e.target.value)}
+                  placeholder="Quét hoặc nhập 8 số MSSV..."
                   className="tabular-mono"
                 />
               </div>
-              <Button onClick={handleQuickLoan}>
+              <Button onClick={handleQuickLoan} disabled={!scanQrInput.trim() || !scanBarcodeInput.trim()}>
                 <Package className="h-4 w-4" />
                 <span>Xác nhận Giao mượn</span>
               </Button>
             </CardContent>
           </Card>
 
-          <DataTable columns={assetCols} data={assets} />
+          <DataTable
+            columns={assetCols}
+            data={assets}
+            emptyTitle="Chưa có tài sản nào trong danh sách mượn – trả"
+            emptyDescription="Danh sách thiết bị và vật tư văn phòng sẽ đồng bộ từ máy chủ."
+          />
         </TabsContent>
 
         <TabsContent value="inventory" className="space-y-4">
@@ -489,12 +426,13 @@ export function OfficeAdminPage(){
                 </div>
                 <Button
                   size="sm"
+                  disabled={inventory.length === 0}
                   onClick={() =>
                     setAuditTarget({
                       title: "Chốt Biên bản Kiểm kê & Trình BTV",
                       description:
                         "Ghi nhận chênh lệch thiếu/hỏng và danh mục Tài sản dư chờ xác minh nguồn gốc.",
-                      summary: "Biên bản kiểm kê Tháng 11/2026 · Ban OFIT",
+                      summary: "Biên bản kiểm kê định kỳ · Ban OFIT",
                       code: "OFFICE_INVENTORY_FINALIZE",
                       destructive: false,
                       onDone: () => setNotice("Đã chốt biên bản kiểm kê, xuất báo cáo trình BTV và lưu Audit Log.")
@@ -507,7 +445,12 @@ export function OfficeAdminPage(){
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {inventory.map((row) => {
+              {inventory.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/25 px-6 py-10 text-center text-xs text-muted-foreground">
+                  Chưa có phiên kiểm kê tài sản nào đang mở.
+                </div>
+              ) : (
+                inventory.map((row) => {
                 const diff = row.actualQty - row.bookQty;
                 return (
                   <div
@@ -554,7 +497,8 @@ export function OfficeAdminPage(){
                     </div>
                   </div>
                 );
-              })}
+                })
+              )}
             </CardContent>
           </Card>
         </TabsContent>

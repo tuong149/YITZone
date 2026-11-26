@@ -33,104 +33,47 @@ const MAJOR_OPTIONS = [
   { code: "146", name: "Cơ điện tử (Khoa Cơ khí)" }
 ];
 
-const ISSUED_CERT_DIRECTORY = [
-  {
-    certCode: "YIT-2026-CLD-0184",
-    studentCode: "22110345",
-    fullName: "Nguyễn Minh Khoa",
-    major: "Công nghệ Thông tin (110)",
-    eventId: "EVT-2026-CLOUD",
-    eventTitle: "Hội thảo Cloud Native & DevOps 2026",
-    roleLabel: "Tham dự viên (2/2 buổi + Khảo sát)",
-    version: 1,
-    status: "VALID"
-  },
-  {
-    certCode: "YIT-2026-CLD-0192",
-    studentCode: "22146091",
-    fullName: "Võ Thanh Tùng",
-    major: "Cơ điện tử (146) → Chuyển ngành CNTT (110)",
-    eventId: "EVT-2026-CLOUD",
-    eventTitle: "Hội thảo Cloud Native & DevOps 2026",
-    roleLabel: "Tham dự viên (2/2 buổi + Khảo sát)",
-    version: 1,
-    status: "VALID"
-  },
-  {
-    certCode: "YIT-2026-HCK-0042",
-    studentCode: "23110099",
-    fullName: "Phan Thùy Dương",
-    major: "Kỹ thuật Dữ liệu (133)",
-    eventId: "EVT-2026-HACK",
-    eventTitle: "UTE Hackathon 2026: Smart Campus",
-    roleLabel: "BTC — MC Dẫn chương trình",
-    version: 1,
-    status: "VALID"
-  },
-  {
-    certCode: "YIT-2026-DST-0088",
-    studentCode: "23110218",
-    fullName: "Nguyễn Hoàng Nam",
-    major: "Công nghệ Thông tin (110)",
-    eventId: "EVT-2026-DIST",
-    eventTitle: "FIT Tech Talk: Kiến trúc Hệ thống Phân tán & Kafka",
-    roleLabel: "Tham dự viên",
-    version: 1,
-    status: "REVOKED"
-  }
-];
+const INITIAL_CERT_DIRECTORY = [];
 
 export function CertificateAdminPage({ embeddedEventId } = {}) {
   const [searchParams] = useSearchParams();
   const filterEventId = embeddedEventId ?? searchParams.get("eventId") ?? undefined;
   const storedEvents = useEventStore((s) => s.events);
 
-  const eventOptions = useMemo(() => {
-    if (storedEvents.length === 0) {
-      return [
-        {
-          id: "EVT-2026-CLOUD",
-          title: "Hội thảo Cloud Native & DevOps 2026",
-          eligibleAttendees: 176,
-          eligibleBtc: 18,
-          pendingReviewCount: 0
-        }
-      ];
-    }
-    return storedEvents.map((evt, idx) => ({
-      id: evt.id,
-      title: evt.title,
-      eligibleAttendees: Math.max(12, Math.round(evt.registeredCount * 0.85)),
-      eligibleBtc: Math.max(6, evt.btcRoles.length * 3),
-      pendingReviewCount: idx === 1 ? 2 : 0
-    }));
-  }, [storedEvents]);
+  const eventOptions = useMemo(
+    () =>
+      storedEvents.map((evt) => ({
+        id: evt.id,
+        title: evt.title,
+        eligibleAttendees: evt.eligibleAttendees ?? evt.registeredCount ?? 0,
+        eligibleBtc: evt.eligibleBtc ?? (evt.btcRoles?.length ?? 0),
+        pendingReviewCount: evt.pendingReviewCount ?? 0
+      })),
+    [storedEvents]
+  );
 
   const [selectedEventId, setSelectedEventId] = useState(
-    () => filterEventId ?? eventOptions[0].id
+    () => filterEventId ?? eventOptions[0]?.id ?? ""
   );
 
   useEffect(() => {
     if (filterEventId && eventOptions.some((e) => e.id === filterEventId)) {
       setSelectedEventId(filterEventId);
+    } else if (!selectedEventId && eventOptions[0]?.id) {
+      setSelectedEventId(eventOptions[0].id);
     }
-  }, [filterEventId, eventOptions]);
+  }, [filterEventId, eventOptions, selectedEventId]);
 
   const [finalizedIds, setFinalizedIds] = useState({});
   const [cddnMajors, setCddnMajors] = useState(["110", "133", "162"]);
 
-  // Searchable lookup for Transfer & Revoke/Reissue (B8)
-  const [directory, setDirectory] = useState(ISSUED_CERT_DIRECTORY);
-  const [transferQuery, setTransferQuery] = useState("22146091");
-  const [selectedTransferCert, setSelectedTransferCert] = useState(
-    ISSUED_CERT_DIRECTORY[1]
-  );
-  const [transferDate, setTransferDate] = useState("2026-09-01");
+  const [directory, setDirectory] = useState(INITIAL_CERT_DIRECTORY);
+  const [transferQuery, setTransferQuery] = useState("");
+  const [selectedTransferCert, setSelectedTransferCert] = useState(null);
+  const [transferDate, setTransferDate] = useState("");
 
   const [revokeQuery, setRevokeQuery] = useState("");
-  const [selectedRevokeCert, setSelectedRevokeCert] = useState(
-    ISSUED_CERT_DIRECTORY[0]
-  );
+  const [selectedRevokeCert, setSelectedRevokeCert] = useState(null);
 
   const [auditModal, setAuditModal] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -139,10 +82,12 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
   const actionIdempotencyKeyRef = useRef(crypto.randomUUID());
 
   const activeEvent =
-    eventOptions.find((e) => e.id === selectedEventId) ?? eventOptions[0];
-  const totalCerts = activeEvent.eligibleAttendees + activeEvent.eligibleBtc;
-  const isEventFinalized = Boolean(finalizedIds[activeEvent.id]);
-  const hasPendingReviews = activeEvent.pendingReviewCount > 0;
+    eventOptions.find((e) => e.id === selectedEventId) ?? eventOptions[0] ?? null;
+  const totalCerts = activeEvent
+    ? activeEvent.eligibleAttendees + activeEvent.eligibleBtc
+    : 0;
+  const isEventFinalized = activeEvent ? Boolean(finalizedIds[activeEvent.id]) : false;
+  const hasPendingReviews = activeEvent ? activeEvent.pendingReviewCount > 0 : false;
 
   const transferMatches = useMemo(() => {
     const q = transferQuery.trim().toLowerCase();
@@ -221,17 +166,20 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
         setNotice(null);
         try {
           await revokeCertificate(target.certCode, reason, actionIdempotencyKeyRef.current);
-        } catch {
-          // Update local directory state cleanly and report audit log confirmation
+          setDirectory((prev) =>
+            prev.map((item) =>
+              item.certCode === target.certCode ? { ...item, status: "REVOKED" } : item
+            )
+          );
+          setSelectedRevokeCert((prev) => (prev ? { ...prev, status: "REVOKED" } : null));
+          setNotice(`Đã thu hồi chứng nhận ${target.certCode}. Đã ghi Audit Log.`);
+        } catch (err) {
+          setErrorMsg(
+            extractApiErrorMessage(err, "Không thể thu hồi chứng nhận trên máy chủ. Vui lòng thử lại.")
+          );
+        } finally {
+          actionIdempotencyKeyRef.current = crypto.randomUUID();
         }
-        setDirectory((prev) =>
-          prev.map((item) =>
-            item.certCode === target.certCode ? { ...item, status: "REVOKED" } : item
-          )
-        );
-        setSelectedRevokeCert((prev) => (prev ? { ...prev, status: "REVOKED" } : null));
-        setNotice(`Đã thu hồi chứng nhận ${target.certCode}. Đã ghi Audit Log.`);
-        actionIdempotencyKeyRef.current = crypto.randomUUID();
       }
     });
   };
@@ -254,24 +202,27 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
         setNotice(null);
         try {
           await reissueCertificate(target.certCode, reason, actionIdempotencyKeyRef.current);
+          const nextVer = target.version + 1;
+          setDirectory((prev) =>
+            prev.map((item) =>
+              item.certCode === target.certCode
+                ? { ...item, version: nextVer, status: "VALID" }
+                : item
+            )
+          );
+          setSelectedRevokeCert((prev) =>
+            prev ? { ...prev, version: nextVer, status: "VALID" } : null
+          );
+          setNotice(
+            `Đã phát hành phiên bản mới v${nextVer} cho chứng nhận ${target.certCode} (${target.fullName}). Đã ghi Audit Log.`
+          );
         } catch (err) {
-          void extractApiErrorMessage(err, "");
+          setErrorMsg(
+            extractApiErrorMessage(err, "Không thể cấp lại phiên bản chứng nhận mới. Vui lòng thử lại.")
+          );
+        } finally {
+          actionIdempotencyKeyRef.current = crypto.randomUUID();
         }
-        const nextVer = target.version + 1;
-        setDirectory((prev) =>
-          prev.map((item) =>
-            item.certCode === target.certCode
-              ? { ...item, version: nextVer, status: "VALID" }
-              : item
-          )
-        );
-        setSelectedRevokeCert((prev) =>
-          prev ? { ...prev, version: nextVer, status: "VALID" } : null
-        );
-        setNotice(
-          `Đã phát hành phiên bản mới v${nextVer} cho chứng nhận ${target.certCode} (${target.fullName}). Đã ghi Audit Log.`
-        );
-        actionIdempotencyKeyRef.current = crypto.randomUUID();
       }
     });
   };
@@ -292,12 +243,14 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
             type="button"
             variant="outline"
             size="sm"
+            disabled={!activeEvent}
             className="shrink-0 rounded-full"
-            onClick={() =>
+            onClick={() => {
+              if (!activeEvent) return;
               setNotice(
                 `Đã xuất tệp Excel đối soát mẫu Phòng CTSV / Đào tạo cho "${activeEvent.title}" (gồm cột loại quyền lợi, không liệt kê số điểm).`
-              )
-            }
+              );
+            }}
           >
             <FileSpreadsheet className="h-4 w-4" />
             <span>Xuất Excel Đối soát CTSV</span>
@@ -364,7 +317,7 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
                   <Award className="h-5 w-5 shrink-0 text-primary" />
                   <CardTitle className="text-lg">Chốt Kết quả Sự kiện &amp; Phát hành E-Cert</CardTitle>
                 </div>
-                {!embeddedEventId && (
+                {!embeddedEventId && eventOptions.length > 0 && activeEvent && (
                   <div className="w-full sm:w-80">
                     <Select value={activeEvent.id} onValueChange={setSelectedEventId}>
                       <SelectTrigger className="rounded-xl">
@@ -388,110 +341,117 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
             </CardHeader>
 
             <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <Label>Chọn các ngành được ghi nhận quyền lợi CĐDN cho sự kiện này</Label>
-                <div className="flex flex-wrap gap-2">
-                  {MAJOR_OPTIONS.map((m) => {
-                    const active = cddnMajors.includes(m.code);
-                    return (
-                      <Button
-                        key={m.code}
-                        type="button"
-                        size="sm"
-                        variant={active ? "default" : "outline"}
-                        disabled={isEventFinalized}
-                        className="rounded-full"
-                        onClick={() => toggleMajor(m.code)}
-                      >
-                        <span className="tabular-mono">{m.code}</span>
-                        <span>{m.name}</span>
-                        {active && <Check className="h-3.5 w-3.5" />}
-                      </Button>
-                    );
-                  })}
+              {!activeEvent ? (
+                <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                  Chưa có sự kiện nào sẵn sàng để chốt kết quả và phát hành E-Certificate.
                 </div>
-              </div>
-
-              <div className="grid gap-3 text-xs sm:grid-cols-3">
-                <div className="rounded-xl border border-border bg-muted/40 p-3.5">
-                  <div className="text-muted-foreground">Tham dự viên đủ K/N buổi + Khảo sát</div>
-                  <div className="tabular-mono mt-1 text-lg font-semibold text-foreground">
-                    {activeEvent.eligibleAttendees} SV
-                  </div>
-                </div>
-                <div className="rounded-xl border border-border bg-muted/40 p-3.5">
-                  <div className="text-muted-foreground">Thành viên BTC đủ điểm danh (Miễn bài thu hoạch)</div>
-                  <div className="tabular-mono mt-1 text-lg font-semibold text-foreground">
-                    {activeEvent.eligibleBtc} BTC
-                  </div>
-                </div>
-                <div className="rounded-xl border border-border bg-muted/40 p-3.5">
-                  <div className="text-muted-foreground">Hàng chờ hậu kiểm 48h còn tồn</div>
-                  <div
-                    className={
-                      hasPendingReviews
-                        ? "tabular-mono mt-1 text-lg font-semibold text-status-warning"
-                        : "tabular-mono mt-1 text-lg font-semibold text-status-success"
-                    }
-                  >
-                    {activeEvent.pendingReviewCount} ca
-                  </div>
-                </div>
-              </div>
-
-              {hasPendingReviews && (
-                <div
-                  role="alert"
-                  className="flex flex-col justify-between gap-3 rounded-xl border border-status-warning/35 bg-status-warning/10 px-4 py-3 text-xs text-status-warning sm:flex-row sm:items-center"
-                >
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
-                    <span>
-                      Còn <strong className="tabular-mono">{activeEvent.pendingReviewCount}</strong> ca trong hàng chờ hậu kiểm 48h. Bắt buộc xử lý hết trước khi mở khóa nút chốt phát hành E-Certificate.
-                    </span>
-                  </div>
-                  <Button asChild size="sm" variant="outline" className="shrink-0 rounded-full">
-                    <Link to={`/admin/attendance?eventId=${encodeURIComponent(activeEvent.id)}`}>
-                      <span>Mở hàng chờ hậu kiểm</span>
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  disabled={isEventFinalized || hasPendingReviews || cddnMajors.length === 0}
-                  onClick={() =>
-                    setAuditModal({
-                      title: "Chốt Kết quả & Phát hành E-Certificate Hàng loạt",
-                      summary: `${activeEvent.title} · SV đủ ĐK: ${activeEvent.eligibleAttendees} · BTC: ${activeEvent.eligibleBtc} · Hậu kiểm tồn: ${activeEvent.pendingReviewCount} ca · Ngành CĐDN: ${cddnMajors.join(", ")}`,
-                      code: "CERT_BATCH_FINALIZE",
-                      destructive: false,
-                      onDone: () => {
-                        setFinalizedIds((prev) => ({ ...prev, [activeEvent.id]: true }));
-                        setNotice(
-                          `Đã chốt kết quả "${activeEvent.title}", ghi nhận CĐDN cho mã ngành ${cddnMajors.join(", ")} và phát hành ${totalCerts} E-Certificate kèm mã QR xác thực. Đã ghi Audit Log.`
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Chọn các ngành được ghi nhận quyền lợi CĐDN cho sự kiện này</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {MAJOR_OPTIONS.map((m) => {
+                        const active = cddnMajors.includes(m.code);
+                        return (
+                          <Button
+                            key={m.code}
+                            type="button"
+                            size="sm"
+                            variant={active ? "default" : "outline"}
+                            disabled={isEventFinalized}
+                            className="rounded-full"
+                            onClick={() => toggleMajor(m.code)}
+                          >
+                            <span className="tabular-mono">{m.code}</span>
+                            <span>{m.name}</span>
+                            {active && <Check className="h-3.5 w-3.5" />}
+                          </Button>
                         );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 text-xs sm:grid-cols-3">
+                    <div className="rounded-xl border border-border bg-muted/40 p-3.5">
+                      <div className="text-muted-foreground">Tham dự viên đủ K/N buổi + Khảo sát</div>
+                      <div className="tabular-mono mt-1 text-lg font-semibold text-foreground">
+                        {activeEvent.eligibleAttendees} SV
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-muted/40 p-3.5">
+                      <div className="text-muted-foreground">Thành viên BTC đủ điểm danh (Miễn bài thu hoạch)</div>
+                      <div className="tabular-mono mt-1 text-lg font-semibold text-foreground">
+                        {activeEvent.eligibleBtc} BTC
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-muted/40 p-3.5">
+                      <div className="text-muted-foreground">Hàng chờ hậu kiểm 48h còn tồn</div>
+                      <div
+                        className={
+                          hasPendingReviews
+                            ? "tabular-mono mt-1 text-lg font-semibold text-status-warning"
+                            : "tabular-mono mt-1 text-lg font-semibold text-status-success"
+                        }
+                      >
+                        {activeEvent.pendingReviewCount} ca
+                      </div>
+                    </div>
+                  </div>
+
+                  {hasPendingReviews && (
+                    <div
+                      role="alert"
+                      className="flex flex-col justify-between gap-3 rounded-xl border border-status-warning/35 bg-status-warning/10 px-4 py-3 text-xs text-status-warning sm:flex-row sm:items-center"
+                    >
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>
+                          Còn <strong className="tabular-mono">{activeEvent.pendingReviewCount}</strong> ca trong hàng chờ hậu kiểm 48h. Bắt buộc xử lý hết trước khi mở khóa nút chốt phát hành E-Certificate.
+                        </span>
+                      </div>
+                      <Button asChild size="sm" variant="outline" className="shrink-0 rounded-full">
+                        <Link to={`/admin/attendance?eventId=${encodeURIComponent(activeEvent.id)}`}>
+                          <span>Mở hàng chờ hậu kiểm</span>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      disabled={isEventFinalized || hasPendingReviews || cddnMajors.length === 0 || totalCerts === 0}
+                      onClick={() =>
+                        setAuditModal({
+                          title: "Chốt Kết quả & Phát hành E-Certificate Hàng loạt",
+                          summary: `${activeEvent.title} · SV đủ ĐK: ${activeEvent.eligibleAttendees} · BTC: ${activeEvent.eligibleBtc} · Hậu kiểm tồn: ${activeEvent.pendingReviewCount} ca · Ngành CĐDN: ${cddnMajors.join(", ")}`,
+                          code: "CERT_BATCH_FINALIZE",
+                          destructive: false,
+                          onDone: () => {
+                            setFinalizedIds((prev) => ({ ...prev, [activeEvent.id]: true }));
+                            setNotice(
+                              `Đã chốt kết quả "${activeEvent.title}", ghi nhận CĐDN cho mã ngành ${cddnMajors.join(", ")} và phát hành ${totalCerts} E-Certificate kèm mã QR xác thực. Đã ghi Audit Log.`
+                            );
+                          }
+                        })
                       }
-                    })
-                  }
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  <span>
-                    {isEventFinalized
-                      ? `Đã chốt & phát hành ${totalCerts} E-Certificate`
-                      : `Chốt Kết quả & Phát hành ${totalCerts} E-Certificate`}
-                  </span>
-                </Button>
-                {isEventFinalized && <Badge variant="success">Đã chốt phát hành</Badge>}
-              </div>
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>
+                        {isEventFinalized
+                          ? `Đã chốt & phát hành ${totalCerts} E-Certificate`
+                          : `Chốt Kết quả & Phát hành ${totalCerts} E-Certificate`}
+                      </span>
+                    </Button>
+                    {isEventFinalized && <Badge variant="success">Đã chốt phát hành</Badge>}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* TAB 2: Searchable Student Lookup for Major Transfer (B8) */}
         <TabsContent value="transfer" className="mt-4">
           <Card>
             <CardHeader>
@@ -510,33 +470,39 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
                       id="tr-search"
                       value={transferQuery}
                       onChange={(e) => setTransferQuery(e.target.value)}
-                      placeholder="Nhập MSSV hoặc tên sinh viên (VD: 22146091, Võ Thanh Tùng)..."
+                      placeholder="Nhập MSSV hoặc họ tên sinh viên..."
                       className="pl-9"
                     />
                   </div>
                   <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-muted/25 p-2">
-                    {transferMatches.map((item) => {
-                      const picked = selectedTransferCert?.certCode === item.certCode;
-                      return (
-                        <button
-                          key={item.certCode}
-                          type="button"
-                          onClick={() => setSelectedTransferCert(item)}
-                          className={cn(
-                            "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors",
-                            picked
-                              ? "bg-primary/12 font-semibold text-primary"
-                              : "hover:bg-card text-foreground"
-                          )}
-                        >
-                          <span>
-                            <span className="tabular-mono font-semibold">{item.studentCode}</span> ·{" "}
-                            {item.fullName}
-                          </span>
-                          <span className="text-muted-foreground">{item.major}</span>
-                        </button>
-                      );
-                    })}
+                    {transferMatches.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-muted-foreground">
+                        Chưa có hồ sơ chứng nhận nào khớp điều kiện tra cứu.
+                      </div>
+                    ) : (
+                      transferMatches.map((item) => {
+                        const picked = selectedTransferCert?.certCode === item.certCode;
+                        return (
+                          <button
+                            key={item.certCode}
+                            type="button"
+                            onClick={() => setSelectedTransferCert(item)}
+                            className={cn(
+                              "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors",
+                              picked
+                                ? "bg-primary/12 font-semibold text-primary"
+                                : "text-foreground hover:bg-card"
+                            )}
+                          >
+                            <span>
+                              <span className="tabular-mono font-semibold">{item.studentCode}</span> ·{" "}
+                              {item.fullName}
+                            </span>
+                            <span className="text-muted-foreground">{item.major}</span>
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -551,7 +517,7 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
                     />
                   </div>
 
-                  {selectedTransferCert && (
+                  {selectedTransferCert ? (
                     <div className="space-y-1 rounded-xl border border-border bg-muted/35 p-3.5 text-xs">
                       <div className="font-semibold text-foreground">
                         Xem trước hồ sơ: {selectedTransferCert.fullName} (
@@ -565,6 +531,10 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
                         </span>{" "}
                         ({selectedTransferCert.eventTitle})
                       </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                      Chọn sinh viên từ danh sách bên trái để xem trước hồ sơ.
                     </div>
                   )}
 
@@ -582,7 +552,6 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
           </Card>
         </TabsContent>
 
-        {/* TAB 3: Searchable Certificate Lookup + Separated Revoke vs Post-Revoke Reissue (B8) */}
         <TabsContent value="revoke" className="mt-4">
           <Card>
             <CardHeader>
@@ -600,43 +569,49 @@ export function CertificateAdminPage({ embeddedEventId } = {}) {
                     id="rev-search"
                     value={revokeQuery}
                     onChange={(e) => setRevokeQuery(e.target.value)}
-                    placeholder="Gõ MSSV (22110345), tên SV hoặc mã YIT-2026..."
+                    placeholder="Nhập MSSV, họ tên hoặc mã chứng nhận..."
                     className="pl-9"
                   />
                 </div>
 
                 <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-xl border border-border bg-muted/25 p-2">
-                  {revokeMatches.map((item) => {
-                    const picked = selectedRevokeCert?.certCode === item.certCode;
-                    return (
-                      <button
-                        key={item.certCode}
-                        type="button"
-                        onClick={() => setSelectedRevokeCert(item)}
-                        className={cn(
-                          "flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors",
-                          picked
-                            ? "border-primary bg-primary/10 text-foreground"
-                            : "border-transparent bg-card/70 hover:border-border"
-                        )}
-                      >
-                        <div className="min-w-0">
-                          <div className="font-semibold text-foreground">
-                            {item.fullName} · <span className="tabular-mono">{item.studentCode}</span>
-                          </div>
-                          <div className="truncate text-muted-foreground">
-                            <span className="tabular-mono">{item.certCode}</span> · {item.eventTitle}
-                          </div>
-                        </div>
-                        <Badge
-                          variant={item.status === "REVOKED" ? "danger" : "success"}
-                          className="shrink-0"
+                  {revokeMatches.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-muted-foreground">
+                      Chưa có chứng nhận nào được tải trong danh mục đối soát.
+                    </div>
+                  ) : (
+                    revokeMatches.map((item) => {
+                      const picked = selectedRevokeCert?.certCode === item.certCode;
+                      return (
+                        <button
+                          key={item.certCode}
+                          type="button"
+                          onClick={() => setSelectedRevokeCert(item)}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors",
+                            picked
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-transparent bg-card/70 hover:border-border"
+                          )}
                         >
-                          {item.status === "REVOKED" ? "Đã thu hồi" : `Hợp lệ v${item.version}`}
-                        </Badge>
-                      </button>
-                    );
-                  })}
+                          <div className="min-w-0">
+                            <div className="font-semibold text-foreground">
+                              {item.fullName} · <span className="tabular-mono">{item.studentCode}</span>
+                            </div>
+                            <div className="truncate text-muted-foreground">
+                              <span className="tabular-mono">{item.certCode}</span> · {item.eventTitle}
+                            </div>
+                          </div>
+                          <Badge
+                            variant={item.status === "REVOKED" ? "danger" : "success"}
+                            className="shrink-0"
+                          >
+                            {item.status === "REVOKED" ? "Đã thu hồi" : `Hợp lệ v${item.version}`}
+                          </Badge>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 

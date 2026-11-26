@@ -34,7 +34,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
   const [teams, setTeams] = useState(INITIAL_COMPETITION_TEAMS);
   const [scoringMode, setScoringMode] = useState("SUM_OF_MEMBERS");
   const [cheatingPolicy, setCheatingPolicy] = useState("ZERO_MEMBER_SCORE");
-  const [qualifyTopN, setQualifyTopN] = useState(MASTERING_IT_META.qualifyTopN);
+  const [qualifyTopN, setQualifyTopN] = useState(MASTERING_IT_META?.qualifyTopN ?? 5);
   const [minParticipated, setMinParticipated] = useState(5);
   const [qualFinalized, setQualFinalized] = useState(false);
   const [votingSynced, setVotingSynced] = useState(false);
@@ -86,18 +86,22 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
 
   const maxAudienceVotes = Math.max(
     1,
-    ...finalistTeams.map((t) => t.stageScores.audienceVotes)
+    ...finalistTeams.map((t) => Number(t.stageScores?.audienceVotes) || 0)
   );
 
   const rankedFinals = useMemo(() => {
     const audienceWeight = 100 - judgeWeight;
     return finalistTeams
       .map((team) => {
+        const warmup = Number(team.stageScores?.warmup) || 0;
+        const accel = Number(team.stageScores?.accel) || 0;
+        const finish = Number(team.stageScores?.finish) || 0;
+        const votes = Number(team.stageScores?.audienceVotes) || 0;
         const bgk100 =
-          (team.stageScores.warmup / 20) * 20 +
-          (team.stageScores.accel / 30) * 30 +
-          (team.stageScores.finish / 50) * 50;
-        const audience100 = (team.stageScores.audienceVotes / maxAudienceVotes) * 100;
+          (warmup / 20) * 20 +
+          (accel / 30) * 30 +
+          (finish / 50) * 50;
+        const audience100 = (votes / maxAudienceVotes) * 100;
         const finalWeighted =
           votingMode === "WEIGHTED_INTO_MAIN"
             ? (judgeWeight / 100) * bgk100 + (audienceWeight / 100) * audience100
@@ -112,8 +116,9 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
     const voteWeight = 100 - separateAwardJudgeWeight;
     return finalistTeams
       .map((team) => {
-        const bgkVideo = team.introVideo?.bgkVideoScore ?? 0;
-        const vote100 = (team.stageScores.audienceVotes / maxAudienceVotes) * 100;
+        const bgkVideo = Number(team.introVideo?.bgkVideoScore) || 0;
+        const votes = Number(team.stageScores?.audienceVotes) || 0;
+        const vote100 = (votes / maxAudienceVotes) * 100;
         const total =
           (separateAwardJudgeWeight / 100) * bgkVideo + (voteWeight / 100) * vote100;
         return { team, bgkVideo, vote100, total };
@@ -277,10 +282,10 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
   const pendingReviewTeams = teams.filter((t) => t.status === "SUBMITTED").length;
   const totalUteMembers = teams
     .filter((t) => t.status === "APPROVED")
-    .reduce((acc, t) => acc + t.members.filter((m) => !m.isExternal).length, 0);
+    .reduce((acc, t) => acc + (t.members ?? []).filter((m) => !m.isExternal).length, 0);
   const totalExternalMembers = teams
     .filter((t) => t.status === "APPROVED")
-    .reduce((acc, t) => acc + t.members.filter((m) => m.isExternal).length, 0);
+    .reduce((acc, t) => acc + (t.members ?? []).filter((m) => m.isExternal).length, 0);
 
   return (
     <div className="space-y-6">
@@ -298,7 +303,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
 
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link to="/events/EVT-2026-MASTERING-IT">
+              <Link to={MASTERING_IT_META.eventId ? `/events/${MASTERING_IT_META.eventId}` : "/events"}>
                 <Users className="h-4 w-4" />
                 <span>Xem trang Sự kiện</span>
               </Link>
@@ -318,7 +323,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="text-xs font-semibold text-muted-foreground">Đội đã duyệt / Trần</div>
           <div className="mt-1 tabular-mono text-2xl font-semibold text-foreground">
-            {totalApprovedTeams} / {MASTERING_IT_META.maxTeams}
+            {totalApprovedTeams} / {MASTERING_IT_META?.maxTeams ?? 0}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {pendingReviewTeams} hồ sơ đội đang chờ duyệt
@@ -401,6 +406,17 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
+              {teams.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                  <Users className="h-8 w-8 text-muted-foreground" />
+                  <p className="mt-3 font-display text-base font-medium text-foreground">
+                    Chưa có đội thi nào đăng ký
+                  </p>
+                  <p className="mt-1 max-w-md text-xs text-muted-foreground">
+                    Danh sách các đội hoàn tất xác thực thành viên và gửi hồ sơ dự thi sẽ hiển thị tại đây để BTC xét duyệt.
+                  </p>
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground">
@@ -414,8 +430,9 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {teams.map((team) => {
-                      const leader = team.members.find((m) => m.role === "LEADER");
-                      const extCount = team.members.filter((m) => m.isExternal).length;
+                      const members = team.members ?? [];
+                      const leader = members.find((m) => m.role === "LEADER");
+                      const extCount = members.filter((m) => m.isExternal).length;
                       return (
                         <tr key={team.id} className="hover:bg-muted/30">
                           <td className="px-4 py-3">
@@ -430,7 +447,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <Badge variant="info">{team.members.length - extCount} UTE</Badge>
+                              <Badge variant="info">{members.length - extCount} UTE</Badge>
                               {extCount > 0 && (
                                 <Badge variant="warning">
                                   <Building2 className="h-3 w-3" />
@@ -477,6 +494,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                   </tbody>
                 </table>
               </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -567,13 +585,24 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                 type="button"
                 size="sm"
                 onClick={handleFinalizeQualifying}
-                disabled={qualFinalized}
+                disabled={qualFinalized || standings.length === 0}
               >
                 <Lock className="h-4 w-4" />
                 <span>{qualFinalized ? "Đã chốt BXH Top n" : `Chốt BXH & Chọn Top ${qualifyTopN}`}</span>
               </Button>
             </CardHeader>
             <CardContent className="p-0">
+              {standings.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                  <Trophy className="h-8 w-8 text-muted-foreground" />
+                  <p className="mt-3 font-display text-base font-medium text-foreground">
+                    Chưa có dữ liệu xếp hạng Vòng loại
+                  </p>
+                  <p className="mt-1 max-w-md text-xs text-muted-foreground">
+                    Bảng xếp hạng tự động gộp điểm các thành viên sẽ hiển thị sau khi có đội được duyệt và hoàn thành bài thi Vòng loại.
+                  </p>
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground">
@@ -653,6 +682,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                   </tbody>
                 </table>
               </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -668,7 +698,12 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                 </CardDescription>
               </div>
               {votingMode !== "NONE" && (
-                <Button type="button" size="sm" onClick={handleSyncToVoting}>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={finalistTeams.length === 0}
+                  onClick={handleSyncToVoting}
+                >
                   <RefreshCw className="h-4 w-4" />
                   <span>{votingSynced ? "Đồng bộ lại sang 4.20" : "Đồng bộ Top n sang 4.20"}</span>
                 </Button>
@@ -762,7 +797,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
-                {STAGE_SEGMENTS.map((seg) => (
+                {(STAGE_SEGMENTS ?? []).map((seg) => (
                   <div key={seg.code} className="rounded-lg border border-border bg-muted/30 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-foreground text-sm">{seg.title}</span>
@@ -775,6 +810,16 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                 ))}
               </div>
 
+              {rankedFinals.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-12 text-center">
+                  <p className="font-display text-base font-medium text-foreground">
+                    Chưa có đội thi nào vào Vòng Chung kết
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Hãy chốt Bảng xếp hạng Vòng loại ở Tab 2 để xác định danh sách các đội bước vào đêm Chung kết sân khấu.
+                  </p>
+                </div>
+              ) : (
               <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground">
@@ -871,9 +916,10 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                   </tbody>
                 </table>
               </div>
+              )}
 
               {/* Dedicated Separate Award (Intro Video + BGK & Vote Weighted) Panel */}
-              {votingMode === "SEPARATE_AWARD" && (
+              {votingMode === "SEPARATE_AWARD" && rankedSeparateAward.length > 0 && (
                 <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -997,13 +1043,24 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                 type="button"
                 size="sm"
                 onClick={handleFinalizeAwards}
-                disabled={awardsFinalized}
+                disabled={awardsFinalized || rankedFinals.length === 0}
               >
                 <Award className="h-4 w-4" />
                 <span>{awardsFinalized ? "Đã chốt Giải & Cấp E-Cert" : "Chốt Giải & Phát hành E-Cert"}</span>
               </Button>
             </CardHeader>
             <CardContent className="p-0">
+              {rankedFinals.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                  <Award className="h-8 w-8 text-muted-foreground" />
+                  <p className="mt-3 font-display text-base font-medium text-foreground">
+                    Chưa có kết quả xếp hạng Chung kết để xét trao giải
+                  </p>
+                  <p className="mt-1 max-w-md text-xs text-muted-foreground">
+                    Sau khi BGK hoàn tất chấm điểm Vòng Chung kết tại Tab 3, danh sách phân bổ giải thưởng và E-Certificate sẽ hiển thị tại đây.
+                  </p>
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-border bg-muted/40 text-xs font-semibold text-muted-foreground">
@@ -1067,6 +1124,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
                   </tbody>
                 </table>
               </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1080,7 +1138,7 @@ export function CompetitionAdminPage({ embedded = false } = {}) {
           }}
           title={auditModal.title}
           description={auditModal.description}
-          targetSummary={`${MASTERING_IT_META.title} (${MASTERING_IT_META.id})`}
+          targetSummary={`${MASTERING_IT_META?.title ?? "Cuộc thi Học thuật"} (${MASTERING_IT_META?.id ?? "COMP"})`}
           actionCode={auditModal.code}
           confirmLabel="Xác nhận & Ghi Audit Log"
           onConfirm={async () => {

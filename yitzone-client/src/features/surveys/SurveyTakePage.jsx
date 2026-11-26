@@ -152,8 +152,9 @@ export function SurveyTakePage() {
     const nextErrors = {};
     let firstInvalidId = null;
 
-    for (let i = 0; i < survey.questions.length; i += 1) {
-      const q = survey.questions[i];
+    const questions = survey.questions ?? [];
+    for (let i = 0; i < questions.length; i += 1) {
+      const q = questions[i];
       if (!q.required) continue;
       const val = answers[q.id];
       const empty =
@@ -234,7 +235,7 @@ export function SurveyTakePage() {
             </span>
           </Badge>
           <Badge variant="outline" className="tabular-mono">
-            {survey.scope} · {survey.questions.length} câu hỏi
+            {survey.scope} · {(survey.questions ?? []).length} câu hỏi
           </Badge>
         </div>
 
@@ -255,7 +256,7 @@ export function SurveyTakePage() {
       )}
 
       <div className="space-y-4">
-        {survey.questions.map((q, idx) => {
+        {(survey.questions ?? []).map((q, idx) => {
           const qError = fieldErrors[q.id];
           return (
           <Card

@@ -9,45 +9,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const INITIAL_BATCH_MEMBERS = [
-  {
-    id: "bm-1",
-    studentCode: "21110201",
-    fullName: "Nguyễn Hoàng Phúc",
-    currentRole: "Trưởng Ban EMFIT",
-    decision: "DISMISS",
-    proposedRole: "Thôi giữ chức (lưu termHistory)",
-    warning: "Đang phụ trách sự kiện 'UTE Hackathon 2026' chưa kết thúc — cần bàn giao Trưởng BTC."
-  },
-  {
-    id: "bm-2",
-    studentCode: "22110345",
-    fullName: "Nguyễn Minh Khoa",
-    currentRole: "Phó Ban EMFIT",
-    decision: "PROMOTE",
-    proposedRole: "Trưởng Ban EMFIT"
-  },
-  {
-    id: "bm-3",
-    studentCode: "23110402",
-    fullName: "Trần Mỹ Linh",
-    currentRole: "Tổ trưởng Tổ Truyền thông",
-    decision: "KEEP",
-    proposedRole: "Giữ nguyên chức vụ"
-  }
-];
+const INITIAL_BATCH_MEMBERS = [];
 
-export function RestructuringPage(){
+export function RestructuringPage() {
   const [selectedUnits, setSelectedUnits] = useState(["EMFIT"]);
   const [batchMembers, setBatchMembers] = useState(INITIAL_BATCH_MEMBERS);
   const [effectiveMode, setEffectiveMode] = useState("IMMEDIATE");
-  const [effectiveDate, setEffectiveDate] = useState("2026-12-01T00:00");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [singleMssv, setSingleMssv] = useState("");
+  const [singleAction, setSingleAction] = useState("APPOINT");
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [resultBanner, setResultBanner] = useState(null);
 
   const toggleUnit = (code) => {
     setSelectedUnits((prev) =>
-      prev.includes(code) ? prev.filter((u) => u !== code): [...prev, code]
+      prev.includes(code) ? prev.filter((u) => u !== code) : [...prev, code]
     );
   };
 
@@ -56,15 +32,15 @@ export function RestructuringPage(){
       prev.map((m) =>
         m.id !== id
           ? m
-: {
-...m,
+          : {
+              ...m,
               decision,
               proposedRole:
                 decision === "KEEP"
                   ? "Giữ nguyên chức vụ"
-: decision === "DISMISS"
+                  : decision === "DISMISS"
                     ? "Thôi giữ chức (đóng endAt → lưu termHistory)"
-: "Thăng chức / Điều chuyển nguyên tử"
+                    : "Thăng chức / Điều chuyển nguyên tử"
             }
       )
     );
@@ -97,7 +73,6 @@ export function RestructuringPage(){
         </TabsList>
 
         <TabsContent value="batch" className="space-y-5">
-          {/* Step 1: Select exact units */}
           <Card>
             <CardHeader>
               <CardTitle>Bước 1: Chọn Đơn vị Tham gia Đợt Kiện toàn</CardTitle>
@@ -113,17 +88,16 @@ export function RestructuringPage(){
                     key={code}
                     type="button"
                     size="sm"
-                    variant={active ? "default": "outline"}
+                    variant={active ? "default" : "outline"}
                     onClick={() => toggleUnit(code)}
                   >
-                    {code} {active ? "✓": ""}
+                    {code} {active ? "✓" : ""}
                   </Button>
                 );
               })}
             </CardContent>
           </Card>
 
-          {/* Step 2: Diff Preview Table */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -135,49 +109,66 @@ export function RestructuringPage(){
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-3">
-                {batchMembers.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex flex-col justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4 lg:flex-row lg:items-center"
-                  >
-                    <div className="space-y-1">
-                      <div className="font-medium text-foreground">
-                        {m.fullName} <span className="tabular-mono text-xs text-muted-foreground">({m.studentCode})</span>
+              {batchMembers.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                  Chưa có nhân sự nào trong danh sách dự thảo kiện toàn của đơn vị đã chọn.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {batchMembers.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex flex-col justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4 lg:flex-row lg:items-center"
+                    >
+                      <div className="space-y-1">
+                        <div className="font-medium text-foreground">
+                          {m.fullName}{" "}
+                          <span className="tabular-mono text-xs text-muted-foreground">({m.studentCode})</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <Badge variant="outline">Trước: {m.currentRole}</Badge>
+                          <span>→</span>
+                          <Badge
+                            variant={
+                              m.decision === "DISMISS"
+                                ? "danger"
+                                : m.decision === "PROMOTE"
+                                  ? "success"
+                                  : "secondary"
+                            }
+                          >
+                            Sau: {m.proposedRole}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <Badge variant="outline">Trước: {m.currentRole}</Badge>
-                        <span>→</span>
-                        <Badge
-                          variant={
-                            m.decision === "DISMISS"
-                              ? "danger"
-: m.decision === "PROMOTE"
-                                ? "success"
-: "secondary"
-                          }
-                        >
-                          Sau: {m.proposedRole}
-                        </Badge>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-wrap gap-1.5">
-                      {(["KEEP", "PROMOTE", "DISMISS"]).map((dec) => (
-                        <Button
-                          key={dec}
-                          type="button"
-                          size="sm"
-                          variant={m.decision === dec ? (dec === "DISMISS" ? "destructive": "default"): "outline"}
-                          onClick={() => updateDecision(m.id, dec)}
-                        >
-                          {dec === "KEEP" ? "Giữ nguyên": dec === "PROMOTE" ? "Đổi / Thăng chức": "Thôi giữ chức"}
-                        </Button>
-                      ))}
+                      <div className="flex flex-wrap gap-1.5">
+                        {["KEEP", "PROMOTE", "DISMISS"].map((dec) => (
+                          <Button
+                            key={dec}
+                            type="button"
+                            size="sm"
+                            variant={
+                              m.decision === dec
+                                ? dec === "DISMISS"
+                                  ? "destructive"
+                                  : "default"
+                                : "outline"
+                            }
+                            onClick={() => updateDecision(m.id, dec)}
+                          >
+                            {dec === "KEEP"
+                              ? "Giữ nguyên"
+                              : dec === "PROMOTE"
+                                ? "Đổi / Thăng chức"
+                                : "Thôi giữ chức"}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               {warnings.length > 0 && (
                 <div className="space-y-1.5 rounded-xl border border-status-warning/40 bg-status-warning/10 p-4 text-xs text-status-warning">
@@ -193,7 +184,6 @@ export function RestructuringPage(){
                 </div>
               )}
 
-              {/* Step 3: Publish Immediately or Schedule */}
               <div className="flex flex-col gap-4 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="space-y-1.5">
@@ -226,7 +216,7 @@ export function RestructuringPage(){
 
                 <Button
                   type="button"
-                  disabled={selectedUnits.length === 0}
+                  disabled={selectedUnits.length === 0 || batchMembers.length === 0}
                   onClick={() => setPublishDialogOpen(true)}
                 >
                   <CalendarClock className="h-4 w-4" />
@@ -251,11 +241,17 @@ export function RestructuringPage(){
             <CardContent className="grid gap-4 md:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="single-mssv">MSSV Nhân sự</Label>
-                <Input id="single-mssv" defaultValue="22110345" className="tabular-mono" />
+                <Input
+                  id="single-mssv"
+                  value={singleMssv}
+                  onChange={(e) => setSingleMssv(e.target.value)}
+                  placeholder="Nhập MSSV 8 chữ số..."
+                  className="tabular-mono"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="single-action">Loại thao tác</Label>
-                <Select defaultValue="APPOINT">
+                <Select value={singleAction} onValueChange={setSingleAction}>
                   <SelectTrigger id="single-action" className="rounded-xl">
                     <SelectValue />
                   </SelectTrigger>
@@ -267,7 +263,12 @@ export function RestructuringPage(){
                 </Select>
               </div>
               <div className="flex items-end">
-                <Button className="w-full" onClick={() => setPublishDialogOpen(true)}>
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={!singleMssv.trim()}
+                  onClick={() => setPublishDialogOpen(true)}
+                >
                   Thực thi &amp; Ghi Audit Log
                 </Button>
               </div>
@@ -281,15 +282,23 @@ export function RestructuringPage(){
         onOpenChange={setPublishDialogOpen}
         title="Ban hành Quyết định Kiện toàn Nhân sự"
         description="Hệ thống sẽ cập nhật startAt/endAt, lưu termHistory, thu hồi cache quyền cũ trong ≤ 5 giây và ghi đầy đủ vào Audit Log."
-        targetSummary={`Đơn vị: ${selectedUnits.join(", ")} · Chế độ: ${
-          effectiveMode === "IMMEDIATE" ? "Hiệu lực ngay": `Hẹn giờ (${effectiveDate})`
-        }`}
+        targetSummary={
+          singleMssv.trim()
+            ? `Nhân sự ${singleMssv.trim()} · Thao tác ${singleAction}`
+            : `Đơn vị: ${selectedUnits.join(", ")} · Chế độ: ${
+                effectiveMode === "IMMEDIATE" ? "Hiệu lực ngay" : `Hẹn giờ (${effectiveDate || "chưa chọn"})`
+              }`
+        }
         actionCode="IAM_RESTRUCTURING_PUBLISH"
         destructive={false}
         confirmLabel="Xác nhận Ban hành"
         onConfirm={(reason) =>
           setResultBanner(
-            `Đã ban hành kiện toàn (${effectiveMode === "IMMEDIATE" ? "áp dụng ngay & thu hồi cache quyền ≤ 5s": `lên lịch ${effectiveDate}`}). Lý do Audit: ${reason}`
+            `Đã ban hành kiện toàn (${
+              effectiveMode === "IMMEDIATE"
+                ? "áp dụng ngay & thu hồi cache quyền ≤ 5s"
+                : `lên lịch ${effectiveDate || "theo kế hoạch"}`
+            }). Lý do Audit: ${reason}`
           )
         }
       />

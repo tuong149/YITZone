@@ -35,6 +35,7 @@ import {
   getMajorsByFaculty,
   resolveMajorCandidatesByMssv
 } from "@/features/iam/data/faculty-major-catalog";
+import { recordPrivacyConsent } from "@/features/iam/api";
 import { loadOnboardingState, saveOnboardingState } from "@/features/iam/data/onboarding-storage";
 import { cn } from "@/lib/utils";
 import { getOrCreateDeviceKeyPair } from "@/lib/webcrypto";
@@ -79,9 +80,9 @@ export function OnboardingWizardPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const userId = useAuthStore((s) => s.userId) ?? "22110345";
-  const email = useAuthStore((s) => s.email) ?? `${userId}@student.hcmute.edu.vn`;
-  const rawFullName = useAuthStore((s) => s.fullName) ?? "Nguyễn Minh Khoa";
+  const userId = useAuthStore((s) => s.userId) ?? "";
+  const email = useAuthStore((s) => s.email) ?? "";
+  const rawFullName = useAuthStore((s) => s.fullName) ?? "";
   const roleScopes = useAuthStore((s) => s.roleScopes);
   const authProvider = useAuthStore((s) => s.authProvider);
   const fullName = parseCleanName(rawFullName);
@@ -113,7 +114,13 @@ export function OnboardingWizardPage() {
 
   const existingState = useMemo(() => loadOnboardingState(userId), [userId]);
   const resolution = useMemo(
-    () => resolveMajorCandidatesByMssv(userId) || resolveMajorCandidatesByMssv(email),
+    () =>
+      resolveMajorCandidatesByMssv(userId) ||
+      resolveMajorCandidatesByMssv(email) || {
+        mssv: null,
+        majorCode: null,
+        candidates: []
+      },
     [userId, email]
   );
 
@@ -301,7 +308,7 @@ export function OnboardingWizardPage() {
           setStep2Error("Email cá nhân dự phòng chưa đúng định dạng (VD: tenban@gmail.com).");
           return;
         }
-        if (trimmedBackup.toLowerCase() === email.toLowerCase()) {
+        if (email && trimmedBackup.toLowerCase() === email.toLowerCase()) {
           setStep2Error("Email dự phòng phải khác Email trường để vẫn đăng nhập được sau tốt nghiệp.");
           return;
         }
@@ -403,6 +410,10 @@ export function OnboardingWizardPage() {
         yitbotDeidentified: yitbotConsent
       }
     });
+
+    if (!skipped && pdplBasic) {
+      void recordPrivacyConsent("PDPL_BASIC", true).catch(() => {});
+    }
   };
 
   const handleSkipAll = () => {
@@ -580,12 +591,12 @@ export function OnboardingWizardPage() {
               </div>
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">MSSV / Định danh</dt>
-                <dd className="mt-0.5 tabular-mono font-semibold text-foreground">{mssv ?? userId}</dd>
+                <dd className="mt-0.5 tabular-mono font-semibold text-foreground">{mssv || userId || "—"}</dd>
               </div>
               <div className="min-w-0">
                 <dt className="text-xs font-medium text-muted-foreground">Email tài khoản</dt>
-                <dd className="mt-0.5 truncate text-foreground" title={email}>
-                  {email}
+                <dd className="mt-0.5 truncate text-foreground" title={email || undefined}>
+                  {email || "—"}
                 </dd>
               </div>
             </dl>

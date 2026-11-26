@@ -54,7 +54,6 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { cloneFreshCriteriaTree, INITIAL_AWARD_CYCLES } from "./sv5t-data";
 
-const DEMO_FALLBACK_REVIEWER_ID = "22110345";
 const EMPTY_LIST = [];
 
 const COHORT_CRITERIA_PROGRESS = [
@@ -62,35 +61,30 @@ const COHORT_CRITERIA_PROGRESS = [
     key: "DAO_DUC",
     title: "Đạo đức tốt",
     mode: "AUTO",
-    ratio: 0.77,
     note: "Đồng bộ từ hoạt động sinh hoạt chính trị & ĐRL gắn nhãn SV5T"
   },
   {
     key: "HOC_TAP",
     title: "Học tập tốt",
     mode: "EXTERNAL",
-    ratio: 0.37,
     note: "GPA chính thức cần minh chứng ngoài; sự kiện học thuật & OJ đồng bộ tự động"
   },
   {
     key: "THE_LUC",
     title: "Thể lực tốt",
     mode: "EXTERNAL",
-    ratio: 0.29,
     note: "Giấy xác nhận Thanh niên khỏe cần tải minh chứng ngoài; FIT Games đồng bộ tự động"
   },
   {
     key: "TINH_NGUYEN",
     title: "Tình nguyện tốt",
     mode: "AUTO",
-    ratio: 0.86,
     note: "Đồng bộ tự động từ E-Cert Mùa Hè Xanh, Xuân Tình Nguyện, Hiến máu & CTXH"
   },
   {
     key: "HOI_NHAP",
     title: "Hội nhập tốt",
     mode: "EXTERNAL",
-    ratio: 0.43,
     note: "Chứng chỉ ngoại ngữ (IELTS/TOEIC/VSTEP) cần minh chứng ngoài; Seminar CĐDN đồng bộ tự động"
   }
 ];
@@ -110,7 +104,7 @@ function getCycleStatusMeta(status) {
 }
 
 export function Sv5tAdminPage() {
-  const authUserId = useAuthStore((s) => s.userId);
+  const authUserId = useAuthStore((s) => s.userId) ?? "";
 
   // Level 1: Award Cycles state
   const [cycles, setCycles] = useState(INITIAL_AWARD_CYCLES);
@@ -269,12 +263,7 @@ export function Sv5tAdminPage() {
   const criteriaTree = activeCycle?.criteriaTree ?? EMPTY_LIST;
   const honorRollPublished = activeCycle?.status === "PUBLISHED";
 
-  const effectiveReviewerId = useMemo(() => {
-    if (authUserId && applications.some((a) => a.userId === authUserId)) {
-      return authUserId;
-    }
-    return DEMO_FALLBACK_REVIEWER_ID;
-  }, [authUserId, applications]);
+  const effectiveReviewerId = authUserId;
 
   const selectedCriterion = useMemo(
     () => criteriaTree.find((c) => c.key === selectedCritKey) ?? criteriaTree[0] ?? null,
@@ -353,7 +342,7 @@ export function Sv5tAdminPage() {
   };
 
   const handlePreliminaryDecision = (app, nextPreliminaryStatus, customNote) => {
-    if (app.userId === effectiveReviewerId || honorRollPublished) return;
+    if ((Boolean(effectiveReviewerId) && app.userId === effectiveReviewerId) || honorRollPublished) return;
     setErrorMsg(null);
     const defaultNote =
       nextPreliminaryStatus === "SCREENED_OK"
@@ -600,7 +589,7 @@ export function Sv5tAdminPage() {
       key: "name",
       header: "Đợt xét duyệt & Năm học",
       render: (cycle) => {
-        const condCount = cycle.criteriaTree.reduce((s, c) => s + c.conditions.length, 0);
+        const condCount = (cycle.criteriaTree ?? []).reduce((s, c) => s + (c.conditions ?? []).length, 0);
         return (
           <div className="space-y-1">
             <div className="font-medium text-foreground">{cycle.name}</div>
@@ -632,12 +621,13 @@ export function Sv5tAdminPage() {
       key: "stats",
       header: "Hồ sơ & Kết quả",
       render: (cycle) => {
-        const approved = cycle.applications.filter((a) => a.councilStatus === "APPROVED").length;
-        const appeals = cycle.applications.filter((a) => a.appealStatus === "APPEAL_OPEN_72H").length;
+        const cycleApps = cycle.applications ?? [];
+        const approved = cycleApps.filter((a) => a.councilStatus === "APPROVED").length;
+        const appeals = cycleApps.filter((a) => a.appealStatus === "APPEAL_OPEN_72H").length;
         return (
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary" className="tabular-mono">
-              {cycle.applications.length} hồ sơ
+              {cycleApps.length} hồ sơ
             </Badge>
             {approved > 0 && (
               <Badge variant="success" className="tabular-mono">
@@ -689,7 +679,7 @@ export function Sv5tAdminPage() {
       key: "student",
       header: "Ứng viên & Minh chứng",
       render: (row) => {
-        const isSelf = row.userId === effectiveReviewerId;
+        const isSelf = Boolean(effectiveReviewerId) && row.userId === effectiveReviewerId;
         return (
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -763,7 +753,7 @@ export function Sv5tAdminPage() {
       header: "Thao tác",
       align: "right",
       render: (row) => {
-        const isSelf = row.userId === effectiveReviewerId;
+        const isSelf = Boolean(effectiveReviewerId) && row.userId === effectiveReviewerId;
         if (isSelf) {
           return (
             <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -976,7 +966,11 @@ export function Sv5tAdminPage() {
         <DataTable
           columns={cycleColumns}
           data={filteredCycles}
-          emptyTitle={hasCycleFilters ? "Không tìm thấy đợt xét duyệt khớp bộ lọc" : "Chưa có đợt xét duyệt nào"}
+          emptyTitle={
+            hasCycleFilters
+              ? "Không tìm thấy đợt xét duyệt khớp bộ lọc"
+              : "Chưa có đợt xét chọn Sinh viên 5 tốt nào"
+          }
           emptyDescription={
             hasCycleFilters
               ? "Thử xóa từ khóa hoặc đổi trạng thái lọc để xem toàn bộ danh sách."
@@ -1462,8 +1456,10 @@ export function Sv5tAdminPage() {
             <Lock className="h-4 w-4 shrink-0 text-brand-navy dark:text-brand-cyan" />
             <span>
               <strong>Chống xung đột lợi ích:</strong> Cán bộ{" "}
-              <span className="tabular-mono font-semibold">{effectiveReviewerId}</span> bị khóa thao tác tự thẩm tra và
-              tự chấm duyệt trên hồ sơ cá nhân. Mọi quyết định Hội đồng bắt buộc nhập lý do vào{" "}
+              <span className="tabular-mono font-semibold">
+                {effectiveReviewerId || "đang đăng nhập"}
+              </span>{" "}
+              bị khóa thao tác tự thẩm tra và tự chấm duyệt trên hồ sơ cá nhân. Mọi quyết định Hội đồng bắt buộc nhập lý do vào{" "}
               <span className="tabular-mono font-semibold">Audit Log</span>.
             </span>
           </div>
@@ -1841,8 +1837,8 @@ export function Sv5tAdminPage() {
             </CardHeader>
             <CardContent className="divide-y divide-border p-0">
               {COHORT_CRITERIA_PROGRESS.map((item) => {
-                const total = activeCycle.goalRegisteredCount;
-                const achievedCount = Math.round(total * item.ratio);
+                const total = activeCycle.goalRegisteredCount ?? 0;
+                const achievedCount = activeCycle.criteriaStats?.[item.key] ?? 0;
                 const pct = total > 0 ? Math.round((achievedCount / total) * 100) : 0;
                 return (
                   <div
@@ -1959,7 +1955,7 @@ export function Sv5tAdminPage() {
         {inspectApp && (
           <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
             {(() => {
-              const isSelf = inspectApp.userId === effectiveReviewerId;
+              const isSelf = Boolean(effectiveReviewerId) && inspectApp.userId === effectiveReviewerId;
               const isLocked = isSelf || honorRollPublished;
               return (
                 <>

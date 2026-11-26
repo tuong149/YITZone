@@ -282,7 +282,7 @@ export function RegistrationFormBuilder({
             onClick={() => setPreviewMode((v) => !v)}
           >
             {previewMode ? <Pencil className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-            <span>{previewMode ? "Quay lại Chỉnh sửa" : "Xem trước & Test nhánh"}</span>
+            <span>{previewMode ? "Quay lại Chỉnh sửa" : "Xem trước biểu mẫu"}</span>
           </Button>
         )}
       </div>
@@ -730,14 +730,14 @@ export function RegistrationFormBuilder({
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3">
             <div>
               <h3 className="font-display text-base font-medium text-foreground">
-                Xem trước &amp; Kiểm thử Rẽ nhánh Biểu mẫu
+                Xem trước biểu mẫu
               </h3>
               <p className="text-xs text-muted-foreground">
                 Đang hiển thị{" "}
                 <span className="tabular-mono font-semibold text-foreground">
                   {visiblePreviewFields.length}/{fields.length}
                 </span>{" "}
-                câu hỏi theo lựa chọn thử nghiệm bên dưới.
+                câu hỏi theo lựa chọn xem trước bên dưới.
               </p>
             </div>
             <Button
@@ -748,7 +748,7 @@ export function RegistrationFormBuilder({
               onClick={() => setPreviewAnswers({})}
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              <span>Đặt lại thử nghiệm</span>
+              <span>Đặt lại xem trước</span>
             </Button>
           </div>
 

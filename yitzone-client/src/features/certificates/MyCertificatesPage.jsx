@@ -20,42 +20,6 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useEventStore } from "@/stores/event-store";
 import { useSurveyStore } from "@/stores/survey-store";
 
-const SAMPLE_CERTS = [
-  {
-    id: "c-1",
-    certCode: "YIT-2026-CLD-0184",
-    version: 1,
-    eventTitle: "Hội thảo Cloud Native & DevOps 2026",
-    semester: "HK1 2026-2027",
-    roleLabel: "Tham dự viên",
-    benefits: ["Cộng ĐRL", "Cộng CĐDN"],
-    issuedDate: "29/11/2026",
-    status: "ISSUED"
-  },
-  {
-    id: "c-2",
-    certCode: "YIT-2026-HCK-0042",
-    version: 2,
-    eventTitle: "UTE Hackathon 2026: Smart Campus",
-    semester: "HK1 2026-2027",
-    roleLabel: "BTC — MC (Kiêm nhiệm: Văn nghệ)",
-    benefits: ["Cộng ĐRL", "Cộng CTXH", "Cộng CĐDN"],
-    issuedDate: "15/12/2026",
-    status: "ISSUED"
-  },
-  {
-    id: "c-3",
-    certCode: "YIT-2026-MHX-0311",
-    version: 1,
-    eventTitle: "Chiến dịch Tình nguyện Mùa Hè Xanh FIT",
-    semester: "HK2 2025-2026",
-    roleLabel: "Chiến sĩ Tình nguyện",
-    benefits: ["Cộng CTXH"],
-    issuedDate: "20/08/2026",
-    status: "ISSUED"
-  }
-];
-
 export function MyCertificatesPage() {
   const [semester, setSemester] = useState("ALL");
   const [downloadNotice, setDownloadNotice] = useState(null);
@@ -78,12 +42,12 @@ export function MyCertificatesPage() {
     const apiItems = (remoteCerts ?? []).map((dto) => ({
       id: dto.certificateId,
       certCode: dto.certificateCode,
-      version: 1,
-      eventTitle: `Chứng nhận ${dto.certificateCode}`,
-      semester: "HK1 2026-2027",
-      roleLabel: "Tham dự viên",
-      benefits: ["Cộng ĐRL"],
-      issuedDate: "Đã cấp bởi Đoàn – Hội FIT",
+      version: dto.version ?? 1,
+      eventTitle: dto.eventTitle ?? `Chứng nhận ${dto.certificateCode}`,
+      semester: dto.semester ?? "HK1 2026-2027",
+      roleLabel: dto.roleLabel ?? "Tham dự viên",
+      benefits: dto.benefits ?? dto.benefitTypes ?? ["Cộng ĐRL"],
+      issuedDate: dto.issuedDate ?? "Đã cấp bởi Đoàn – Hội FIT",
       status: dto.status === "ISSUED" ? "ISSUED" : "PENDING_FINALIZE"
     }));
 
@@ -100,9 +64,8 @@ export function MyCertificatesPage() {
         eventTitle: ev.title,
         semester: "HK1 2026-2027",
         roleLabel: "Tham dự viên",
-        benefits: ev.benefits.filter(
-          (b) =>
-            b === "Cộng ĐRL" || b === "Cộng CTXH" || b === "Cộng CĐDN"
+        benefits: (ev.benefits ?? []).filter(
+          (b) => b === "Cộng ĐRL" || b === "Cộng CTXH" || b === "Cộng CĐDN"
         ),
         issuedDate: ev.dateSummary,
         status: "PENDING_SURVEY",
@@ -110,10 +73,7 @@ export function MyCertificatesPage() {
       });
     }
 
-    const demoFallback =
-      import.meta.env.VITE_DEMO_MODE === "true" && apiItems.length === 0 ? SAMPLE_CERTS : [];
-
-    return [...apiItems, ...dynamicItems, ...demoFallback];
+    return [...apiItems, ...dynamicItems];
   }, [remoteCerts, registrations, events, surveys]);
 
   const filtered = useMemo(
@@ -149,7 +109,7 @@ export function MyCertificatesPage() {
   <div class="sheet">
     <div class="org">Đoàn TN – Hội SV Khoa Công nghệ Thông tin · Trường ĐH Sư phạm Kỹ thuật TP.HCM</div>
     <h1>GIẤY CHỨNG NHẬN ĐIỆN TỬ (E-CERTIFICATE)</h1>
-    <div class="recipient">${fullName} (${userId})</div>
+    <div class="recipient">${fullName}${userId ? ` (${userId})` : ""}</div>
     <div class="meta">Tư cách ghi nhận: <strong>${cert.roleLabel}</strong> · Học kỳ: ${cert.semester}</div>
     <div class="event">${cert.eventTitle}</div>
     <div class="badges">
@@ -209,7 +169,6 @@ export function MyCertificatesPage() {
         </div>
       )}
 
-      {/* Activity Count Summary by Benefit Type (Strictly no numeric scores) */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -231,7 +190,6 @@ export function MyCertificatesPage() {
         </Card>
       </div>
 
-      {/* Certificates List with Loading / Error / Empty States */}
       <QueryState
         isLoading={isLoading}
         isError={isError && filtered.length === 0}
@@ -252,68 +210,68 @@ export function MyCertificatesPage() {
       >
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((cert) => (
-          <Card key={cert.id} className="flex flex-col justify-between">
-            <CardHeader className="space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                {cert.status === "ISSUED" ? (
-                  <VerifiedBadge label={`E-Cert v${cert.version}`} />
-                ) : (
-                  <Badge variant="warning" className="gap-1">
-                    <Clock className="h-3 w-3" />
-                    <span>Chờ khảo sát để mở khóa E-Cert</span>
-                  </Badge>
-                )}
-                <span className="tabular-mono text-xs text-muted-foreground">{cert.certCode}</span>
-              </div>
-              <CardTitle className="text-lg">{cert.eventTitle}</CardTitle>
-              <CardDescription>
-                {cert.semester} · Tư cách: <strong className="text-foreground">{cert.roleLabel}</strong> ·{" "}
-                <span className="tabular-mono">{cert.issuedDate}</span>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-1.5">
-                {cert.benefits.map((b) => (
-                  <Badge
-                    key={b}
-                    variant={b === "Cộng CĐDN" ? "success" : b === "Cộng CTXH" ? "info" : "default"}
-                  >
-                    {b}
-                  </Badge>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {cert.status === "PENDING_SURVEY" ? (
-                  <Button asChild size="sm" className="liquid-glass-btn-cobalt rounded-full">
-                    <Link to={`/surveys/${cert.surveyId ?? "evt-cloud-2026"}`}>
-                      <ClipboardList className="h-3.5 w-3.5" />
-                      <span>Làm khảo sát ngay để mở E-Cert</span>
-                    </Link>
-                  </Button>
-                ) : (
-                  <>
-                    <Button asChild size="sm" variant="outline" className="rounded-full">
-                      <Link to={`/verify/${cert.certCode}`}>
-                        <QrCode className="h-3.5 w-3.5" />
-                        <span>Trang xác thực QR</span>
-                        <ExternalLink className="h-3 w-3" />
+            <Card key={cert.id} className="flex flex-col justify-between">
+              <CardHeader className="space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {cert.status === "ISSUED" ? (
+                    <VerifiedBadge label={`E-Cert v${cert.version}`} />
+                  ) : (
+                    <Badge variant="warning" className="gap-1">
+                      <Clock className="h-3 w-3" />
+                      <span>Chờ khảo sát để mở khóa E-Cert</span>
+                    </Badge>
+                  )}
+                  <span className="tabular-mono text-xs text-muted-foreground">{cert.certCode}</span>
+                </div>
+                <CardTitle className="text-lg">{cert.eventTitle}</CardTitle>
+                <CardDescription>
+                  {cert.semester} · Tư cách: <strong className="text-foreground">{cert.roleLabel}</strong> ·{" "}
+                  <span className="tabular-mono">{cert.issuedDate}</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-1.5">
+                  {cert.benefits.map((b) => (
+                    <Badge
+                      key={b}
+                      variant={b === "Cộng CĐDN" ? "success" : b === "Cộng CTXH" ? "info" : "default"}
+                    >
+                      {b}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {cert.status === "PENDING_SURVEY" ? (
+                    <Button asChild size="sm" className="liquid-glass-btn-cobalt rounded-full">
+                      <Link to={cert.surveyId ? `/surveys/${encodeURIComponent(cert.surveyId)}` : "/surveys"}>
+                        <ClipboardList className="h-3.5 w-3.5" />
+                        <span>Làm khảo sát ngay để mở E-Cert</span>
                       </Link>
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="rounded-full"
-                      onClick={() => handleDownloadEcertPdf(cert)}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>Tải bản in E-Cert</span>
-                    </Button>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  ) : (
+                    <>
+                      <Button asChild size="sm" variant="outline" className="rounded-full">
+                        <Link to={`/verify/${encodeURIComponent(cert.certCode)}`}>
+                          <QrCode className="h-3.5 w-3.5" />
+                          <span>Trang xác thực QR</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => handleDownloadEcertPdf(cert)}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Tải bản in E-Cert</span>
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </QueryState>
 

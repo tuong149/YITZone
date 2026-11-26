@@ -9,6 +9,7 @@ import {
   EyeOff,
   KeyRound,
   Laptop,
+  Loader2,
   LogOut,
   ShieldCheck,
   Smartphone
@@ -18,35 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { setupTotpMfa, verifyTotpMfa } from "@/features/iam/api";
+import { extractApiErrorMessage } from "@/lib/api-client";
 
-const INITIAL_SESSIONS = [
-  {
-    id: "sess-current",
-    device: "Chrome trên Windows 11",
-    location: "TP. Thủ Đức, Việt Nam",
-    lastActive: "Đang hoạt động",
-    type: "desktop",
-    current: true
-  },
-  {
-    id: "sess-mobile",
-    device: "YITZone PWA · Safari trên iOS 18",
-    location: "TP. Hồ Chí Minh, Việt Nam",
-    lastActive: "18 phút trước",
-    type: "mobile",
-    current: false
-  },
-  {
-    id: "sess-lab",
-    device: "Edge trên Windows · Phòng máy A4-302",
-    location: "Cơ sở Võ Văn Ngân",
-    lastActive: "2 ngày trước",
-    type: "desktop",
-    current: false
-  }
-];
-
-const DEMO_TOTP_SECRET = "JBSWY3DPEHPK3PXP";
+const INITIAL_SESSIONS = [];
 
 export function ProfileSecuritySection({
   userId,
@@ -54,7 +30,6 @@ export function ProfileSecuritySection({
   accountHealth,
   onUpdateAccountHealth
 }) {
-  // Password change form
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -63,12 +38,13 @@ export function ProfileSecuritySection({
   const [pwError, setPwError] = useState(null);
   const [pwSuccess, setPwSuccess] = useState(null);
 
-  // TOTP MFA
+  const [mfaSetup, setMfaSetup] = useState(null);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaSetupError, setMfaSetupError] = useState(null);
   const [mfaOtp, setMfaOtp] = useState("");
   const [mfaError, setMfaError] = useState(null);
   const [copiedSecret, setCopiedSecret] = useState(false);
 
-  // Active sessions
   const [sessions, setSessions] = useState(INITIAL_SESSIONS);
   const [sessionNotice, setSessionNotice] = useState(null);
 
@@ -108,9 +84,39 @@ export function ProfileSecuritySection({
     );
   };
 
-  const handleCopySecret = async () => {
+  const handleStartMfaSetup = async () => {
+    setMfaLoading(true);
+    setMfaSetupError(null);
+    setMfaError(null);
     try {
-      await navigator.clipboard.writeText(DEMO_TOTP_SECRET);
+      const data = await setupTotpMfa();
+      const secret = data?.secret || data?.sharedSecret || "";
+      if (!secret) {
+        setMfaSetupError("Máy chủ chưa trả về khóa thiết lập TOTP hợp lệ.");
+        return;
+      }
+      const accountLabel = encodeURIComponent(userId || email || "YITZoneUser");
+      const otpauthUri =
+        data?.otpauthUri ||
+        data?.qrCodeUri ||
+        `otpauth://totp/YITZone:${accountLabel}?secret=${encodeURIComponent(secret)}&issuer=YITZone`;
+      setMfaSetup({ secret, otpauthUri });
+    } catch (err) {
+      setMfaSetupError(
+        extractApiErrorMessage(
+          err,
+          "Không thể khởi tạo khóa TOTP MFA từ máy chủ. Vui lòng thử lại khi dịch vụ xác thực sẵn sàng."
+        )
+      );
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleCopySecret = async () => {
+    if (!mfaSetup?.secret) return;
+    try {
+      await navigator.clipboard.writeText(mfaSetup.secret);
     } catch {
       // Clipboard fallback ignored in restricted contexts
     }
@@ -118,15 +124,27 @@ export function ProfileSecuritySection({
     window.setTimeout(() => setCopiedSecret(false), 2000);
   };
 
-  const handleVerifyMfa = (e) => {
+  const handleVerifyMfa = async (e) => {
     e.preventDefault();
-    if (!/^[0-9]{6}$/.test(mfaOtp.trim())) {
+    const cleanedOtp = mfaOtp.trim();
+    if (!/^[0-9]{6}$/.test(cleanedOtp)) {
       setMfaError("Mã xác thực TOTP phải gồm đúng 6 chữ số từ ứng dụng Authenticator.");
       return;
     }
     setMfaError(null);
-    setMfaOtp("");
-    onUpdateAccountHealth({ mfaEnabled: true });
+    try {
+      await verifyTotpMfa(cleanedOtp);
+      setMfaOtp("");
+      setMfaSetup(null);
+      onUpdateAccountHealth({ mfaEnabled: true });
+    } catch (err) {
+      setMfaError(
+        extractApiErrorMessage(
+          err,
+          "Không thể xác minh mã TOTP 6 số với máy chủ. Vui lòng kiểm tra lại thời gian thiết bị."
+        )
+      );
+    }
   };
 
   const revokeSession = (sessionId) => {
@@ -152,7 +170,6 @@ export function ProfileSecuritySection({
         </p>
       </section>
 
-      {/* Linked Sign-in Methods */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Phương thức đăng nhập liên kết</CardTitle>
@@ -165,9 +182,11 @@ export function ProfileSecuritySection({
             <li className="flex flex-col justify-between gap-2 px-5 py-3.5 sm:flex-row sm:items-center">
               <div>
                 <div className="text-sm font-medium text-foreground">Google Workspace Nhà trường (SSO)</div>
-                <div className="text-xs text-muted-foreground">{email}</div>
+                <div className="text-xs text-muted-foreground">{email || "Chưa liên kết email trường"}</div>
               </div>
-              <Badge variant="success">Đã liên kết</Badge>
+              <Badge variant={email ? "success" : "secondary"}>
+                {email ? "Đã liên kết" : "Chưa liên kết"}
+              </Badge>
             </li>
             <li className="flex flex-col justify-between gap-2 px-5 py-3.5 sm:flex-row sm:items-center">
               <div>
@@ -186,7 +205,6 @@ export function ProfileSecuritySection({
         </CardContent>
       </Card>
 
-      {/* Password Management */}
       <Card className="rounded-[22px]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -307,7 +325,6 @@ export function ProfileSecuritySection({
         </CardContent>
       </Card>
 
-      {/* TOTP MFA */}
       <Card className="rounded-[22px]">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -323,7 +340,7 @@ export function ProfileSecuritySection({
             Quét mã QR bằng Google Authenticator hoặc Microsoft Authenticator theo chuẩn RFC 6238 (6 số, làm mới mỗi 30 giây). Bắt buộc với BTV &amp; SystemAdmin.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {accountHealth.mfaEnabled ? (
             <div className="flex flex-col justify-between gap-4 rounded-md border border-status-success/30 bg-status-success/10 p-4 sm:flex-row sm:items-center">
               <div className="flex items-start gap-2.5 text-sm text-status-success">
@@ -344,13 +361,37 @@ export function ProfileSecuritySection({
                 Tắt MFA
               </Button>
             </div>
+          ) : !mfaSetup ? (
+            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Khởi tạo khóa bí mật TOTP trực tiếp từ máy chủ xác thực để liên kết với ứng dụng Google Authenticator hoặc Microsoft Authenticator trên điện thoại của bạn.
+              </p>
+              {mfaSetupError && (
+                <div
+                  role="alert"
+                  className="flex items-center gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-xs text-status-danger"
+                >
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{mfaSetupError}</span>
+                </div>
+              )}
+              <Button
+                type="button"
+                disabled={mfaLoading}
+                onClick={() => void handleStartMfaSetup()}
+              >
+                {mfaLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                <span>{mfaLoading ? "Đang khởi tạo khóa TOTP..." : "Thiết lập xác thực 2 lớp (2FA)"}</span>
+              </Button>
+            </div>
           ) : (
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
               <div className="shrink-0 self-start rounded-md border border-border bg-white p-3">
-                <QRCodeSVG
-                  value={`otpauth://totp/YITZone:${userId}?secret=${DEMO_TOTP_SECRET}&issuer=YITZone`}
-                  size={132}
-                />
+                <QRCodeSVG value={mfaSetup.otpauthUri} size={132} />
               </div>
 
               <div className="flex-1 space-y-4">
@@ -360,23 +401,27 @@ export function ProfileSecuritySection({
                   </div>
                   <div className="flex items-center gap-2">
                     <code className="tabular-mono rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground">
-                      {DEMO_TOTP_SECRET}
+                      {mfaSetup.secret}
                     </code>
                     <Button type="button" variant="outline" size="sm" onClick={() => void handleCopySecret()}>
-                      {copiedSecret ? <Check className="h-3.5 w-3.5 text-status-success" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedSecret ? (
+                        <Check className="h-3.5 w-3.5 text-status-success" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
                       <span>{copiedSecret ? "Đã sao chép" : "Sao chép"}</span>
                     </Button>
                   </div>
                 </div>
 
-                <form onSubmit={handleVerifyMfa} className="space-y-2.5">
+                <form onSubmit={(e) => void handleVerifyMfa(e)} className="space-y-2.5">
                   <Label htmlFor="mfa-verify">Nhập mã 6 số từ ứng dụng Authenticator</Label>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
                       id="mfa-verify"
                       maxLength={6}
                       inputMode="numeric"
-                      placeholder="123456"
+                      placeholder="000000"
                       value={mfaOtp}
                       onChange={(e) => {
                         setMfaOtp(e.target.value.replace(/\D/g, ""));
@@ -401,7 +446,6 @@ export function ProfileSecuritySection({
         </CardContent>
       </Card>
 
-      {/* Active Sessions */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -426,40 +470,46 @@ export function ProfileSecuritySection({
               <span>{sessionNotice}</span>
             </div>
           )}
-          <ul className="divide-y divide-border border-t border-border">
-            {sessions.map((sess) => (
-              <li
-                key={sess.id}
-                className="flex flex-col justify-between gap-3 px-5 py-3.5 sm:flex-row sm:items-center"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    {sess.type === "mobile" ? <Smartphone className="h-4 w-4" /> : <Laptop className="h-4 w-4" />}
-                  </span>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{sess.device}</span>
-                      {sess.current && <Badge variant="success">Phiên hiện tại</Badge>}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {sess.location} · {sess.lastActive}
+          {sessions.length === 0 ? (
+            <div className="border-t border-border p-6 text-center text-xs text-muted-foreground">
+              Chưa có danh sách phiên đăng nhập hoạt động nào được đồng bộ từ máy chủ.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border border-t border-border">
+              {sessions.map((sess) => (
+                <li
+                  key={sess.id}
+                  className="flex flex-col justify-between gap-3 px-5 py-3.5 sm:flex-row sm:items-center"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                      {sess.type === "mobile" ? <Smartphone className="h-4 w-4" /> : <Laptop className="h-4 w-4" />}
+                    </span>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">{sess.device}</span>
+                        {sess.current && <Badge variant="success">Phiên hiện tại</Badge>}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {sess.location} · {sess.lastActive}
+                      </div>
                     </div>
                   </div>
-                </div>
-                {!sess.current && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => revokeSession(sess.id)}
-                    className="self-start text-status-danger hover:bg-status-danger/10 hover:text-status-danger sm:self-center"
-                  >
-                    Thu hồi
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
+                  {!sess.current && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => revokeSession(sess.id)}
+                      className="self-start text-status-danger hover:bg-status-danger/10 hover:text-status-danger sm:self-center"
+                    >
+                      Thu hồi
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>

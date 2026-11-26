@@ -14,3 +14,11 @@ export function useSurveys(){
     retry: false
   });
 }
+
+export async function summarizeSurveyEssays(surveyId, redactedContent) {
+  const res = await apiClient.post(`/surveys/${encodeURIComponent(surveyId)}/ai-summary`, {
+    redactedContent
+  });
+  if (!res.data.success) throw new Error(res.data.detail);
+  return res.data.data;
+}

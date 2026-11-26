@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 
 const CATEGORY_TAGS = [
   "Điểm danh/Quyền lợi",
@@ -28,66 +29,16 @@ const CATEGORY_TAGS = [
   "Thắc mắc chung"
 ];
 
-const INITIAL_THREADS = [
-  {
-    id: "TH-2041",
-    category: "Điểm danh/Quyền lợi",
-    title: "Bổ sung điểm danh sự kiện FIT Tech Talk (lỗi mạng tại hội trường)",
-    status: "DANG_XU_LY",
-    updatedAt: "21/11 · 19:40",
-    messages: [
-      {
-        id: "m1",
-        sender: "STUDENT",
-        senderLabel: "Bạn (22110418)",
-        text: "Chào BCH, em có quét QR check-in lúc 08:25 nhưng hội trường mất sóng nên chưa hiện trên hệ thống. Em đính kèm ảnh chụp thẻ sinh viên và ảnh hội trường ạ.",
-        time: "19:12",
-        seen: true,
-        attachmentName: "minh-chung-checkin.jpg (1.4 MB)"
-      },
-      {
-        id: "m2",
-        sender: "BCH",
-        senderLabel: "Ban Chấp hành Đoàn - Hội Khoa CNTT",
-        text: "Chào bạn, BCH đã tiếp nhận yêu cầu và kiểm tra hàng chờ đồng bộ ngoại tuyến. Vui lòng chờ trong cửa sổ hậu kiểm 48h, hệ thống sẽ gửi Web Push ngay khi cập nhật E-Cert.",
-        time: "19:40",
-        seen: true
-      }
-    ]
-  },
-  {
-    id: "TH-2018",
-    category: "Cửa hàng",
-    title: "Đổi size Áo Khoa CNTT từ M sang L (Đơn #ORD-2026-084)",
-    status: "DA_GIAI_QUYET",
-    updatedAt: "18/11 · 15:20",
-    messages: [
-      {
-        id: "m3",
-        sender: "STUDENT",
-        senderLabel: "Bạn (22110418)",
-        text: "Em muốn đổi size áo đơn #ORD-2026-084 sang size L trước khi nhận tại bàn trực OFIT được không ạ?",
-        time: "14:05",
-        seen: true
-      },
-      {
-        id: "m4",
-        sender: "BCH",
-        senderLabel: "Ban Chấp hành Đoàn - Hội Khoa CNTT",
-        text: "Đã cập nhật đơn #ORD-2026-084 sang size L. Bạn ghé Văn phòng Đoàn - Hội các ca trực T2–T7 để nhận áo nhé!",
-        time: "15:20",
-        seen: true
-      }
-    ]
-  }
-];
+const INITIAL_THREADS = [];
 
-export function MessengerPage(){
+export function MessengerPage() {
   const location = useLocation();
-  const navState = (location.state) ?? null;
+  const navState = location.state ?? null;
+  const userId = useAuthStore((s) => s.userId);
+  const senderLabel = userId ? `Bạn (${userId})` : "Bạn";
 
   const [threads, setThreads] = useState(INITIAL_THREADS);
-  const [activeId, setActiveId] = useState(INITIAL_THREADS[0].id);
+  const [activeId, setActiveId] = useState(() => INITIAL_THREADS[0]?.id ?? "");
   const [mobileView, setMobileView] = useState("list");
   const [composerText, setComposerText] = useState("");
   const [replyTarget, setReplyTarget] = useState(null);
@@ -99,15 +50,24 @@ export function MessengerPage(){
   const [newBody, setNewBody] = useState(
     navState?.prefillSummary
       ? `[Ngữ cảnh chuyển tiếp từ YITBot]\n${navState.prefillSummary}\n\nCâu hỏi bổ sung của em: `
-: ""
+      : ""
   );
   const [newAttachment, setNewAttachment] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (navState?.fromYitBot) setCreating(true);
   }, [navState?.fromYitBot]);
 
-  const activeThread = threads.find((t) => t.id === activeId) ?? threads[0];
+  const activeThread = threads.find((t) => t.id === activeId) ?? threads[0] ?? null;
+
+  const handleAttachmentSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    setNewAttachment(`${file.name} (${sizeMb} MB)`);
+    e.target.value = "";
+  };
 
   const handleCreateTicket = (e) => {
     e.preventDefault();
@@ -123,7 +83,7 @@ export function MessengerPage(){
         {
           id: `m-${Date.now()}`,
           sender: "STUDENT",
-          senderLabel: "Bạn (22110418)",
+          senderLabel,
           text: newBody.trim(),
           time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
           seen: false,
@@ -131,7 +91,7 @@ export function MessengerPage(){
         }
       ]
     };
-    setThreads((prev) => [created,...prev]);
+    setThreads((prev) => [created, ...prev]);
     setActiveId(id);
     setMobileView("chat");
     setCreating(false);
@@ -142,12 +102,12 @@ export function MessengerPage(){
 
   const handleSendReply = (e) => {
     e.preventDefault();
-    if (!composerText.trim()) return;
+    if (!composerText.trim() || !activeThread) return;
     const wasClosed = activeThread.status === "DA_GIAI_QUYET";
     const entry = {
       id: `m-${Date.now()}`,
       sender: "STUDENT",
-      senderLabel: "Bạn (22110418)",
+      senderLabel,
       text: composerText.trim(),
       time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
       seen: false,
@@ -157,12 +117,12 @@ export function MessengerPage(){
       prev.map((t) =>
         t.id === activeThread.id
           ? {
-...t,
-              status: wasClosed ? "CHO_BCH": t.status,
+              ...t,
+              status: wasClosed ? "CHO_BCH" : t.status,
               updatedAt: "Vừa xong",
               messages: [...t.messages, entry]
             }
-: t
+          : t
       )
     );
     if (wasClosed) {
@@ -187,9 +147,13 @@ export function MessengerPage(){
               Mọi yêu cầu được định tuyến tập trung về Hộp thư Chung BCH/BTV, trao đổi thời gian thực và cam kết SLA phản hồi trong 24 giờ làm việc.
             </p>
           </div>
-          <Button type="button" className="h-11 w-full rounded-full sm:h-10 sm:w-auto" onClick={() => setCreating((v) => !v)}>
+          <Button
+            type="button"
+            className="h-11 w-full rounded-full sm:h-10 sm:w-auto"
+            onClick={() => setCreating((v) => !v)}
+          >
             <MessageSquarePlus className="h-4 w-4" />
-            <span>{creating ? "Đóng biểu mẫu": "Tạo câu hỏi mới"}</span>
+            <span>{creating ? "Đóng biểu mẫu" : "Tạo câu hỏi mới"}</span>
           </Button>
         </div>
       </section>
@@ -258,12 +222,19 @@ export function MessengerPage(){
 
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAttachmentSelect}
+                  />
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     className="rounded-full"
-                    onClick={() => setNewAttachment("anh-chup-man-hinh.png (1.2 MB)")}
+                    onClick={() => fileInputRef.current?.click()}
                   >
                     <ImagePlus className="h-4 w-4" />
                     Đính kèm ảnh (≤ 5MB)
@@ -296,36 +267,47 @@ export function MessengerPage(){
             <CardTitle className="text-base">Cuộc trò chuyện của tôi ({threads.length})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {threads.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => {
-                  setActiveId(t.id);
-                  setMobileView("chat");
-                }}
-                className={cn(
-                  "w-full rounded-xl border p-3.5 text-left transition-colors",
-                  t.id === activeThread.id
-                    ? "border-primary bg-primary/8"
-: "border-border bg-card hover:border-primary/40"
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <Badge variant="secondary" className="rounded-full text-[11px]">
-                    {t.category}
-                  </Badge>
-                  <span className="tabular-mono text-[11px] text-muted-foreground">{t.updatedAt}</span>
-                </div>
-                <div className="mt-1.5 line-clamp-2 text-sm font-medium text-foreground">{t.title}</div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="tabular-mono text-[11px] text-muted-foreground">{t.id}</span>
-                  {t.status === "CHO_BCH" && <Badge variant="warning">Chờ BCH trả lời</Badge>}
-                  {t.status === "DANG_XU_LY" && <Badge variant="info">Đang xử lý</Badge>}
-                  {t.status === "DA_GIAI_QUYET" && <Badge variant="success">Đã giải quyết</Badge>}
-                </div>
-              </button>
-            ))}
+            {threads.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/25 px-4 py-10 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Chưa có cuộc trò chuyện nào
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Bấm &ldquo;Tạo câu hỏi mới&rdquo; để gửi thắc mắc trực tiếp đến Ban Chấp hành Khoa CNTT.
+                </p>
+              </div>
+            ) : (
+              threads.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveId(t.id);
+                    setMobileView("chat");
+                  }}
+                  className={cn(
+                    "w-full rounded-xl border p-3.5 text-left transition-colors",
+                    t.id === activeThread?.id
+                      ? "border-primary bg-primary/8"
+                      : "border-border bg-card hover:border-primary/40"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="secondary" className="rounded-full text-[11px]">
+                      {t.category}
+                    </Badge>
+                    <span className="tabular-mono text-[11px] text-muted-foreground">{t.updatedAt}</span>
+                  </div>
+                  <div className="mt-1.5 line-clamp-2 text-sm font-medium text-foreground">{t.title}</div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="tabular-mono text-[11px] text-muted-foreground">{t.id}</span>
+                    {t.status === "CHO_BCH" && <Badge variant="warning">Chờ BCH trả lời</Badge>}
+                    {t.status === "DANG_XU_LY" && <Badge variant="info">Đang xử lý</Badge>}
+                    {t.status === "DA_GIAI_QUYET" && <Badge variant="success">Đã giải quyết</Badge>}
+                  </div>
+                </button>
+              ))
+            )}
           </CardContent>
         </Card>
 
@@ -335,123 +317,136 @@ export function MessengerPage(){
             mobileView === "list" && "hidden lg:flex"
           )}
         >
-          <CardHeader className="border-b border-border/80 px-4 py-3.5 sm:px-5 sm:py-4">
-            <button
-              type="button"
-              onClick={() => setMobileView("list")}
-              className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted lg:hidden"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Danh sách hội thoại ({threads.length})</span>
-            </button>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" className="rounded-full">
-                    {activeThread.category}
-                  </Badge>
-                  <span className="tabular-mono text-xs text-muted-foreground">{activeThread.id}</span>
-                </div>
-                <CardTitle className="mt-1.5 text-base">{activeThread.title}</CardTitle>
-              </div>
-              <VerifiedBadge label="Ban Chấp hành Đoàn - Hội Khoa CNTT" />
-            </div>
-          </CardHeader>
-
-          <CardContent className="flex flex-1 flex-col p-0">
-            <div className="min-h-[280px] max-h-[55dvh] flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:min-h-[320px] sm:max-h-[460px] sm:px-5 sm:py-5">
-              {activeThread.messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={cn(
-                    "flex flex-col gap-1",
-                    m.sender === "STUDENT" ? "items-end": "items-start"
-                  )}
+          {!activeThread ? (
+            <CardContent className="flex min-h-[340px] flex-1 flex-col items-center justify-center p-8 text-center">
+              <p className="text-sm font-medium text-foreground">
+                Chưa có nội dung hội thoại nào được chọn
+              </p>
+              <p className="mt-1 max-w-md text-xs text-muted-foreground">
+                Khi bạn gửi câu hỏi mới, cuộc trao đổi với Ban Chấp hành sẽ hiển thị trực tiếp tại đây.
+              </p>
+            </CardContent>
+          ) : (
+            <>
+              <CardHeader className="border-b border-border/80 px-4 py-3.5 sm:px-5 sm:py-4">
+                <button
+                  type="button"
+                  onClick={() => setMobileView("list")}
+                  className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted lg:hidden"
                 >
-                  <div
-                    className={cn(
-                      "max-w-[85%] px-4 py-3 text-sm leading-relaxed",
-                      m.sender === "STUDENT"
-                        ? "rounded-2xl rounded-tr-md bg-primary text-primary-foreground"
-: "rounded-2xl rounded-tl-md bg-muted/55 text-foreground"
-                    )}
-                  >
-                    <div className="mb-1 flex items-center justify-between gap-3 text-[11px] opacity-85">
-                      <span className="font-semibold">{m.senderLabel}</span>
-                      <button
-                        type="button"
-                        onClick={() => setReplyTarget(m)}
-                        className="inline-flex items-center gap-1 hover:underline"
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span>Danh sách hội thoại ({threads.length})</span>
+                </button>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="rounded-full">
+                        {activeThread.category}
+                      </Badge>
+                      <span className="tabular-mono text-xs text-muted-foreground">{activeThread.id}</span>
+                    </div>
+                    <CardTitle className="mt-1.5 text-base">{activeThread.title}</CardTitle>
+                  </div>
+                  <VerifiedBadge label="Ban Chấp hành Đoàn - Hội Khoa CNTT" />
+                </div>
+              </CardHeader>
+
+              <CardContent className="flex flex-1 flex-col p-0">
+                <div className="min-h-[280px] max-h-[55dvh] flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:min-h-[320px] sm:max-h-[460px] sm:px-5 sm:py-5">
+                  {activeThread.messages.map((m) => (
+                    <div
+                      key={m.id}
+                      className={cn(
+                        "flex flex-col gap-1",
+                        m.sender === "STUDENT" ? "items-end" : "items-start"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "max-w-[85%] px-4 py-3 text-sm leading-relaxed",
+                          m.sender === "STUDENT"
+                            ? "rounded-2xl rounded-tr-md bg-primary text-primary-foreground"
+                            : "rounded-2xl rounded-tl-md bg-muted/55 text-foreground"
+                        )}
                       >
-                        <Reply className="h-3 w-3" />
-                        Trích dẫn
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[11px] opacity-85">
+                          <span className="font-semibold">{m.senderLabel}</span>
+                          <button
+                            type="button"
+                            onClick={() => setReplyTarget(m)}
+                            className="inline-flex items-center gap-1 hover:underline"
+                          >
+                            <Reply className="h-3 w-3" />
+                            Trích dẫn
+                          </button>
+                        </div>
+
+                        {m.replyToText && (
+                          <div className="mb-2 rounded-lg bg-black/10 px-2.5 py-1 text-xs italic dark:bg-white/10">
+                            Trích dẫn: “{m.replyToText}”
+                          </div>
+                        )}
+
+                        <p className="whitespace-pre-line">{m.text}</p>
+
+                        {m.attachmentName && (
+                          <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-black/10 px-2.5 py-1 text-xs dark:bg-white/10">
+                            <ImagePlus className="h-3.5 w-3.5" />
+                            <span>{m.attachmentName}</span>
+                          </div>
+                        )}
+
+                        <div className="mt-1.5 flex items-center justify-end gap-1 tabular-mono text-[10px] opacity-80">
+                          <span>{m.time}</span>
+                          {m.seen && <CheckCheck className="h-3 w-3" />}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-2.5 border-t border-border/80 bg-muted/25 px-4 py-3.5">
+                  {activeThread.status === "DA_GIAI_QUYET" && (
+                    <div className="rounded-xl bg-muted/70 px-3.5 py-2 text-xs text-muted-foreground">
+                      Cuộc trò chuyện này đã được đánh dấu <strong>Đã giải quyết</strong>. Nhắn thêm câu hỏi mới sẽ tự động mở lại trạng thái <strong>Chờ BCH trả lời</strong>.
+                    </div>
+                  )}
+
+                  {replyTarget && (
+                    <div className="flex items-center justify-between rounded-xl bg-card px-3 py-1.5 text-xs shadow-sm">
+                      <span className="truncate text-muted-foreground">
+                        Đang trích dẫn: <strong className="text-foreground">{replyTarget.text.slice(0, 70)}</strong>
+                      </span>
+                      <button type="button" onClick={() => setReplyTarget(null)}>
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                  )}
 
-                    {m.replyToText && (
-                      <div className="mb-2 rounded-lg bg-black/10 px-2.5 py-1 text-xs italic dark:bg-white/10">
-                        Trích dẫn: “{m.replyToText}”
-                      </div>
-                    )}
-
-                    <p className="whitespace-pre-line">{m.text}</p>
-
-                    {m.attachmentName && (
-                      <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-black/10 px-2.5 py-1 text-xs dark:bg-white/10">
-                        <ImagePlus className="h-3.5 w-3.5" />
-                        <span>{m.attachmentName}</span>
-                      </div>
-                    )}
-
-                    <div className="mt-1.5 flex items-center justify-end gap-1 tabular-mono text-[10px] opacity-80">
-                      <span>{m.time}</span>
-                      {m.seen && <CheckCheck className="h-3 w-3" />}
-                    </div>
-                  </div>
+                  <form
+                    onSubmit={handleSendReply}
+                    className="flex items-center gap-2 rounded-full border border-input bg-card p-1.5 pl-4 shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
+                  >
+                    <Input
+                      value={composerText}
+                      onChange={(e) => setComposerText(e.target.value)}
+                      placeholder="Nhập tin nhắn trao đổi với BCH..."
+                      className="h-10 flex-1 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 sm:h-9 sm:text-sm"
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="liquid-glass-btn-cobalt h-10 rounded-full px-4 disabled:opacity-45 sm:h-9"
+                      disabled={!composerText.trim()}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Gửi</span>
+                    </Button>
+                  </form>
                 </div>
-              ))}
-            </div>
-
-            <div className="space-y-2.5 border-t border-border/80 bg-muted/25 px-4 py-3.5">
-              {activeThread.status === "DA_GIAI_QUYET" && (
-                <div className="rounded-xl bg-muted/70 px-3.5 py-2 text-xs text-muted-foreground">
-                  Cuộc trò chuyện này đã được đánh dấu <strong>Đã giải quyết</strong>. Nhắn thêm câu hỏi mới sẽ tự động mở lại trạng thái <strong>Chờ BCH trả lời</strong>.
-                </div>
-              )}
-
-              {replyTarget && (
-                <div className="flex items-center justify-between rounded-xl bg-card px-3 py-1.5 text-xs shadow-sm">
-                  <span className="truncate text-muted-foreground">
-                    Đang trích dẫn: <strong className="text-foreground">{replyTarget.text.slice(0, 70)}</strong>
-                  </span>
-                  <button type="button" onClick={() => setReplyTarget(null)}>
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-
-              <form
-                onSubmit={handleSendReply}
-                className="flex items-center gap-2 rounded-full border border-input bg-card p-1.5 pl-4 shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20"
-              >
-                <Input
-                  value={composerText}
-                  onChange={(e) => setComposerText(e.target.value)}
-                  placeholder="Nhập tin nhắn trao đổi với BCH..."
-                  className="h-10 flex-1 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 sm:h-9 sm:text-sm"
-                />
-                <Button
-                  type="submit"
-                  size="sm"
-                  className="liquid-glass-btn-cobalt h-10 rounded-full px-4 disabled:opacity-45 sm:h-9"
-                  disabled={!composerText.trim()}
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  <span>Gửi</span>
-                </Button>
-              </form>
-            </div>
-          </CardContent>
+              </CardContent>
+            </>
+          )}
         </Card>
       </div>
     </div>

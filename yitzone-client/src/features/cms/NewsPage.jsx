@@ -49,7 +49,7 @@ export function NewsPage() {
   const [contribOpen, setContribOpen] = useState(false);
   const [contribTitle, setContribTitle] = useState("");
   const [contribCategoryId, setContribCategoryId] = useState(
-    () => categories[0]?.id ?? "cat-doan-hoi"
+    () => categories[0]?.id ?? ""
   );
   const [contribBody, setContribBody] = useState("");
 
@@ -151,25 +151,28 @@ export function NewsPage() {
 
   const allTags = useMemo(() => {
     const set = new Set();
-    publishedArticles.forEach((a) => a.tags.forEach((t) => set.add(t)));
+    publishedArticles.forEach((a) => (a.tags ?? []).forEach((t) => set.add(t)));
     return Array.from(set);
   }, [publishedArticles]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return publishedArticles.filter((a) => {
+      const tags = a.tags ?? [];
       const matchCat = selectedCategoryId === "ALL" || a.categoryId === selectedCategoryId;
-      const matchTag = !selectedTag || a.tags.includes(selectedTag);
+      const matchTag = !selectedTag || tags.includes(selectedTag);
       const matchQ =
         !q ||
         a.title.toLowerCase().includes(q) ||
         a.excerpt.toLowerCase().includes(q) ||
         a.authorName.toLowerCase().includes(q) ||
-        a.tags.some((t) => t.toLowerCase().includes(q));
+        tags.some((t) => t.toLowerCase().includes(q));
       return matchCat && matchTag && matchQ;
     });
   }, [publishedArticles, selectedCategoryId, selectedTag, searchQuery]);
 
+  const hasActiveFilters =
+    selectedCategoryId !== "ALL" || Boolean(selectedTag) || Boolean(searchQuery.trim());
   const featuredArticle = filtered.find((a) => a.featured) ?? filtered[0];
   const secondaryArticles = filtered.filter((a) => a.id !== featuredArticle?.id);
 
@@ -234,7 +237,7 @@ export function NewsPage() {
               <Label>Chuyên mục đề xuất</Label>
               <Select value={contribCategoryId} onValueChange={setContribCategoryId}>
                 <SelectTrigger className="rounded-xl">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn chuyên mục" />
                 </SelectTrigger>
                 <SelectContent>
                   {activeCategories.map((c) => (
@@ -359,7 +362,7 @@ export function NewsPage() {
                   <span>·</span>
                   <span className="inline-flex items-center gap-1 tabular-mono">
                     <Eye className="h-3.5 w-3.5" />
-                    {featuredArticle.views.toLocaleString("vi-VN")}
+                    {(featuredArticle.views ?? 0).toLocaleString("vi-VN")}
                   </span>
                 </div>
 
@@ -377,7 +380,7 @@ export function NewsPage() {
                 </p>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {featuredArticle.tags.map((tag) => (
+                  {(featuredArticle.tags ?? []).map((tag) => (
                     <Badge key={tag} variant="secondary">
                       #{tag}
                     </Badge>
@@ -405,24 +408,30 @@ export function NewsPage() {
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <BookOpen className="h-8 w-8 text-muted-foreground" />
             <p className="mt-3 font-display text-lg font-medium text-foreground">
-              Không tìm thấy bài viết phù hợp
+              {publishedArticles.length === 0 && !hasActiveFilters
+                ? "Chưa có bài viết nào được xuất bản"
+                : "Không tìm thấy bài viết phù hợp"}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Thử đổi chuyên mục hoặc xóa từ khóa tìm kiếm để xem toàn bộ bản tin đã xuất bản.
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              {publishedArticles.length === 0 && !hasActiveFilters
+                ? "Các bản tin hoạt động Đoàn – Hội, chia sẻ học thuật và bài cộng tác sinh viên sẽ hiển thị tại đây sau khi Ban Biên tập xuất bản."
+                : "Thử đổi chuyên mục hoặc xóa từ khóa tìm kiếm để xem toàn bộ bản tin đã xuất bản."}
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-4 rounded-full"
-              onClick={() => {
-                setSelectedCategoryId("ALL");
-                setSelectedTag(null);
-                setSearchQuery("");
-              }}
-            >
-              Đặt lại bộ lọc
-            </Button>
+            {hasActiveFilters && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4 rounded-full"
+                onClick={() => {
+                  setSelectedCategoryId("ALL");
+                  setSelectedTag(null);
+                  setSearchQuery("");
+                }}
+              >
+                Đặt lại bộ lọc
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
@@ -501,10 +510,6 @@ export function NewsPage() {
           ))}
         </section>
       )}
-
-      <p className="text-xs text-muted-foreground">
-        Dữ liệu bài viết và chuyên mục đang hiển thị là nội dung mẫu minh họa.
-      </p>
     </div>
   );
 }

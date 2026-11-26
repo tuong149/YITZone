@@ -18,7 +18,7 @@ import {
   XCircle
 } from "lucide-react";
 import { AuditActionDialog } from "@/components/ui/audit-action-dialog";
-import { Badge, VerifiedBadge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -40,165 +40,15 @@ import { useOrderStore } from "@/stores/order-store";
 import { pushAppToast } from "@/stores/toast-store";
 import { StoreCatalogCrudTab } from "./StoreCatalogCrudTab";
 
-const INITIAL_ADMIN_ORDERS = [
-  {
-    id: "adm-ord-1",
-    code: "YIT-STR-849514",
-    student: "22110345 · Nguyễn Minh Khoa",
-    itemsSummary: "1× Áo Polo Khoa CNTT (Size M) + 1× Dây đeo thẻ FIT",
-    deliveryLabel: "Giao phòng A3-302 (Khu A, CS1) · Ca 2",
-    campaign: "FACULTY_MERCH",
-    paymentMethod: "COD",
-    total: 235_000,
-    status: "PENDING_COD",
-    createdAt: "24/11/2026 08:40"
-  },
-  {
-    id: "adm-ord-2",
-    code: "YIT-STR-849201",
-    student: "23110218 · Nguyễn Hoàng Nam",
-    itemsSummary: "1× Áo khoác Hoodie FIT 2026 (Size L, Xanh Navy)",
-    deliveryLabel: "Nhận tại Văn phòng Đoàn – Hội (CS1)",
-    campaign: "FACULTY_MERCH",
-    paymentMethod: "VIETQR",
-    total: 320_000,
-    status: "PAID",
-    createdAt: "23/11/2026 15:12"
-  },
-  {
-    id: "adm-ord-3",
-    code: "YIT-STR-849108",
-    student: "23110440 · Lê Thảo Nhi",
-    itemsSummary: "2× Combo Tiếp sức Ôn thi XTN 2027",
-    deliveryLabel: "Giao phòng E2-104 (Khu E, CS1) · Ca 3",
-    campaign: "XTN-2027",
-    paymentMethod: "VIETQR",
-    total: 223_000,
-    status: "DELIVERED",
-    createdAt: "23/11/2026 10:05"
-  },
-  {
-    id: "adm-ord-4",
-    code: "YIT-STR-848112",
-    student: "24110095 · Phạm Thảo Vy",
-    itemsSummary: "1× Túi Tote Canvas Node-Grid",
-    deliveryLabel: "Nhận tại Văn phòng Đoàn – Hội (CS1)",
-    campaign: "XTN-2027",
-    paymentMethod: "VIETQR",
-    total: 80_000,
-    status: "PAID_OUT_OF_STOCK",
-    createdAt: "22/11/2026 19:22"
-  }
-];
+const INITIAL_ADMIN_ORDERS = [];
 
-const INITIAL_RECON = [
-  {
-    id: "rc-1",
-    orderCode: "YIT-STR-849300",
-    student: "22110412 · Võ Gia Huy",
-    amount: 320_000,
-    channel: "Chuyển khoản sai nội dung",
-    issue: "Có ảnh biên lai tham chiếu · Chờ Thủ quỹ đối chiếu sao kê thực tế",
-    status: "PENDING_MANUAL"
-  },
-  {
-    id: "rc-2",
-    orderCode: "YIT-STR-849199",
-    student: "Webhook SePay",
-    amount: 185_000,
-    channel: "Webhook HMAC-SHA256",
-    issue: "Từ chối 401 — Chữ ký số không khớp (Đã ghi Audit Log)",
-    status: "WEBHOOK_REJECTED_401"
-  }
-];
+const INITIAL_RECON = [];
 
-const INITIAL_SUPPORTS = [
-  {
-    id: "sp-1",
-    orderCode: "YIT-STR-849201",
-    student: "23110218 · Nguyễn Hoàng Nam",
-    requestType: "Đổi size (L → XL)",
-    reason: "Đơn chưa giao, xin đổi sang XL (Tự động cân bằng tồn 2 size)",
-    status: "OPEN"
-  },
-  {
-    id: "sp-2",
-    orderCode: "YIT-STR-848112",
-    student: "24110095 · Phạm Thảo Vy",
-    requestType: "Hoàn tiền",
-    reason: "Tiền về sau 15 phút khi hết tồn kho Túi Tote · Hoàn 80.000đ",
-    status: "OPEN"
-  }
-];
+const INITIAL_SUPPORTS = [];
 
-const INITIAL_COD = [
-  {
-    id: "cod-1",
-    ctvName: "Lê Quốc Bảo",
-    mssv: "22110389",
-    ordersCount: 6,
-    cashCollected: 1_420_000,
-    hoursElapsed: 27,
-    signedByTreasurer: false
-  },
-  {
-    id: "cod-2",
-    ctvName: "Trần Thị Minh Anh",
-    mssv: "23110142",
-    ordersCount: 4,
-    cashCollected: 860_000,
-    hoursElapsed: 5,
-    signedByTreasurer: false
-  }
-];
+const INITIAL_COD = [];
 
-const PRODUCT_FINANCE_ROWS = [
-  {
-    id: "pf-1",
-    name: "Combo Tiếp sức Ôn thi XTN 2027",
-    campaign: "XTN-2027",
-    soldQty: 92,
-    revenue: 10_028_000,
-    cost: 4_968_000,
-    refund: 0
-  },
-  {
-    id: "pf-2",
-    name: "Bánh tráng trộn & Khô gà gây quỹ",
-    campaign: "XTN-2027",
-    soldQty: 148,
-    revenue: 6_212_000,
-    cost: 1_972_000,
-    refund: 80_000
-  },
-  {
-    id: "pf-3",
-    name: "Trà tắc mật ong xí muội (500ml)",
-    campaign: "XTN-2027",
-    soldQty: 120,
-    revenue: 2_400_000,
-    cost: 800_000,
-    refund: 0
-  },
-  {
-    id: "pf-4",
-    name: "Áo khoác Hoodie FIT HCM-UTE 2026",
-    campaign: "FACULTY_MERCH",
-    soldQty: 34,
-    revenue: 10_880_000,
-    cost: 6_630_000,
-    refund: 0
-  },
-  {
-    id: "pf-5",
-    name: "Áo Polo Khoa CNTT & Dây đeo thẻ",
-    campaign: "FACULTY_MERCH",
-    soldQty: 103,
-    revenue: 10_375_000,
-    cost: 5_626_000,
-    refund: 0
-  }
-];
+const PRODUCT_FINANCE_ROWS = [];
 
 function formatVnd(amount) {
   return `${amount.toLocaleString("vi-VN")}đ`;
@@ -214,13 +64,15 @@ function orderStatusBadge(status) {
       return <Badge variant="success">Đã giao hàng</Badge>;
     case "PAID_OUT_OF_STOCK":
       return <Badge variant="danger">Hết tồn · Chờ hoàn tiền</Badge>;
+    default:
+      return <Badge variant="outline">{status}</Badge>;
   }
 }
 
 export function StoreAdminPage() {
   const authorities = useAuthStore((s) => s.authorities);
   const currentUserName = useAuthStore((s) => s.fullName) ?? "Cán bộ trực";
-  const currentUserId = useAuthStore((s) => s.userId) ?? "22110456";
+  const currentUserId = useAuthStore((s) => s.userId) ?? "";
   const studentOrders = useOrderStore((s) => s.orders);
 
   const canManageStoreFinance = hasAnyPermission(authorities, [
@@ -256,7 +108,7 @@ export function StoreAdminPage() {
       .map((o) => ({
         id: o.id,
         code: o.code,
-        student: `${currentUserId} · ${currentUserName}`,
+        student: currentUserId ? `${currentUserId} · ${currentUserName}` : currentUserName,
         itemsSummary: o.itemsSummary,
         deliveryLabel: o.deliveryLabel,
         campaign: o.itemsSummary.toLowerCase().includes("xtn") ? "XTN-2027" : "FACULTY_MERCH",
@@ -893,7 +745,12 @@ export function StoreAdminPage() {
             </div>
           </div>
 
-          <DataTable columns={orderCols} data={filteredOrders} />
+          <DataTable
+            columns={orderCols}
+            data={filteredOrders}
+            emptyTitle="Chưa có đơn hàng nào"
+            emptyDescription="Các đơn hàng sinh viên đặt trên Cửa hàng sẽ hiển thị tại đây."
+          />
         </TabsContent>
 
         {/* TAB 2: VIETQR RECONCILIATION & SUPPORT */}
@@ -902,14 +759,24 @@ export function StoreAdminPage() {
             <h2 className="font-display text-lg font-medium text-foreground">
               Hàng chờ Đối soát VietQR &amp; Nhật ký Thanh toán Tự động
             </h2>
-            <DataTable columns={reconCols} data={reconRows} />
+            <DataTable
+              columns={reconCols}
+              data={reconRows}
+              emptyTitle="Không có giao dịch chờ đối soát"
+              emptyDescription="Nhật ký webhook VietQR và các giao dịch cần Thủ quỹ đối soát thủ công sẽ xuất hiện tại đây."
+            />
           </div>
 
           <div className="space-y-2">
             <h2 className="font-display text-lg font-medium text-foreground">
               Yêu cầu Hỗ trợ Đơn hàng (Đổi Size / Hoàn tiền)
             </h2>
-            <DataTable columns={supportCols} data={supportRows} />
+            <DataTable
+              columns={supportCols}
+              data={supportRows}
+              emptyTitle="Chưa có yêu cầu hỗ trợ nào"
+              emptyDescription="Các yêu cầu đổi size, đổi mẫu hoặc hoàn tiền từ sinh viên sẽ hiển thị tại đây."
+            />
           </div>
         </TabsContent>
 
@@ -1017,7 +884,12 @@ export function StoreAdminPage() {
               <Banknote className="h-5 w-5 text-primary" />
               <span>Phiếu Bàn giao Tiền mặt Cuối ca</span>
             </h2>
-            <DataTable columns={codCols} data={codRows} />
+            <DataTable
+              columns={codCols}
+              data={codRows}
+              emptyTitle="Chưa có phiếu thu COD nào"
+              emptyDescription="Phiếu bàn giao tiền mặt COD cuối ca của CTV trực bàn sẽ hiển thị tại đây."
+            />
           </div>
         </TabsContent>
 
@@ -1087,36 +959,24 @@ export function StoreAdminPage() {
             <h2 className="font-display text-lg font-medium text-foreground">
               Chi tiết Hạch toán theo Sản phẩm
             </h2>
-            <DataTable columns={financeCols} data={financeRows} />
+            <DataTable
+              columns={financeCols}
+              data={financeRows}
+              emptyTitle="Chưa có dữ liệu hạch toán sản phẩm"
+              emptyDescription="Doanh thu, giá vốn và lợi nhuận ròng theo từng sản phẩm sẽ được tổng hợp khi phát sinh đơn hàng."
+            />
           </div>
 
           <Card>
             <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ShieldCheck className="h-5 w-5 text-brand-navy dark:text-brand-cyan" />
-                  <span>Tài khoản Ngân hàng Tổ chức đang gắn VietQR</span>
-                </CardTitle>
-                <VerifiedBadge label="Đã được BTV phê duyệt" />
-              </div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldCheck className="h-5 w-5 text-brand-navy dark:text-brand-cyan" />
+                <span>Tài khoản Ngân hàng Tổ chức đang gắn VietQR</span>
+              </CardTitle>
               <CardDescription>
-                Mọi chiến dịch gây quỹ bắt buộc gắn tài khoản đứng tên tổ chức Đoàn – Hội Khoa CNTT đã qua BTV duyệt.
+                Mọi chiến dịch gây quỹ bắt buộc gắn tài khoản đứng tên tổ chức Đoàn – Hội Khoa CNTT đã qua Ban Thường vụ phê duyệt tại tab Danh mục, Sản phẩm &amp; Voucher.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">
-              <div className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-1">
-                <div className="text-xs font-semibold text-muted-foreground">Ngân hàng thụ hưởng</div>
-                <div className="tabular-mono font-semibold text-foreground">
-                  Vietcombank · 1029 8844 2026
-                </div>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-1">
-                <div className="text-xs font-semibold text-muted-foreground">Chủ tài khoản</div>
-                <div className="font-semibold text-foreground">
-                  DOAN KHOA CONG NGHE THONG TIN HCMUTE
-                </div>
-              </div>
-            </CardContent>
           </Card>
         </TabsContent>
 

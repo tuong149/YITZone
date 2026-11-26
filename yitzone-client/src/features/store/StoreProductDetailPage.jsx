@@ -39,14 +39,14 @@ export function StoreProductDetailPage() {
   const setSelectedBucket = useCartStore((s) => s.setSelectedBucket);
   const totalCartCount = useCartStore((s) => s.items.reduce((sum, i) => sum + i.qty, 0));
 
-  const [selectedSize, setSelectedSize] = useState(product?.sizes[0] ?? "Free Size");
-  const [selectedColor, setSelectedColor] = useState(product?.colors[0] ?? "Mặc định");
+  const [selectedSize, setSelectedSize] = useState(product?.sizes?.[0] ?? "Free Size");
+  const [selectedColor, setSelectedColor] = useState(product?.colors?.[0] ?? "Mặc định");
   const [qty, setQty] = useState(1);
 
   useEffect(() => {
     if (!product) return;
-    setSelectedSize(product.sizes[0] ?? "Free Size");
-    setSelectedColor(product.colors[0] ?? "Mặc định");
+    setSelectedSize(product.sizes?.[0] ?? "Free Size");
+    setSelectedColor(product.colors?.[0] ?? "Mặc định");
     setQty(1);
   }, [product]);
 
@@ -58,10 +58,16 @@ export function StoreProductDetailPage() {
             <AlertCircle className="h-6 w-6" />
           </div>
           <h1 className="mt-4 font-display text-2xl font-medium text-foreground">
-            Không tìm thấy sản phẩm
+            Không tìm thấy vật phẩm
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Mã sản phẩm <span className="tabular-mono font-semibold text-foreground">{productId}</span> không tồn tại hoặc đợt mở bán đã kết thúc.
+            {productId ? (
+              <>
+                Mã vật phẩm <span className="tabular-mono font-semibold text-foreground">{productId}</span> không tồn tại hoặc đợt mở bán đã kết thúc.
+              </>
+            ) : (
+              "Vật phẩm bạn tìm kiếm không tồn tại hoặc đợt mở bán đã kết thúc."
+            )}
           </p>
           <div className="mt-6 flex justify-center">
             <Button asChild className="rounded-full px-5">
@@ -249,7 +255,7 @@ export function StoreProductDetailPage() {
               <span className="tabular-mono text-muted-foreground">Đang chọn: {selectedSize}</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {product.sizes.map((sz) => (
+              {(product.sizes ?? []).map((sz) => (
                 <button
                   key={sz}
                   type="button"
@@ -274,7 +280,7 @@ export function StoreProductDetailPage() {
               <span className="text-muted-foreground">{selectedColor}</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {product.colors.map((color) => (
+              {(product.colors ?? []).map((color) => (
                 <button
                   key={color}
                   type="button"
@@ -361,7 +367,7 @@ export function StoreProductDetailPage() {
           <CardContent className="space-y-4 text-sm leading-relaxed text-muted-foreground">
             <p className="text-foreground/90">{product.description}</p>
             <ul className="space-y-2">
-              {product.highlights.map((item) => (
+              {(product.highlights ?? []).map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-foreground">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-success" />
                   <span>{item}</span>

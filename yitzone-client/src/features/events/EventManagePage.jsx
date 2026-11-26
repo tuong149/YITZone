@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
+  AlertCircle,
   ArrowLeft,
   Award,
   CalendarClock,
@@ -14,6 +15,7 @@ import {
   MonitorPlay,
   Music,
   Pencil,
+  Plus,
   QrCode,
   ScanLine,
   ShieldAlert,
@@ -42,159 +44,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { CertificateAdminPage } from "@/features/certificates/CertificateAdminPage";
 import { CompetitionAdminPage } from "@/features/competitions/CompetitionAdminPage";
+import { normalizeApiEventItem, useEventDetail } from "@/features/events/api";
 import { EventCreatePage } from "@/features/events/EventCreatePage";
 import { LiveQaAdminPage } from "@/features/liveqa/LiveQaAdminPage";
 import { SurveyAdminPage } from "@/features/surveys/SurveyAdminPage";
 import { VotingAdminPage } from "@/features/voting/VotingAdminPage";
 import { useEventStore } from "@/stores/event-store";
 
-const MANAGED_EVENTS = {
-  "EVT-2026-MASTERING-IT": {
-    id: "EVT-2026-MASTERING-IT",
-    title: "Mastering IT 2026 — Cuộc thi Học thuật (Đội 5 SV · 2 Vòng)",
-    scope: "FACULTY",
-    status: "PUBLISHED",
-    capacity: 40,
-    registeredCount: 6,
-    waitlistCount: 0,
-    closeAt: "2026-12-04T23:59",
-    benefits: ["Cộng ĐRL", "Cộng CĐDN"],
-    hasExam: true,
-    isTeamCompetition: true,
-    hasLiveQa: true,
-    hasLiveVoting: true,
-    sessions: [
-      { id: "mit-1", name: "Vòng loại Trực tuyến", date: "2026-12-06", timeRange: "08:30 – 10:00", location: "Phòng thi trực tuyến YITZone" },
-      { id: "mit-2", name: "Đêm Chung kết Sân khấu", date: "2026-12-19", timeRange: "18:00 – 21:30", location: "Hội trường Lớn Khu A" }
-    ]
-  },
-  "EVT-2026-CLOUD": {
-    id: "EVT-2026-CLOUD",
-    title: "Hội thảo Cloud Native & DevOps 2026",
-    scope: "FACULTY",
-    status: "PUBLISHED",
-    capacity: 200,
-    registeredCount: 184,
-    waitlistCount: 12,
-    closeAt: "2026-11-28T07:00",
-    benefits: ["Cộng ĐRL", "Cộng CĐDN"],
-    hasExam: true,
-    isTeamCompetition: false,
-    hasLiveQa: true,
-    hasLiveVoting: true,
-    sessions: [
-      { id: "S1", name: "Buổi 1 · Khai mạc & Chuyên đề Kubernetes", date: "2026-11-28", timeRange: "08:00 – 11:30", location: "Hội trường Lớn Khu A" }
-    ]
-  },
-  "EVT-2026-HACK": {
-    id: "EVT-2026-HACK",
-    title: "UTE Hackathon 2026: Smart Campus",
-    scope: "FACULTY",
-    status: "PENDING_BTV",
-    capacity: 120,
-    registeredCount: 96,
-    waitlistCount: 4,
-    closeAt: "2026-12-11T08:00",
-    benefits: ["Cộng ĐRL", "Cộng CĐDN"],
-    hasExam: false,
-    isTeamCompetition: true,
-    hasLiveQa: true,
-    hasLiveVoting: true,
-    sessions: [
-      { id: "hck-1", name: "Khai mạc & Pitching 24h", date: "2026-12-12", timeRange: "08:00 – 17:00", location: "Hội trường Lớn Khu A" }
-    ]
-  },
-  "EVT-2026-OFIT": {
-    id: "EVT-2026-OFIT",
-    title: "Tập huấn Nội bộ Ban Văn phòng (OFIT)",
-    scope: "DEPT_INTERNAL",
-    status: "DRAFT",
-    capacity: 40,
-    registeredCount: 28,
-    waitlistCount: 0,
-    closeAt: "2026-12-09T16:30",
-    benefits: [],
-    hasExam: false,
-    isTeamCompetition: false,
-    hasLiveQa: false,
-    hasLiveVoting: false,
-    sessions: [
-      { id: "ofit-1", name: "Buổi 1 · Quy trình trực & bàn giao", date: "2026-12-10", timeRange: "17:30 – 19:30", location: "Văn phòng A1-204" }
-    ]
-  }
-};
-
-const INITIAL_ATTENDEES = [
-  {
-    id: "reg-1",
-    studentCode: "23110214",
-    fullName: "Nguyễn Minh Khôi",
-    major: "CNTT (110)",
-    status: "CONFIRMED",
-    formAnswers: "Đặt áo: Có (Size L) · Zalo: 0901 234 567",
-    registeredAt: "21/11/2026 09:15"
-  },
-  {
-    id: "reg-2",
-    studentCode: "23110308",
-    fullName: "Trần Thảo Vy",
-    major: "CNTT (110)",
-    status: "CONFIRMED",
-    formAnswers: "Đặt áo: Không · Zalo: 0912 889 102",
-    registeredAt: "21/11/2026 09:42"
-  },
-  {
-    id: "reg-3",
-    studentCode: "24162019",
-    fullName: "Lê Quốc Bảo",
-    major: "ATTT (162)",
-    status: "PROMOTED_HOLD",
-    formAnswers: "Đặt áo: Có (Size M) · Giữ chỗ còn 24 phút",
-    registeredAt: "21/11/2026 11:05"
-  },
-  {
-    id: "reg-4",
-    studentCode: "23133041",
-    fullName: "Bùi Khánh Linh",
-    major: "KTDL (133)",
-    status: "WAITLIST",
-    formAnswers: "Đặt áo: Có (Size S) · Hàng chờ #1",
-    registeredAt: "21/11/2026 14:20"
-  }
-];
-
-const INITIAL_BTC_APPLICANTS = [
-  {
-    id: "btc-a1",
-    studentCode: "22110112",
-    fullName: "Võ Hoàng Nam",
-    nv1: "Kỹ thuật LED & Âm thanh",
-    nv2: "Điều phối hội trường",
-    approvedRole: "Kỹ thuật LED & Âm thanh",
-    hasArtsOverlap: false,
-    tempModuleGranted: "Quản trị Phòng thi",
-    status: "APPROVED"
-  },
-  {
-    id: "btc-a2",
-    studentCode: "23110099",
-    fullName: "Phan Thùy Dương",
-    nv1: "MC Dẫn chương trình",
-    nv2: "Lễ tân / Soát vé",
-    approvedRole: "MC Dẫn chương trình",
-    hasArtsOverlap: true,
-    status: "APPROVED"
-  },
-  {
-    id: "btc-a3",
-    studentCode: "24110202",
-    fullName: "Cao Đức Mạnh",
-    nv1: "Lễ tân / Soát vé QR & Thẻ SV",
-    nv2: "Hậu cần",
-    hasArtsOverlap: false,
-    status: "PENDING"
-  }
-];
+const INITIAL_ATTENDEES = [];
+const INITIAL_BTC_APPLICANTS = [];
 
 export function EventManagePage() {
   const { eventId } = useParams();
@@ -207,81 +65,88 @@ export function EventManagePage() {
 function EventManageWorkspace({ eventId }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const storedEvents = useEventStore((s) => s.events);
+  const { data: apiDetailData, isLoading: isLoadingDetail } = useEventDetail(eventId);
+
   const baseEvent = useMemo(() => {
-    const fromStore = eventId ? storedEvents.find((e) => e.id === eventId) : undefined;
-    if (fromStore) {
-      return {
-        id: fromStore.id,
-        title: fromStore.title,
-        scope: fromStore.scope,
-        status: fromStore.status,
-        capacity: fromStore.capacity,
-        registeredCount: fromStore.registeredCount,
-        waitlistCount: fromStore.waitlistCount,
-        closeAt: fromStore.closeAt,
-        benefits: fromStore.benefits,
-        hasExam: fromStore.hasExam,
-        isTeamCompetition: fromStore.isTeamCompetition,
-        hasLiveQa: fromStore.sessions.some((s) => s.activities.liveQa),
-        hasLiveVoting: fromStore.sessions.some((s) => s.activities.liveVoting),
-        sessions: fromStore.sessions.map((s) => ({
-          id: s.id,
-          name: s.name,
-          date: s.date,
-          timeRange: s.timeRange,
-          location: s.location
-        }))
-      };
-    }
-    return (
-      (eventId && MANAGED_EVENTS[eventId]) || {
-        id: eventId ?? "EVT-CUSTOM",
-        title: `Sự kiện ${eventId ?? ""}`,
+    const fromStore = eventId ? storedEvents.find((e) => e.id === eventId) : storedEvents[0];
+    const resolved = fromStore ?? (apiDetailData ? normalizeApiEventItem(apiDetailData) : null);
+    if (!resolved) return null;
+
+    const sessions = Array.isArray(resolved.sessions) ? resolved.sessions : [];
+    return {
+      id: resolved.id,
+      title: resolved.title,
+      scope: resolved.scope ?? "FACULTY",
+      status: resolved.status ?? "PUBLISHED",
+      capacity: Number(resolved.capacity ?? 0),
+      registeredCount: Number(resolved.registeredCount ?? 0),
+      waitlistCount: Number(resolved.waitlistCount ?? 0),
+      closeAt: resolved.closeAt ?? "",
+      benefits: Array.isArray(resolved.benefits) ? resolved.benefits : [],
+      hasExam: Boolean(resolved.hasExam),
+      isTeamCompetition: Boolean(resolved.isTeamCompetition),
+      hasLiveQa: sessions.some((s) => s.activities?.liveQa),
+      hasLiveVoting: sessions.some((s) => s.activities?.liveVoting),
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        name: s.name,
+        date: s.date,
+        timeRange: s.timeRange,
+        location: s.location
+      }))
+    };
+  }, [eventId, storedEvents, apiDetailData]);
+
+  const fallbackState = useMemo(
+    () =>
+      baseEvent ?? {
+        id: eventId ?? "",
+        title: "",
         scope: "FACULTY",
-        status: "PUBLISHED",
-        capacity: 200,
-        registeredCount: 42,
+        status: "DRAFT",
+        capacity: 0,
+        registeredCount: 0,
         waitlistCount: 0,
-        closeAt: "2026-12-10T23:59",
-        benefits: ["Cộng ĐRL"],
+        closeAt: "",
+        benefits: [],
         hasExam: false,
         isTeamCompetition: false,
-        hasLiveQa: true,
-        hasLiveVoting: true,
-        sessions: [
-          { id: "S1", name: "Phiên chính", date: "2026-12-10", timeRange: "08:00 – 11:30", location: "Hội trường Lớn Khu A" }
-        ]
-      }
-    );
-  }, [eventId, storedEvents]);
+        hasLiveQa: false,
+        hasLiveVoting: false,
+        sessions: []
+      },
+    [baseEvent, eventId]
+  );
 
   const initialTab =
     searchParams.get("tab") ??
-    (baseEvent.isTeamCompetition ? "team-rounds" : "registrations");
+    (fallbackState.isTeamCompetition ? "team-rounds" : "registrations");
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  const [eventState, setEventState] = useState(baseEvent);
-  const [editTitle, setEditTitle] = useState(baseEvent.title);
-  const [editCapacity, setEditCapacity] = useState(String(baseEvent.capacity));
-  const [editCloseAt, setEditCloseAt] = useState(baseEvent.closeAt);
+  const [eventState, setEventState] = useState(fallbackState);
+  const [editTitle, setEditTitle] = useState(fallbackState.title);
+  const [editCapacity, setEditCapacity] = useState(String(fallbackState.capacity));
+  const [editCloseAt, setEditCloseAt] = useState(fallbackState.closeAt);
 
   // Separate Reschedule Dialog state (B5)
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
-  const [rescheduleSessionId, setRescheduleSessionId] = useState(baseEvent.sessions[0]?.id ?? "S1");
-  const [rescheduleDateTime, setRescheduleDateTime] = useState("2026-12-15T08:00");
+  const [rescheduleSessionId, setRescheduleSessionId] = useState(
+    fallbackState.sessions[0]?.id ?? ""
+  );
+  const [rescheduleDateTime, setRescheduleDateTime] = useState("");
   const [rescheduleLocation, setRescheduleLocation] = useState(
-    baseEvent.sessions[0]?.location ?? "Hội trường Lớn Khu A"
+    fallbackState.sessions[0]?.location ?? ""
   );
   const [rescheduleReason, setRescheduleReason] = useState("");
 
   useEffect(() => {
-    setEventState(baseEvent);
-    setEditTitle(baseEvent.title);
-    setEditCapacity(String(baseEvent.capacity));
-    setEditCloseAt(baseEvent.closeAt);
-    setRescheduleSessionId(baseEvent.sessions[0]?.id ?? "S1");
-    setRescheduleLocation(baseEvent.sessions[0]?.location ?? "Hội trường Lớn Khu A");
-  }, [baseEvent]);
+    setEventState(fallbackState);
+    setEditTitle(fallbackState.title);
+    setEditCapacity(String(fallbackState.capacity));
+    setEditCloseAt(fallbackState.closeAt);
+    setRescheduleSessionId(fallbackState.sessions[0]?.id ?? "");
+    setRescheduleLocation(fallbackState.sessions[0]?.location ?? "");
+  }, [fallbackState]);
 
   const [attendees, setAttendees] = useState(INITIAL_ATTENDEES);
   const [btcList, setBtcList] = useState(INITIAL_BTC_APPLICANTS);
@@ -299,6 +164,42 @@ function EventManageWorkspace({ eventId }) {
         a.formAnswers.toLowerCase().includes(q)
     );
   }, [attendees, searchReg]);
+
+  if (!baseEvent) {
+    return (
+      <div className="mx-auto max-w-xl py-12">
+        <Card className="rounded-[24px] p-6 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-warning/15 text-status-warning">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h1 className="mt-4 font-display text-2xl font-medium text-foreground">
+            {isLoadingDetail ? "Đang tải dữ liệu sự kiện..." : "Không tìm thấy sự kiện"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {isLoadingDetail
+              ? "Hệ thống đang đồng bộ thông tin kế hoạch sự kiện từ máy chủ."
+              : `Sự kiện ${eventId ? `"${eventId}" ` : ""}chưa tồn tại trong hệ thống hoặc đã bị gỡ bỏ.`}
+          </p>
+          {!isLoadingDetail && (
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <Button asChild variant="outline" className="rounded-full px-5">
+                <Link to="/admin/events">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Quay lại Quản trị Sự kiện</span>
+                </Link>
+              </Button>
+              <Button asChild className="rounded-full px-5">
+                <Link to="/admin/events/new">
+                  <Plus className="h-4 w-4" />
+                  <span>Tạo sự kiện mới</span>
+                </Link>
+              </Button>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  }
 
   const approvedBtcCount = btcList.filter((b) => b.status === "APPROVED").length;
 
@@ -345,7 +246,7 @@ function EventManageWorkspace({ eventId }) {
 
   const handleConfirmReschedule = (e) => {
     e.preventDefault();
-    if (rescheduleReason.trim().length < 5) return;
+    if (rescheduleReason.trim().length < 5 || !rescheduleSessionId) return;
     const [nextDate, nextTime] = rescheduleDateTime.split("T");
     setEventState((prev) => ({
       ...prev,
@@ -353,8 +254,8 @@ function EventManageWorkspace({ eventId }) {
         s.id === rescheduleSessionId
           ? {
               ...s,
-              date: nextDate ?? s.date,
-              timeRange: `${nextTime ?? "08:00"} – 11:30`,
+              date: nextDate || s.date,
+              timeRange: nextTime ? `${nextTime} – 11:30` : s.timeRange,
               location: rescheduleLocation.trim() || s.location
             }
           : s
@@ -420,6 +321,10 @@ function EventManageWorkspace({ eventId }) {
     ONGOING: { label: "Đang diễn ra", variant: "info" },
     COMPLETED: { label: "Đã hoàn thành", variant: "secondary" }
   };
+  const currentStatusBadge = statusMeta[eventState.status] ?? {
+    label: eventState.status,
+    variant: "secondary"
+  };
 
   return (
     <div className="space-y-6">
@@ -438,9 +343,7 @@ function EventManageWorkspace({ eventId }) {
             <h1 className="font-display text-2xl font-medium text-foreground">
               {eventState.title}
             </h1>
-            <Badge variant={statusMeta[eventState.status].variant}>
-              {statusMeta[eventState.status].label}
-            </Badge>
+            <Badge variant={currentStatusBadge.variant}>{currentStatusBadge.label}</Badge>
             <Badge variant="outline" className="tabular-mono">
               {eventState.id}
             </Badge>
@@ -455,13 +358,13 @@ function EventManageWorkspace({ eventId }) {
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link to={`/stage?eventId=${eventState.id}`}>
+            <Link to={`/stage?eventId=${encodeURIComponent(eventState.id)}`}>
               <MonitorPlay className="h-3.5 w-3.5 text-primary" />
               <span>Màn chiếu LED 16:9</span>
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link to={`/staff/scanner?eventId=${eventState.id}`}>
+            <Link to={`/staff/scanner?eventId=${encodeURIComponent(eventState.id)}`}>
               <ScanLine className="h-3.5 w-3.5" />
               <span>Máy Soát vé Hiện trường</span>
             </Link>
@@ -607,6 +510,7 @@ function EventManageWorkspace({ eventId }) {
                   variant="outline"
                   size="sm"
                   className="rounded-full"
+                  disabled={attendees.length === 0}
                   onClick={() =>
                     setNotice("Đã xuất danh sách đăng ký kèm các cột câu trả lời form động ra file Excel (.xlsx).")
                   }
@@ -633,7 +537,9 @@ function EventManageWorkspace({ eventId }) {
                     {filteredAttendees.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-8 text-center text-xs text-muted-foreground">
-                          Không tìm thấy sinh viên nào khớp với từ khóa &ldquo;{searchReg}&rdquo;.
+                          {attendees.length === 0
+                            ? "Chưa có sinh viên nào đăng ký tham dự sự kiện này."
+                            : `Không tìm thấy sinh viên nào khớp với từ khóa "${searchReg}".`}
                         </td>
                       </tr>
                     ) : (
@@ -707,77 +613,85 @@ function EventManageWorkspace({ eventId }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {btcList.map((b) => (
-                      <tr key={b.id} className="hover:bg-muted/30">
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-medium text-foreground">{b.fullName}</span>
-                            {b.hasArtsOverlap && (
-                              <Badge variant="calArts">
-                                <Music className="h-3 w-3" />
-                                <span>Kiêm Văn nghệ</span>
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="tabular-mono text-xs text-muted-foreground">
-                            {b.studentCode}
-                          </div>
+                    {btcList.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-xs text-muted-foreground">
+                          Chưa có hồ sơ ứng tuyển Ban Tổ chức nào cho sự kiện này.
                         </td>
-                        <td className="px-4 py-3 text-xs">
-                          <div className="font-medium text-foreground">NV1: {b.nv1}</div>
-                          <div className="text-muted-foreground">NV2: {b.nv2}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {b.status === "APPROVED" ? (
-                              <Badge variant="success">{b.approvedRole}</Badge>
+                      </tr>
+                    ) : (
+                      btcList.map((b) => (
+                        <tr key={b.id} className="hover:bg-muted/30">
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-medium text-foreground">{b.fullName}</span>
+                              {b.hasArtsOverlap && (
+                                <Badge variant="calArts">
+                                  <Music className="h-3 w-3" />
+                                  <span>Kiêm Văn nghệ</span>
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="tabular-mono text-xs text-muted-foreground">
+                              {b.studentCode}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <div className="font-medium text-foreground">NV1: {b.nv1}</div>
+                            <div className="text-muted-foreground">NV2: {b.nv2}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {b.status === "APPROVED" ? (
+                                <Badge variant="success">{b.approvedRole}</Badge>
+                              ) : (
+                                <Badge variant="warning">Chờ duyệt</Badge>
+                              )}
+                              {b.tempModuleGranted && (
+                                <Badge variant="outline" className="tabular-mono">
+                                  <KeyRound className="h-3 w-3" />
+                                  <span>{b.tempModuleGranted}</span>
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {b.status === "PENDING" ? (
+                              <div className="inline-flex flex-wrap justify-end gap-1.5">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="rounded-full"
+                                  onClick={() => handleApproveBtc(b, false)}
+                                >
+                                  Duyệt NV1
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-full"
+                                  onClick={() => handleApproveBtc(b, true)}
+                                >
+                                  Chuyển NV2
+                                </Button>
+                              </div>
                             ) : (
-                              <Badge variant="warning">Chờ duyệt</Badge>
-                            )}
-                            {b.tempModuleGranted && (
-                              <Badge variant="outline" className="tabular-mono">
-                                <KeyRound className="h-3 w-3" />
-                                <span>{b.tempModuleGranted}</span>
-                              </Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {b.status === "PENDING" ? (
-                            <div className="inline-flex flex-wrap justify-end gap-1.5">
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="rounded-full"
-                                onClick={() => handleApproveBtc(b, false)}
-                              >
-                                Duyệt NV1
-                              </Button>
                               <Button
                                 type="button"
                                 size="sm"
                                 variant="outline"
                                 className="rounded-full"
-                                onClick={() => handleApproveBtc(b, true)}
+                                onClick={() => handleGrantTempModule(b, "Soát vé & Điểm danh")}
                               >
-                                Chuyển NV2
+                                <KeyRound className="h-3.5 w-3.5" />
+                                <span>Cấp quyền Soát vé</span>
                               </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="rounded-full"
-                              onClick={() => handleGrantTempModule(b, "Soát vé & Điểm danh")}
-                            >
-                              <KeyRound className="h-3.5 w-3.5" />
-                              <span>Cấp quyền Soát vé</span>
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -795,35 +709,45 @@ function EventManageWorkspace({ eventId }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3">
-                {eventState.sessions.map((ses) => (
-                  <div
-                    key={ses.id}
-                    className="flex flex-col justify-between gap-3 rounded-xl border border-border/80 bg-muted/25 p-4 sm:flex-row sm:items-center"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="font-medium text-foreground">{ses.name}</div>
-                      <div className="tabular-mono text-xs text-muted-foreground">
-                        {ses.date} · {ses.timeRange} · {ses.location}
+              {eventState.sessions.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-xs text-muted-foreground">
+                  Chưa có buổi hoạt động nào được cấu hình cho sự kiện này.
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {eventState.sessions.map((ses) => (
+                    <div
+                      key={ses.id}
+                      className="flex flex-col justify-between gap-3 rounded-xl border border-border/80 bg-muted/25 p-4 sm:flex-row sm:items-center"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="font-medium text-foreground">{ses.name}</div>
+                        <div className="tabular-mono text-xs text-muted-foreground">
+                          {ses.date} · {ses.timeRange} · {ses.location}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild size="sm" className="rounded-full">
+                          <Link
+                            to={`/stage/checkin?eventId=${encodeURIComponent(eventState.id)}&sessionId=${encodeURIComponent(ses.id)}`}
+                          >
+                            <MonitorPlay className="h-3.5 w-3.5" />
+                            <span>Chiếu QR Động 10s (LED 16:9)</span>
+                          </Link>
+                        </Button>
+                        <Button asChild size="sm" variant="outline" className="rounded-full">
+                          <Link
+                            to={`/staff/scanner?eventId=${encodeURIComponent(eventState.id)}&sessionId=${encodeURIComponent(ses.id)}`}
+                          >
+                            <ScanLine className="h-3.5 w-3.5" />
+                            <span>Máy Soát vé CTV</span>
+                          </Link>
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button asChild size="sm" className="rounded-full">
-                        <Link to={`/stage/checkin?eventId=${eventState.id}&sessionId=${ses.id}`}>
-                          <MonitorPlay className="h-3.5 w-3.5" />
-                          <span>Chiếu QR Động 10s (LED 16:9)</span>
-                        </Link>
-                      </Button>
-                      <Button asChild size="sm" variant="outline" className="rounded-full">
-                        <Link to={`/staff/scanner?eventId=${eventState.id}&sessionId=${ses.id}`}>
-                          <ScanLine className="h-3.5 w-3.5" />
-                          <span>Máy Soát vé CTV</span>
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
                 <div className="space-y-0.5 text-xs">
@@ -833,7 +757,7 @@ function EventManageWorkspace({ eventId }) {
                   </p>
                 </div>
                 <Button asChild size="sm" variant="outline" className="rounded-full">
-                  <Link to={`/admin/attendance?eventId=${eventState.id}`}>
+                  <Link to={`/admin/attendance?eventId=${encodeURIComponent(eventState.id)}`}>
                     <span>Mở Bàn Hậu kiểm 48h</span>
                   </Link>
                 </Button>
@@ -963,6 +887,7 @@ function EventManageWorkspace({ eventId }) {
                   variant="outline"
                   size="sm"
                   className="rounded-full"
+                  disabled={eventState.sessions.length === 0}
                   onClick={() => setRescheduleOpen(true)}
                 >
                   <CalendarClock className="h-4 w-4 text-primary" />
@@ -1010,7 +935,7 @@ function EventManageWorkspace({ eventId }) {
               <Label>Buổi hoạt động cần dời lịch</Label>
               <Select value={rescheduleSessionId} onValueChange={setRescheduleSessionId}>
                 <SelectTrigger className="rounded-xl">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn buổi hoạt động" />
                 </SelectTrigger>
                 <SelectContent>
                   {eventState.sessions.map((s) => (
@@ -1050,7 +975,7 @@ function EventManageWorkspace({ eventId }) {
                 required
                 value={rescheduleReason}
                 onChange={(e) => setRescheduleReason(e.target.value)}
-                placeholder="VD: Điều chỉnh theo lịch sử dụng Hội trường Lớn Khu A của Nhà trường..."
+                placeholder="Nhập lý do điều chỉnh lịch trình..."
               />
             </div>
 
@@ -1058,7 +983,7 @@ function EventManageWorkspace({ eventId }) {
               <Button type="button" variant="outline" onClick={() => setRescheduleOpen(false)}>
                 Hủy
               </Button>
-              <Button type="submit" disabled={rescheduleReason.trim().length < 5}>
+              <Button type="submit" disabled={rescheduleReason.trim().length < 5 || !rescheduleSessionId}>
                 Xác nhận dời lịch &amp; Gửi thông báo
               </Button>
             </DialogFooter>

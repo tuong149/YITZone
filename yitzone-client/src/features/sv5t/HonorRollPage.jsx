@@ -20,9 +20,14 @@ const HONOREE_PHOTOS = [
 ];
 
 export function HonorRollPage(){
-  const [year, setYear] = useState("2025–2026");
+  const [year, setYear] = useState("ALL");
   const [tier, setTier] = useState("ALL");
   const [query, setQuery] = useState("");
+
+  const availableYears = useMemo(
+    () => Array.from(new Set(INITIAL_HONOR_ROLL.map((item) => item.academicYear).filter(Boolean))),
+    []
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -92,8 +97,11 @@ export function HonorRollPage(){
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Tất cả năm học</SelectItem>
-              <SelectItem value="2025–2026">Năm học 2025–2026</SelectItem>
-              <SelectItem value="2024–2025">Năm học 2024–2025</SelectItem>
+              {availableYears.map((yr) => (
+                <SelectItem key={yr} value={yr}>
+                  Năm học {yr}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -115,27 +123,33 @@ export function HonorRollPage(){
       </section>
 
       {groupedByTier.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-[24px] border border-border bg-card py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-[24px] border border-border bg-card px-6 py-16 text-center">
           <Trophy className="h-9 w-9 text-muted-foreground" />
           <p className="mt-3 font-display text-xl font-medium text-foreground">
-            Chưa có gương mặt khớp bộ lọc
+            {INITIAL_HONOR_ROLL.length === 0
+              ? "Chưa có danh sách Bảng vàng Vinh danh"
+              : "Chưa có gương mặt khớp bộ lọc"}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Thử chọn lại năm học hoặc cấp danh hiệu để xem toàn bộ Bảng vàng.
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+            {INITIAL_HONOR_ROLL.length === 0
+              ? "Danh sách gương mặt Sinh viên 5 tốt các cấp sẽ được hiển thị tại đây sau khi Ban Thường vụ công bố kết quả xét duyệt chính thức."
+              : "Thử chọn lại năm học hoặc cấp danh hiệu để xem toàn bộ Bảng vàng."}
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-5 rounded-full"
-            onClick={() => {
-              setYear("ALL");
-              setTier("ALL");
-              setQuery("");
-            }}
-          >
-            Xem tất cả gương mặt
-          </Button>
+          {INITIAL_HONOR_ROLL.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-5 rounded-full"
+              onClick={() => {
+                setYear("ALL");
+                setTier("ALL");
+                setQuery("");
+              }}
+            >
+              Xem tất cả gương mặt
+            </Button>
+          )}
         </div>
       ): (
         /* GROUPED SECTIONS BY AWARD TIER */
@@ -156,7 +170,7 @@ export function HonorRollPage(){
 
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {group.items.map((entry, idx) => {
-                  const photoSrc = HONOREE_PHOTOS[idx % HONOREE_PHOTOS.length];
+                  const photoSrc = entry.avatarUrl || entry.photoUrl || HONOREE_PHOTOS[idx % HONOREE_PHOTOS.length];
                   return (
                     <article
                       key={entry.id}
@@ -197,11 +211,6 @@ export function HonorRollPage(){
           ))}
         </div>
       )}
-
-      <p className="text-xs text-muted-foreground">
-        Lưu ý: Hình ảnh và danh sách hiển thị là dữ liệu mẫu minh họa, chưa phản ánh kết
-        quả xét duyệt thực tế.
-      </p>
     </div>
   );
 }

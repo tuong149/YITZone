@@ -5,9 +5,9 @@ import {
   Clock,
   MonitorPlay,
   QrCode,
-  Search,
   ShieldAlert,
-  UserCheck
+  UserCheck,
+  Users
 } from "lucide-react";
 import { AuditActionDialog } from "@/components/ui/audit-action-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -18,87 +18,46 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { mergeStoredAndApiEvents, useEvents } from "@/features/events/api";
 import { useEventStore } from "@/stores/event-store";
 
-const INITIAL_QUEUE = [
-  {
-    id: "rq-1",
-    studentCode: "22110345",
-    fullName: "Nguyễn Minh Khoa",
-    flagLabel: "Tọa độ GPS lệch nhẹ (+1đ)",
-    flagCode: "GPS_MINOR_DRIFT",
-    riskWeight: 1,
-    scannedAt: "08:12:04"
-  },
-  {
-    id: "rq-2",
-    studentCode: "22110489",
-    fullName: "Trần Thảo Vy",
-    flagLabel: "Khóa thiết bị mới tạo < 15 phút (+1đ)",
-    flagCode: "RECENT_DEVICE_BINDING",
-    riskWeight: 1,
-    scannedAt: "08:14:31"
-  },
-  {
-    id: "rq-3",
-    studentCode: "23110219",
-    fullName: "Lê Quốc Bảo",
-    flagLabel: "Trùng thiết bị điểm danh (+2đ · Tín hiệu Mạnh)",
-    flagCode: "DEVICE_TOKEN_COLLISION",
-    riskWeight: 2,
-    scannedAt: "08:18:10"
-  },
-  {
-    id: "rq-4",
-    studentCode: "24110077",
-    fullName: "Phạm Gia Bảo (Vãng lai)",
-    flagLabel: "Thẻ SV vãng lai chưa đăng ký (+2đ · Tín hiệu Mạnh)",
-    flagCode: "BARCODE_WALKIN_UNVERIFIED",
-    riskWeight: 2,
-    scannedAt: "08:21:55"
-  }
-];
-
-const STUDENT_DIRECTORY = [
-  { mssv: "22110345", fullName: "Nguyễn Minh Khoa", major: "K22 Công nghệ Phần mềm (110)", registered: true },
-  { mssv: "22110418", fullName: "Trần Đức Thịnh", major: "K22 Hệ thống Thông tin (110)", registered: true },
-  { mssv: "23110214", fullName: "Nguyễn Minh Khôi", major: "K23 Công nghệ Thông tin (110)", registered: true },
-  { mssv: "23110308", fullName: "Trần Thảo Vy", major: "K23 Công nghệ Thông tin (110)", registered: true },
-  { mssv: "24162019", fullName: "Lê Quốc Bảo", major: "K24 An toàn Thông tin (162)", registered: false }
-];
+const INITIAL_QUEUE = [];
 
 export function AttendanceReviewPage() {
   const [searchParams] = useSearchParams();
-  const events = useEventStore((s) => s.events);
+  const queryEventId = searchParams.get("eventId") ?? "";
+  const storedEvents = useEventStore((s) => s.events);
+  const { data: apiEventsData } = useEvents();
+  const events = useMemo(
+    () => mergeStoredAndApiEvents(storedEvents, apiEventsData),
+    [storedEvents, apiEventsData]
+  );
 
   const [selectedEventId, setSelectedEventId] = useState(
-    () => searchParams.get("eventId") ?? events[0]?.id ?? "EVT-2026-CLOUD"
+    () => queryEventId || events[0]?.id || ""
   );
   const selectedEvent = useMemo(
-    () => events.find((e) => e.id === selectedEventId) ?? events[0],
+    () => events.find((e) => e.id === selectedEventId) ?? events[0] ?? null,
     [events, selectedEventId]
   );
-  const sessions = selectedEvent?.sessions ?? [];
+  const sessions = useMemo(
+    () => selectedEvent?.sessions ?? [],
+    [selectedEvent]
+  );
   const [selectedSessionId, setSelectedSessionId] = useState(
-    () => sessions[0]?.id ?? "S1"
+    () => sessions[0]?.id ?? ""
+  );
+  const activeSession = useMemo(
+    () => sessions.find((s) => s.id === selectedSessionId) ?? sessions[0] ?? null,
+    [sessions, selectedSessionId]
   );
 
   const [queue, setQueue] = useState(INITIAL_QUEUE);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [studentQuery, setStudentQuery] = useState("");
-  const [pickedStudent, setPickedStudent] = useState(
-    STUDENT_DIRECTORY[0]
-  );
+  const [manualMssv, setManualMssv] = useState("");
+  const [manualFullName, setManualFullName] = useState("");
   const [auditModal, setAuditModal] = useState(null);
   const [notice, setNotice] = useState(null);
-
-  const filteredDirectory = useMemo(() => {
-    const q = studentQuery.trim().toLowerCase();
-    if (!q) return STUDENT_DIRECTORY;
-    return STUDENT_DIRECTORY.filter(
-      (s) => s.mssv.includes(q) || s.fullName.toLowerCase().includes(q)
-    );
-  }, [studentQuery]);
 
   const columns = [
     {
@@ -172,6 +131,14 @@ export function AttendanceReviewPage() {
     }
   ];
 
+  const stageCheckinUrl = selectedEvent
+    ? `/stage/checkin?eventId=${encodeURIComponent(selectedEvent.id)}`
+    : "/stage/checkin";
+  const staffScannerUrl = selectedEvent
+    ? `/staff/scanner?eventId=${encodeURIComponent(selectedEvent.id)}`
+    : "/staff/scanner";
+  const isManualValid = /^[0-9]{8}$/.test(manualMssv.trim()) && Boolean(selectedEvent);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -180,22 +147,22 @@ export function AttendanceReviewPage() {
             Hậu kiểm Điểm danh 48 giờ &amp; Điểm danh Bù Có Kiểm toán
           </h1>
           <p className="text-sm text-muted-foreground">
-            Chấm điểm rủi ro trọng số, khóa duyệt hàng loạt nhóm Tín hiệu Mạnh (+2đ) và điểm danh bù có tra cứu hồ sơ.
+            Chấm điểm rủi ro trọng số, khóa duyệt hàng loạt nhóm Tín hiệu Mạnh (+2đ) và điểm danh bù có kiểm toán.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="warning">
+          <Badge variant="outline">
             <Clock className="h-3.5 w-3.5" />
-            Hạn hậu kiểm còn: 41h 20p
+            <span>Cửa sổ hậu kiểm 48 giờ</span>
           </Badge>
           <Button asChild size="sm" variant="outline" className="rounded-full">
-            <Link to={`/stage/checkin?eventId=${selectedEvent?.id ?? "EVT-2026-CLOUD"}`}>
+            <Link to={stageCheckinUrl}>
               <MonitorPlay className="h-4 w-4 text-primary" />
               <span>Chiếu QR Động LED 16:9</span>
             </Link>
           </Button>
           <Button asChild size="sm" variant="outline" className="rounded-full">
-            <Link to={`/staff/scanner?eventId=${selectedEvent?.id ?? "EVT-2026-CLOUD"}`}>
+            <Link to={staffScannerUrl}>
               <QrCode className="h-4 w-4" />
               <span>Mở Máy Soát vé Hiện trường</span>
             </Link>
@@ -209,14 +176,19 @@ export function AttendanceReviewPage() {
           <Label className="text-xs text-muted-foreground">Sự kiện đang rà soát hậu kiểm</Label>
           <Select
             value={selectedEvent?.id ?? ""}
+            disabled={events.length === 0}
             onValueChange={(val) => {
               setSelectedEventId(val);
               const ev = events.find((e) => e.id === val);
-              if (ev?.sessions[0]) setSelectedSessionId(ev.sessions[0].id);
+              setSelectedSessionId(ev?.sessions?.[0]?.id ?? "");
             }}
           >
             <SelectTrigger className="rounded-xl">
-              <SelectValue />
+              <SelectValue
+                placeholder={
+                  events.length === 0 ? "Chưa có sự kiện nào trong hệ thống" : "Chọn sự kiện"
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               {events.map((ev) => (
@@ -229,9 +201,17 @@ export function AttendanceReviewPage() {
         </div>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Buổi / Ca điểm danh</Label>
-          <Select value={selectedSessionId} onValueChange={setSelectedSessionId}>
+          <Select
+            value={activeSession?.id ?? ""}
+            disabled={sessions.length === 0}
+            onValueChange={setSelectedSessionId}
+          >
             <SelectTrigger className="rounded-xl">
-              <SelectValue />
+              <SelectValue
+                placeholder={
+                  sessions.length === 0 ? "Chưa có buổi điểm danh" : "Chọn buổi điểm danh"
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               {sessions.map((s) => (
@@ -273,6 +253,8 @@ export function AttendanceReviewPage() {
             onSelectionChange={setSelectedIds}
             isRowBulkDisabled={(row) => row.riskWeight === 2}
             bulkDisabledReason="Cấm duyệt hàng loạt với cờ Tín hiệu Mạnh (+2đ)"
+            emptyTitle="Chưa có lượt điểm danh nào cần hậu kiểm"
+            emptyDescription="Các bản ghi điểm danh có cờ cảnh báo rủi ro (+1đ / +2đ) sẽ xuất hiện tại đây trong vòng 48 giờ sau sự kiện."
             bulkActions={
               <Button
                 size="sm"
@@ -301,77 +283,61 @@ export function AttendanceReviewPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserCheck className="h-5 w-5 text-primary" />
-                Điểm danh Bù Bằng tay Có Tra cứu Hồ sơ
+                Điểm danh Bù Bằng tay Có Kiểm toán
               </CardTitle>
               <CardDescription>
-                Tìm kiếm sinh viên theo MSSV hoặc Họ tên để kiểm tra trạng thái đăng ký trước khi xác nhận điểm danh bù.
+                Nhập MSSV 8 chữ số của sinh viên gặp sự cố thiết bị để ghi nhận điểm danh bù kèm lý do lưu vào Audit Log.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="manual-student-search">Tìm sinh viên theo MSSV hoặc Họ tên</Label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="manual-student-mssv">Mã số sinh viên (8 chữ số) *</Label>
                   <Input
-                    id="manual-student-search"
-                    placeholder="Nhập MSSV hoặc tên (VD: 22110345, Nguyễn Minh...)"
-                    value={studentQuery}
-                    onChange={(e) => setStudentQuery(e.target.value)}
-                    className="pl-9"
+                    id="manual-student-mssv"
+                    inputMode="numeric"
+                    maxLength={8}
+                    placeholder="VD: 23110001"
+                    value={manualMssv}
+                    onChange={(e) => setManualMssv(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    className="tabular-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="manual-student-name">Họ và tên (tùy chọn)</Label>
+                  <Input
+                    id="manual-student-name"
+                    placeholder="Nhập họ tên sinh viên..."
+                    value={manualFullName}
+                    onChange={(e) => setManualFullName(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="max-h-36 space-y-1.5 overflow-y-auto rounded-xl border border-border/80 bg-muted/25 p-2">
-                {filteredDirectory.map((stu) => {
-                  const isPicked = pickedStudent?.mssv === stu.mssv;
-                  return (
-                    <button
-                      key={stu.mssv}
-                      type="button"
-                      onClick={() => setPickedStudent(stu)}
-                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${
-                        isPicked
-                          ? "bg-primary/12 font-semibold text-primary"
-                          : "hover:bg-card text-foreground"
-                      }`}
-                    >
-                      <span>
-                        <span className="tabular-mono font-semibold">{stu.mssv}</span> · {stu.fullName}
-                      </span>
-                      <Badge variant={stu.registered ? "success" : "warning"}>
-                        {stu.registered ? "Đã đăng ký" : "Vãng lai"}
-                      </Badge>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {pickedStudent && (
-                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 text-xs space-y-1">
-                  <div className="font-semibold text-foreground">
-                    Hồ sơ xác nhận: {pickedStudent.fullName} ({pickedStudent.mssv})
-                  </div>
-                  <div className="text-muted-foreground">
-                    {pickedStudent.major} · Sự kiện: <strong>{selectedEvent?.title}</strong>
-                  </div>
-                </div>
+              {!selectedEvent && (
+                <p className="text-xs text-muted-foreground">
+                  Vui lòng tạo và chọn sự kiện ở thanh phía trên trước khi thực hiện điểm danh bù.
+                </p>
               )}
 
               <Button
                 type="button"
-                disabled={!pickedStudent}
+                disabled={!isManualValid}
                 onClick={() => {
-                  if (!pickedStudent) return;
+                  if (!selectedEvent) return;
+                  const code = manualMssv.trim();
+                  const labelName = manualFullName.trim() || `Sinh viên (${code})`;
                   setAuditModal({
                     title: "Xác nhận Điểm danh Bù Bằng tay",
-                    summary: `${pickedStudent.fullName} (${pickedStudent.mssv}) · ${selectedEvent?.title ?? ""} (${selectedSessionId})`,
+                    summary: `${labelName} (${code}) · ${selectedEvent.title}${activeSession ? ` (${activeSession.name})` : ""}`,
                     code: "ATTENDANCE_MANUAL_OVERRIDE",
                     destructive: false,
                     onDone: () => {
                       setNotice(
-                        `Đã ghi nhận điểm danh bù cho ${pickedStudent.fullName} (${pickedStudent.mssv}) tại "${selectedEvent?.title}" và lưu Audit Log.`
+                        `Đã ghi nhận điểm danh bù cho ${labelName} (${code}) tại "${selectedEvent.title}" và lưu Audit Log.`
                       );
+                      setManualMssv("");
+                      setManualFullName("");
                     }
                   });
                 }}
@@ -388,26 +354,14 @@ export function AttendanceReviewPage() {
                 Ghi nhận thành viên BTC đã duyệt đến làm nhiệm vụ sớm — là điều kiện miễn bài thu hoạch khi chốt E-Cert.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 p-3.5">
-                <div>
-                  <div className="font-medium text-foreground">Trần Thảo Vy (Lễ tân)</div>
-                  <div className="tabular-mono text-xs text-muted-foreground">22110412 · Đã duyệt BTC</div>
-                </div>
-                <Badge variant="success">Đã điểm danh sớm</Badge>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 p-3.5">
-                <div>
-                  <div className="font-medium text-foreground">Lê Hoàng Nam (Kỹ thuật LED)</div>
-                  <div className="tabular-mono text-xs text-muted-foreground">23110188 · Đã duyệt BTC</div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setNotice("Đã điểm danh sớm BTC cho Lê Hoàng Nam (23110188).")}
-                >
-                  Xác nhận có mặt
-                </Button>
+            <CardContent>
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-xs text-muted-foreground">
+                <Users className="h-5 w-5 text-primary/70" />
+                <span>
+                  {selectedEvent
+                    ? `Chưa có danh sách thành viên BTC đã duyệt cho "${selectedEvent.title}".`
+                    : "Chọn sự kiện để hiển thị danh sách thành viên Ban Tổ chức cần điểm danh sớm."}
+                </span>
               </div>
             </CardContent>
           </Card>

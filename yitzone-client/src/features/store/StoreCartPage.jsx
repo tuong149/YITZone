@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { validateStoreVoucher } from "@/features/store/api";
+import { extractApiErrorMessage } from "@/lib/api-client";
 import { campaignBucketKey, formatVnd, useCartStore } from "@/stores/cart-store";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +31,7 @@ export function StoreCartPage(){
 
   const [voucherCode, setVoucherCode] = useState(appliedVoucher?.code ?? "");
   const [voucherError, setVoucherError] = useState(null);
+  const [validatingVoucher, setValidatingVoucher] = useState(false);
 
   // Group items by campaign bucket (FACULTY_MERCH vs XTN-2027, etc.)
   const buckets = useMemo(() => {
@@ -60,20 +63,31 @@ export function StoreCartPage(){
   const discountGoods = appliedVoucher?.discountGoods ?? 0;
   const estimatedTotal = Math.max(0, subtotal - discountGoods);
 
-  const handleApplyVoucher = () => {
+  const handleApplyVoucher = async () => {
     const code = voucherCode.trim().toUpperCase();
     setVoucherError(null);
-    if (!code) return;
-    if (code === "YIT20K") {
-      if (subtotal < 200_000) {
-        setVoucherError("Mã YIT20K yêu cầu đơn hàng tối thiểu 200.000đ.");
-        return;
-      }
-      setAppliedVoucher({ code: "YIT20K", discountGoods: 20_000, freeShip: false });
-    } else if (code === "FREESHIP") {
-      setAppliedVoucher({ code: "FREESHIP", discountGoods: 0, freeShip: true });
-    } else {
-      setVoucherError("Mã Voucher không hợp lệ hoặc đã hết lượt sử dụng toàn Khoa.");
+    if (!code || validatingVoucher) return;
+    setValidatingVoucher(true);
+    try {
+      const result = await validateStoreVoucher({
+        code,
+        subtotal,
+        campaignBucket: activeBucket
+      });
+      setAppliedVoucher({
+        code: result.code ?? code,
+        discountGoods: Number(result.discountGoods) || 0,
+        freeShip: Boolean(result.freeShip)
+      });
+    } catch (err) {
+      setVoucherError(
+        extractApiErrorMessage(
+          err,
+          "Mã Voucher không hợp lệ hoặc không thể kiểm tra lúc này."
+        )
+      );
+    } finally {
+      setValidatingVoucher(false);
     }
   };
 
@@ -257,7 +271,7 @@ export function StoreCartPage(){
 
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="cart-voucher">Mã giảm giá (Thử: YIT20K hoặc FREESHIP)</Label>
+                <Label htmlFor="cart-voucher">Mã giảm giá (Voucher)</Label>
                 <div className="flex gap-2">
                   <Input
                     id="cart-voucher"
@@ -266,9 +280,15 @@ export function StoreCartPage(){
                     onChange={(e) => setVoucherCode(e.target.value)}
                     error={voucherError ?? undefined}
                   />
-                  <Button type="button" variant="outline" onClick={handleApplyVoucher} className="shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!voucherCode.trim() || validatingVoucher}
+                    onClick={() => void handleApplyVoucher()}
+                    className="shrink-0"
+                  >
                     <Tag className="h-4 w-4" />
-                    <span>Áp mã</span>
+                    <span>{validatingVoucher ? "Đang kiểm tra..." : "Áp mã"}</span>
                   </Button>
                 </div>
                 {appliedVoucher && (

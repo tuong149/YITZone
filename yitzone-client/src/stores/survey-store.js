@@ -183,59 +183,7 @@ function cloneQuestions(questions) {
   }));
 }
 
-const INITIAL_SURVEYS = [
-  {
-    id: "evt-cloud-2026",
-    title: "Đánh giá Hội thảo Cloud Native & DevOps 2026",
-    description:
-      "Hoàn thành khảo sát ngắn sau Check-out để mở khóa E-Certificate sự kiện. Dữ liệu giúp BTC nâng cao chất lượng các buổi chuyên đề.",
-    scope: "Sau sự kiện",
-    mode: "IDENTIFIED",
-    status: "OPEN",
-    responsesCount: 42,
-    questions: WORKSHOP_QUESTIONS,
-    ratingBreakdown: [
-      { label: "5 sao · Rất hài lòng", pct: 64 },
-      { label: "4 sao · Hài lòng", pct: 26 },
-      { label: "3 sao · Bình thường", pct: 8 },
-      { label: "1–2 sao · Cần cải thiện", pct: 2 }
-    ]
-  },
-  {
-    id: "anon-ofit-2026",
-    title: "Khảo sát Ẩn danh Chất lượng Trực VP Ban OFIT",
-    description:
-      "Mỗi thành viên nộp tối đa 1 lần. Câu trả lời được tách bảng khỏi tài khoản và chỉ mở thống kê khi đạt tối thiểu 5 phản hồi.",
-    scope: "Nội bộ Ban/Tổ",
-    mode: "ANONYMOUS",
-    status: "OPEN",
-    responsesCount: 3,
-    questions: INTERNAL_DUTY_QUESTIONS,
-    ratingBreakdown: [
-      { label: "5 sao · Rất hài lòng", pct: 67 },
-      { label: "4 sao · Hài lòng", pct: 33 },
-      { label: "3 sao · Bình thường", pct: 0 },
-      { label: "1–2 sao · Cần cải thiện", pct: 0 }
-    ]
-  },
-  {
-    id: "all-fit-hk1",
-    title: "Lấy ý kiến Chủ đề Học thuật Học kỳ 2 (2026–2027)",
-    description:
-      "Khảo sát ẩn danh toàn Khoa CNTT nhằm lựa chọn chuỗi workshop, diễn giả và khung giờ phù hợp nhất cho sinh viên.",
-    scope: "Toàn Khoa",
-    mode: "ANONYMOUS",
-    status: "OPEN",
-    responsesCount: 68,
-    questions: FACULTY_ACADEMIC_QUESTIONS,
-    ratingBreakdown: [
-      { label: "5 sao · Rất hài lòng", pct: 58 },
-      { label: "4 sao · Hài lòng", pct: 31 },
-      { label: "3 sao · Bình thường", pct: 9 },
-      { label: "1–2 sao · Cần cải thiện", pct: 2 }
-    ]
-  }
-];
+const INITIAL_SURVEYS = [];
 
 const INITIAL_TEMPLATES = [
   {

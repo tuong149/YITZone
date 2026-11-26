@@ -25,126 +25,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEvents } from "@/features/events/api";
+import { ALL_STORE_PRODUCTS } from "@/features/store/products-data";
+import { formatVnd } from "@/stores/cart-store";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { DEFAULT_HOME_HIGHLIGHTS, useCmsStore } from "@/stores/cms-store";
+import { useEventStore } from "@/stores/event-store";
 
-const STATIC_EVENT_CANDIDATES = [
-  {
-    sourceType: "EVENT",
-    sourceId: "EVT-2026-HACK",
-    category: "Hackathon",
-    title: "UTE Hackathon 2026: Smart Campus",
-    meta: "Thứ 7, 12/12 · 08:00 · Sảnh A HCM-UTE",
-    image: "/images/card-hackathon.jpg",
-    badges: ["Cộng ĐRL", "Cộng CĐDN"],
-    to: "/events/EVT-2026-HACK"
-  },
-  {
-    sourceType: "EVENT",
-    sourceId: "EVT-2026-CLOUD",
-    category: "Hội thảo",
-    title: "Hội thảo Cloud Native & DevOps 2026",
-    meta: "Thứ 7, 28/11 · 08:00 · Hội trường Lớn HCM-UTE",
-    image: "/images/hero-campus.jpg",
-    badges: ["Cộng ĐRL", "Cộng CĐDN"],
-    to: "/events/EVT-2026-CLOUD"
-  },
-  {
-    sourceType: "EVENT",
-    sourceId: "EVT-2026-DIST",
-    category: "Tech Talk",
-    title: "FIT Tech Talk: Kiến trúc Hệ thống Phân tán & Kafka",
-    meta: "Thứ 5, 03/12 · 18:00 · Phòng A5-302",
-    image: "/images/card-hackathon.jpg",
-    badges: ["Cộng ĐRL", "Cộng CĐDN"],
-    to: "/events/EVT-2026-DIST"
-  },
-  {
-    sourceType: "EVENT",
-    sourceId: "EVT-2026-VOL",
-    category: "Tình nguyện",
-    title: "Ngày hội Hiến máu Nhân đạo & Tiếp sức Mùa thi",
-    meta: "Chủ Nhật, 06/12 · 07:30 · Sảnh Khu E HCM-UTE",
-    image: "/images/hero-campus.jpg",
-    badges: ["Cộng CTXH", "Cộng ĐRL"],
-    to: "/events/EVT-2026-VOL"
-  }
-];
-
-const PRODUCT_CANDIDATES = [
-  {
-    sourceType: "PRODUCT",
-    sourceId: "prd-hoodie",
-    category: "Cửa hàng",
-    title: "Áo khoác Hoodie FIT HCM-UTE 2026",
-    meta: "320.000đ · Vật phẩm Khoa thường trực · Pre-order Đợt 2",
-    image: "/images/card-hoodie.jpg",
-    to: "/store"
-  },
-  {
-    sourceType: "PRODUCT",
-    sourceId: "prd-polo",
-    category: "Cửa hàng",
-    title: "Áo Polo Khoa CNTT (Tech Knit)",
-    meta: "185.000đ · Ưu đãi Tân SV · Nhận tại Văn phòng",
-    image: "/images/card-hoodie.jpg",
-    to: "/store"
-  },
-  {
-    sourceType: "PRODUCT",
-    sourceId: "prd-combo-xtn",
-    category: "Xuân Tình Nguyện",
-    title: "Combo Tiếp sức Ôn thi (Bánh tráng + Trà tắc + Khô gà)",
-    meta: "109.000đ · Tiết kiệm 16k · Gây quỹ XTN 2027",
-    image: "/images/hero-campus.jpg",
-    to: "/store"
-  }
-];
-
-const CAMPAIGN_CANDIDATES = [
-  {
-    sourceType: "CAMPAIGN",
-    sourceId: "camp-sv5t",
-    category: "SV5T",
-    title: "Lễ Tuyên dương Sinh viên 5 tốt",
-    meta: "Cấp Liên chi hội Khoa & Trường · Đợt xét 2026",
-    image: "/images/card-sv5t.jpg",
-    verified: true,
-    to: "/public/honor-roll"
-  },
-  {
-    sourceType: "CAMPAIGN",
-    sourceId: "camp-voting",
-    category: "Bình chọn",
-    title: "Bình chọn Mẫu Áo Khoa CNTT & Đêm Gala FIT 2026",
-    meta: "Cổng bình chọn trực tuyến & tại hội trường đang mở",
-    image: "/images/card-sv5t.jpg",
-    to: "/voting"
-  },
-  {
-    sourceType: "CAMPAIGN",
-    sourceId: "camp-minigame",
-    category: "Minigame",
-    title: "Đấu trường Công nghệ FIT 2026",
-    meta: "Tham gia trả lời nhanh, tích lũy Streak & vinh danh Top",
-    image: "/images/card-hackathon.jpg",
-    to: "/minigame"
-  },
-  {
-    sourceType: "CAMPAIGN",
-    sourceId: "camp-oj",
-    category: "Học thuật",
-    title: "Hệ thống Luyện tập Lập trình FIT Online Judge",
-    meta: "Luyện tập thuật toán, chấm bài tự động chuẩn ICPC",
-    image: "/images/card-hackathon.jpg",
-    to: "/oj"
-  }
-];
+function createEmptyHighlightSlots(existing) {
+  return [0, 1, 2].map((idx) => {
+    const found = existing[idx];
+    if (found) return { ...found, id: `slot-${idx + 1}` };
+    return {
+      id: `slot-${idx + 1}`,
+      sourceType: "EVENT",
+      sourceId: "",
+      category: "Nổi bật",
+      title: "",
+      meta: "",
+      image: "/images/hero-campus.jpg",
+      to: "/events"
+    };
+  });
+}
 
 export function HomeHighlightsSection() {
   const { data: apiEvents = [] } = useEvents();
+  const storedEvents = useEventStore((s) => s.events);
   const articles = useCmsStore((s) => s.articles);
   const categories = useCmsStore((s) => s.categories);
   const homeHighlights = useCmsStore((s) => s.homeHighlights);
@@ -156,7 +64,7 @@ export function HomeHighlightsSection() {
   const canPinHighlights = isAuthenticated && hasAnyPermission(authorities, PERMISSIONS.ADMIN_CMS);
 
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(homeHighlights);
+  const [draft, setDraft] = useState(() => createEmptyHighlightSlots(homeHighlights));
   const [activeSlotIdx, setActiveSlotIdx] = useState(0);
   const [sourceTab, setSourceTab] = useState("EVENT");
 
@@ -179,8 +87,21 @@ export function HomeHighlightsSection() {
     });
 
     const seen = new Set(dynamicFromApi.map((e) => e.sourceId));
-    return [...dynamicFromApi, ...STATIC_EVENT_CANDIDATES.filter((e) => !seen.has(e.sourceId))];
-  }, [apiEvents]);
+    const fromStore = storedEvents
+      .filter((ev) => ev.status === "PUBLISHED" && !seen.has(ev.id))
+      .map((ev) => ({
+        sourceType: "EVENT",
+        sourceId: ev.id,
+        category: "Sự kiện",
+        title: ev.title,
+        meta: `${ev.dateSummary} · ${ev.location}`,
+        image: ev.coverImage || "/images/hero-campus.jpg",
+        badges: ev.benefits?.length ? ev.benefits : undefined,
+        to: `/events/${ev.id}`
+      }));
+
+    return [...dynamicFromApi, ...fromStore];
+  }, [apiEvents, storedEvents]);
 
   const articleCandidates = useMemo(
     () =>
@@ -201,19 +122,36 @@ export function HomeHighlightsSection() {
     [articles, categories]
   );
 
+  const productCandidates = useMemo(
+    () =>
+      ALL_STORE_PRODUCTS.map((p) => ({
+        sourceType: "PRODUCT",
+        sourceId: p.id,
+        category: p.categoryLabel || "Cửa hàng",
+        title: p.name,
+        meta: `${formatVnd(p.promoPrice ?? p.listPrice)} · ${p.campaignLabel}`,
+        image: p.image || "/images/card-hoodie.jpg",
+        to: `/store/products/${p.id}`
+      })),
+    []
+  );
+
+  const campaignCandidates = useMemo(() => [], []);
+
   const currentCandidates = useMemo(() => {
     if (sourceTab === "EVENT") return eventCandidates;
     if (sourceTab === "ARTICLE") return articleCandidates;
-    if (sourceTab === "PRODUCT") return PRODUCT_CANDIDATES;
-    return CAMPAIGN_CANDIDATES;
-  }, [sourceTab, eventCandidates, articleCandidates]);
+    if (sourceTab === "PRODUCT") return productCandidates;
+    return campaignCandidates;
+  }, [sourceTab, eventCandidates, articleCandidates, productCandidates, campaignCandidates]);
 
   const activeSlot = draft[activeSlotIdx] ?? draft[0];
 
   const openEditor = () => {
-    setDraft(homeHighlights);
+    const nextDraft = createEmptyHighlightSlots(homeHighlights);
+    setDraft(nextDraft);
     setActiveSlotIdx(0);
-    setSourceTab(homeHighlights[0]?.sourceType ?? "EVENT");
+    setSourceTab(nextDraft[0]?.sourceType ?? "EVENT");
     setOpen(true);
   };
 
@@ -260,10 +198,15 @@ export function HomeHighlightsSection() {
 
   const handleReset = () => {
     resetHomeHighlights();
-    setDraft(DEFAULT_HOME_HIGHLIGHTS);
+    const cleared = createEmptyHighlightSlots(DEFAULT_HOME_HIGHLIGHTS);
+    setDraft(cleared);
     setActiveSlotIdx(0);
-    setSourceTab(DEFAULT_HOME_HIGHLIGHTS[0].sourceType);
+    setSourceTab("EVENT");
   };
+
+  if (homeHighlights.length === 0 && !canPinHighlights) {
+    return null;
+  }
 
   return (
     <section className="space-y-4">
@@ -284,51 +227,60 @@ export function HomeHighlightsSection() {
         )}
       </div>
 
-      <div className="grid gap-5 md:grid-cols-3">
-        {homeHighlights.map((card) => (
-          <Link
-            key={card.id}
-            to={card.to}
-            className="yit-hover-hit group block rounded-[22px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <div className="liquid-glass-card yit-hover-surface flex h-full flex-col overflow-hidden rounded-[22px] group-hover:border-primary/40">
-              <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
-                <img
-                  src={card.image}
-                  alt={card.title}
-                  className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03]"
-                />
-                <span className="liquid-glass-pill absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-semibold text-foreground">
-                  {card.category}
-                </span>
+      {homeHighlights.length === 0 ? (
+        <div className="rounded-[22px] border border-dashed border-border bg-card/60 px-6 py-10 text-center">
+          <p className="text-sm font-medium text-foreground">Chưa có mục nổi bật nào được ghim</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Sau khi xuất bản sự kiện, bài viết hoặc vật phẩm từ máy chủ, bấm &ldquo;Ghim mục nổi bật&rdquo; để đưa lên Trang chủ.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-3">
+          {homeHighlights.map((card) => (
+            <Link
+              key={card.id}
+              to={card.to}
+              className="yit-hover-hit group block rounded-[22px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <div className="liquid-glass-card yit-hover-surface flex h-full flex-col overflow-hidden rounded-[22px] group-hover:border-primary/40">
+                <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
+                  <img
+                    src={card.image}
+                    alt={card.title}
+                    className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+                  />
+                  <span className="liquid-glass-pill absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-semibold text-foreground">
+                    {card.category}
+                  </span>
+                </div>
+
+                <div className="flex-1 space-y-2.5 p-5">
+                  <h3 className="font-display text-lg font-medium leading-snug text-foreground transition-colors duration-150 group-hover:text-primary">
+                    {card.title}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">{card.meta}</p>
+
+                  {card.badges && card.badges.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {card.badges.map((b) => (
+                        <Badge key={b} variant="default">
+                          {b}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {card.verified && (
+                    <div className="pt-1">
+                      <VerifiedBadge label="Xác thực Đoàn - Hội FIT" />
+                    </div>
+                  )}
+                </div>
               </div>
-
-              <div className="flex-1 space-y-2.5 p-5">
-                <h3 className="font-display text-lg font-medium leading-snug text-foreground transition-colors duration-150 group-hover:text-primary">
-                  {card.title}
-                </h3>
-                <p className="text-xs text-muted-foreground">{card.meta}</p>
-
-                {card.badges && card.badges.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {card.badges.map((b) => (
-                      <Badge key={b} variant="default">
-                        {b}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                {card.verified && (
-                  <div className="pt-1">
-                    <VerifiedBadge label="Xác thực Đoàn - Hội FIT" />
-                  </div>
-                )}
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Pinning Dialog (Permission-gated to ADMIN_CMS) */}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -401,13 +353,13 @@ export function HomeHighlightsSection() {
                     <div className="flex items-center gap-2.5">
                       <img
                         src={slot.image}
-                        alt={slot.title}
+                        alt={slot.title || `Vị trí ${idx + 1}`}
                         className="h-11 w-14 shrink-0 rounded-lg object-cover"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[11px] font-semibold text-primary">{slot.category}</p>
                         <p className="line-clamp-2 text-xs font-medium leading-snug text-foreground">
-                          {slot.title}
+                          {slot.title || "Chưa chọn nội dung"}
                         </p>
                       </div>
                     </div>
@@ -458,52 +410,58 @@ export function HomeHighlightsSection() {
                 </div>
               </div>
 
-              <div className="grid max-h-[240px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-                {currentCandidates.map((cand) => {
-                  const isPinnedHere =
-                    activeSlot.sourceType === cand.sourceType &&
-                    activeSlot.sourceId === cand.sourceId;
-                  return (
-                    <button
-                      key={`${cand.sourceType}-${cand.sourceId}`}
-                      type="button"
-                      onClick={() => handlePinCandidate(cand)}
-                      className={cn(
-                        "flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors",
-                        isPinnedHere
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-card hover:border-primary/40"
-                      )}
-                    >
-                      <img
-                        src={cand.image}
-                        alt={cand.title}
-                        className="h-12 w-16 shrink-0 rounded-lg object-cover"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-1 text-xs font-semibold text-foreground">
-                          {cand.title}
-                        </p>
-                        <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
-                          {cand.meta}
-                        </p>
-                      </div>
-                      {isPinnedHere && (
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                          <Check className="h-3.5 w-3.5" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              {currentCandidates.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-card/70 px-4 py-8 text-center text-xs text-muted-foreground">
+                  Chưa có mục xuất bản nào trong nhóm này từ hệ thống.
+                </div>
+              ) : (
+                <div className="grid max-h-[240px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                  {currentCandidates.map((cand) => {
+                    const isPinnedHere =
+                      activeSlot.sourceType === cand.sourceType &&
+                      activeSlot.sourceId === cand.sourceId;
+                    return (
+                      <button
+                        key={`${cand.sourceType}-${cand.sourceId}`}
+                        type="button"
+                        onClick={() => handlePinCandidate(cand)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors",
+                          isPinnedHere
+                            ? "border-primary bg-primary/10"
+                            : "border-border bg-card hover:border-primary/40"
+                        )}
+                      >
+                        <img
+                          src={cand.image}
+                          alt={cand.title}
+                          className="h-12 w-16 shrink-0 rounded-lg object-cover"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-1 text-xs font-semibold text-foreground">
+                            {cand.title}
+                          </p>
+                          <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                            {cand.meta}
+                          </p>
+                        </div>
+                        {isPinnedHere && (
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                            <Check className="h-3.5 w-3.5" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
           <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
             <Button type="button" variant="ghost" size="sm" onClick={handleReset} className="rounded-full">
               <RotateCcw className="h-3.5 w-3.5" />
-              <span>Khôi phục mặc định</span>
+              <span>Bỏ ghim toàn bộ</span>
             </Button>
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <Button type="button" variant="outline" onClick={() => setOpen(false)} className="rounded-full">
@@ -515,7 +473,7 @@ export function HomeHighlightsSection() {
                 className="liquid-glass-btn-cobalt rounded-full px-5"
               >
                 <Check className="h-4 w-4" />
-                <span>Lưu 3 mục nổi bật</span>
+                <span>Lưu mục nổi bật</span>
               </Button>
             </div>
           </DialogFooter>

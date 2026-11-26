@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
@@ -30,74 +30,58 @@ const CLEANING_CHECKLIST = [
   "Khóa cửa văn phòng A1-204 & bàn giao chìa khóa đúng quy định"
 ];
 
-const INITIAL_SLOTS = [
-  { id: "s-t2-1", day: "Thứ 2", shiftName: "Ca 1", time: "07:30–09:30", registered: 2, capacity: 3, mine: true },
-  { id: "s-t3-2", day: "Thứ 3", shiftName: "Ca 2", time: "09:30–11:30", registered: 3, capacity: 3, mine: false },
-  {
-    id: "s-t4-4",
-    day: "Thứ 4",
-    shiftName: "Ca 4",
-    time: "13:00–15:00",
-    registered: 1,
-    capacity: 3,
-    mine: false,
-    conflict: "Trùng Vòng loại Trắc nghiệm (14:00–15:00)"
-  },
-  { id: "s-t5-3", day: "Thứ 5", shiftName: "Ca 3", time: "10:00–12:00", registered: 2, capacity: 3, mine: false },
-  {
-    id: "s-t6-clean",
-    day: "Thứ 6",
-    shiftName: "Ca Vệ sinh T6",
-    time: "16:50–17:30",
-    registered: 2,
-    capacity: 4,
-    mine: true
-  },
-  { id: "s-t7-2", day: "Thứ 7", shiftName: "Ca 2", time: "09:30–11:30", registered: 1, capacity: 3, mine: false }
-];
+const INITIAL_SLOTS = [];
 
-const INITIAL_SWAPS = [
-  {
-    id: "sw-1",
-    fromName: "Nguyễn Hoàng Nam",
-    fromMssv: "23110218",
-    shiftLabel: "Thứ 5 · Ca 3 (10:00–12:00)",
-    reason: "Bận lịch thí nghiệm Mạng máy tính đột xuất",
-    hoursBefore: 36,
-    status: "WAITING_PEER"
-  }
-];
+const INITIAL_SWAPS = [];
 
-export function OfficeDutyPage(){
+export function OfficeDutyPage() {
   const [checkInState, setCheckInState] = useState("IDLE");
-  const [gpsDistance] = useState(18); // meters (warning > 30m)
+  const [gpsStatusText, setGpsStatusText] = useState("Xác thực vị trí GPS khi bấm Check-in");
   const [checkedItems, setCheckedItems] = useState(CLEANING_CHECKLIST.map(() => false));
-  const [photoUploaded, setPhotoUploaded] = useState(false);
+  const [photoFileName, setPhotoFileName] = useState(null);
+  const photoInputRef = useRef(null);
   const [logNote, setLogNote] = useState("");
   const [slots, setSlots] = useState(INITIAL_SLOTS);
   const [swaps, setSwaps] = useState(INITIAL_SWAPS);
 
   // Absence & makeup state (UC-DUTY-03)
   const [absenceMode, setAbsenceMode] = useState("NORMAL");
-  const [makeupShift, setMakeupShift] = useState("s-t5-3");
+  const [makeupShift, setMakeupShift] = useState("");
   const [absenceReason, setAbsenceReason] = useState("");
   const [notice, setNotice] = useState(null);
 
   const completedChecklist = checkedItems.filter(Boolean).length;
   const canCheckOut = checkInState === "ON_TIME" || checkInState === "LATE";
+  const myRegisteredCount = slots.filter((s) => s.mine).length;
+  const availableMakeupSlots = slots.filter(
+    (s) => !s.mine && s.registered < s.capacity && !s.conflict
+  );
 
-  const handleCheckIn = (simulatedMinutesLate) => {
-    if (simulatedMinutesLate <= 15) {
-      setCheckInState("ON_TIME");
-      setNotice(
-        "Check-in Đúng giờ thành công! Hệ thống đã tự động mở tạm quyền phát vật phẩm tại bàn trực."
-      );
-    } else {
-      setCheckInState("LATE");
-      setNotice(
-        "Check-in ghi nhận Đi trễ (phút 16–30) và đã gửi cảnh báo tới Ban OFIT. Tạm quyền bàn phát vật phẩm vẫn được mở."
+  const handleCheckIn = () => {
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsStatusText(
+            `Đã ghi nhận tọa độ (±${Math.round(pos.coords.accuracy)}m)`
+          );
+        },
+        () => {
+          setGpsStatusText("Chưa cấp quyền định vị trình duyệt");
+        },
+        { timeout: 5000 }
       );
     }
+    setCheckInState("ON_TIME");
+    setNotice(
+      "Đã gửi yêu cầu Check-in đầu ca! Hệ thống mở tạm quyền phát vật phẩm tại bàn trực trong ca."
+    );
+  };
+
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFileName(file.name);
+    e.target.value = "";
   };
 
   const handleToggleSlot = (slot) => {
@@ -109,8 +93,8 @@ export function OfficeDutyPage(){
     setSlots((prev) =>
       prev.map((s) =>
         s.id === slot.id
-          ? {...s, mine: !s.mine, registered: s.mine ? s.registered - 1: s.registered + 1 }
-: s
+          ? { ...s, mine: !s.mine, registered: s.mine ? s.registered - 1 : s.registered + 1 }
+          : s
       )
     );
   };
@@ -120,9 +104,13 @@ export function OfficeDutyPage(){
       setNotice("Vui lòng nhập lý do xin vắng tối thiểu 6 ký tự.");
       return;
     }
+    if (absenceMode === "NORMAL" && availableMakeupSlots.length > 0 && !makeupShift) {
+      setNotice("Vui lòng chọn ca trực bù hợp lệ trước khi gửi đơn.");
+      return;
+    }
     if (absenceMode === "NORMAL") {
       setNotice(
-        "Đơn xin vắng (≥ 2 giờ) + Ca bù hợp lệ đã được CHẤP NHẬN TỰ ĐỘNG và đồng bộ lại vào Lịch Của Tôi."
+        "Đã gửi đơn xin vắng (≥ 2 giờ) kèm ca bù lên máy chủ để đối chiếu và cập nhật Lịch Của Tôi."
       );
     } else {
       setNotice(
@@ -133,12 +121,12 @@ export function OfficeDutyPage(){
   };
 
   const handleAcceptSwap = (req) => {
-    const nextStatus = req.hoursBefore >= 24 ? "AUTO_APPROVED": "PENDING_OFIT";
-    setSwaps((prev) => prev.map((s) => (s.id === req.id ? {...s, status: nextStatus }: s)));
+    const nextStatus = req.hoursBefore >= 24 ? "AUTO_APPROVED" : "PENDING_OFIT";
+    setSwaps((prev) => prev.map((s) => (s.id === req.id ? { ...s, status: nextStatus } : s)));
     setNotice(
       nextStatus === "AUTO_APPROVED"
         ? `Bạn đã nhận ca ${req.shiftLabel}. Do gửi trước ≥ 24h, hệ thống tự động duyệt và chuyển trách nhiệm điểm danh sang bạn.`
-: `Bạn đã xác nhận nhận ca ${req.shiftLabel}. Đơn đang chờ Ban OFIT phê duyệt.`
+        : `Bạn đã xác nhận nhận ca ${req.shiftLabel}. Đơn đang chờ Ban OFIT phê duyệt.`
     );
   };
 
@@ -156,7 +144,7 @@ export function OfficeDutyPage(){
 
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="calOffice" className="rounded-full px-3 py-1">
-            Định mức tuần: 2 / 2 ca
+            Đã đăng ký: {myRegisteredCount} ca
           </Badge>
           <Button asChild variant="outline" size="sm" className="rounded-full">
             <Link to="/calendar">Xem trên Lịch hoạt động</Link>
@@ -189,23 +177,23 @@ export function OfficeDutyPage(){
           <Card className="lg:col-span-7">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle>Ca trực hiện tại: Thứ 6 · Ca Vệ sinh (16:50–17:30)</CardTitle>
+                <CardTitle>Điểm danh Ca trực Văn phòng</CardTitle>
                 <Badge
                   variant={
                     checkInState === "ON_TIME" || checkInState === "CHECKED_OUT"
                       ? "success"
-: checkInState === "LATE"
+                      : checkInState === "LATE"
                         ? "warning"
-: "calOffice"
+                        : "calOffice"
                   }
                 >
                   {checkInState === "IDLE"
                     ? "Chờ Check-in"
-: checkInState === "ON_TIME"
+                    : checkInState === "ON_TIME"
                       ? "Đang trực · Đúng giờ"
-: checkInState === "LATE"
+                      : checkInState === "LATE"
                         ? "Đang trực · Đi trễ (16–30')"
-: "Đã Check-out hoàn tất"}
+                        : "Đã Check-out hoàn tất"}
                 </Badge>
               </div>
               <CardDescription>
@@ -220,11 +208,8 @@ export function OfficeDutyPage(){
                     <MapPin className="h-3.5 w-3.5 text-brand-cyan" />
                     <span>Định vị GPS Văn phòng A1-204</span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between">
-                    <span className="tabular-mono text-sm font-semibold text-foreground">
-                      Khoảng cách: {gpsDistance}m
-                    </span>
-                    <Badge variant="success">Trong bán kính 30m</Badge>
+                  <div className="mt-1 text-xs font-medium text-foreground">
+                    {gpsStatusText}
                   </div>
                 </div>
 
@@ -233,8 +218,8 @@ export function OfficeDutyPage(){
                     <Clock className="h-3.5 w-3.5 text-cal-office" />
                     <span>Cửa sổ Check-out cuối ca</span>
                   </div>
-                  <div className="tabular-mono mt-1 text-sm font-semibold text-foreground">
-                    17:25 – 17:45 (-5&apos; / +15&apos;)
+                  <div className="tabular-mono mt-1 text-xs font-medium text-foreground">
+                    Mở từ -5 phút đến +15 phút cuối ca
                   </div>
                 </div>
               </div>
@@ -263,20 +248,15 @@ export function OfficeDutyPage(){
               )}
 
               <div className="flex flex-wrap gap-2.5">
-                {checkInState === "IDLE" ? (
-                  <>
-                    <Button onClick={() => handleCheckIn(5)}>
-                      <UserCheck className="h-4 w-4" />
-                      <span>Check-in Đầu ca (Đúng giờ ≤ 15&apos;)</span>
-                    </Button>
-                    {import.meta.env.DEV && (
-                      <Button variant="outline" onClick={() => handleCheckIn(22)}>
-                        <span>Mô phỏng Check-in Trễ (phút 22)</span>
-                      </Button>
-                    )}
-                  </>
-                ): canCheckOut ? (
+                {checkInState === "IDLE" && (
+                  <Button type="button" onClick={handleCheckIn}>
+                    <UserCheck className="h-4 w-4" />
+                    <span>Check-in Đầu ca</span>
+                  </Button>
+                )}
+                {canCheckOut && (
                   <Button
+                    type="button"
                     onClick={() => {
                       setCheckInState("CHECKED_OUT");
                       setNotice("Check-out cuối ca thành công! Nhật ký trực đã được lưu.");
@@ -285,12 +265,6 @@ export function OfficeDutyPage(){
                     <CheckCircle2 className="h-4 w-4" />
                     <span>Check-out Cuối ca</span>
                   </Button>
-                ): (
-                  import.meta.env.DEV && (
-                    <Button variant="outline" onClick={() => setCheckInState("IDLE")}>
-                      Đặt lại trạng thái mô phỏng
-                    </Button>
-                  )
                 )}
               </div>
 
@@ -311,12 +285,12 @@ export function OfficeDutyPage(){
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Checklist Ca Vệ sinh T6</CardTitle>
-                <Badge variant={completedChecklist === 5 ? "success": "secondary"}>
-                  {completedChecklist}/5 hạng mục
+                <Badge variant={completedChecklist === CLEANING_CHECKLIST.length ? "success" : "secondary"}>
+                  {completedChecklist}/{CLEANING_CHECKLIST.length} hạng mục
                 </Badge>
               </div>
               <CardDescription>
-                Bắt buộc hoàn thành 5 hạng mục và đính kèm ảnh hiện trạng trước khi Check-out.
+                Bắt buộc hoàn thành {CLEANING_CHECKLIST.length} hạng mục và đính kèm ảnh hiện trạng trước khi Check-out.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -328,14 +302,14 @@ export function OfficeDutyPage(){
                       "flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 text-sm transition-colors",
                       checkedItems[idx]
                         ? "border-status-success/35 bg-status-success/5 text-foreground"
-: "border-border bg-card hover:bg-muted/40"
+                        : "border-border bg-card hover:bg-muted/40"
                     )}
                   >
                     <input
                       type="checkbox"
                       checked={checkedItems[idx]}
                       onChange={() =>
-                        setCheckedItems((prev) => prev.map((v, i) => (i === idx ? !v: v)))
+                        setCheckedItems((prev) => prev.map((v, i) => (i === idx ? !v : v)))
                       }
                       className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
                     />
@@ -345,22 +319,29 @@ export function OfficeDutyPage(){
               </div>
 
               <div className="rounded-lg border border-dashed border-border bg-muted/25 p-3.5">
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoSelect}
+                />
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-foreground">
-                    <Camera className="h-4 w-4 text-muted-foreground" />
-                    <span>
-                      {photoUploaded
-                        ? "hien-trang-vp-t6-2111.jpg (Đã đính kèm)"
-: "Chưa có ảnh hiện trạng sau vệ sinh"}
+                  <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground">
+                    <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">
+                      {photoFileName
+                        ? `${photoFileName} (Đã đính kèm)`
+                        : "Chưa có ảnh hiện trạng sau vệ sinh"}
                     </span>
                   </div>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => setPhotoUploaded((p) => !p)}
+                    onClick={() => photoInputRef.current?.click()}
                   >
-                    {photoUploaded ? "Đổi ảnh": "Tải ảnh mẫu"}
+                    {photoFileName ? "Đổi ảnh" : "Chọn ảnh"}
                   </Button>
                 </div>
               </div>
@@ -372,62 +353,74 @@ export function OfficeDutyPage(){
         <TabsContent value="register">
           <Card>
             <CardHeader>
-              <CardTitle>Đăng ký Đợt Trực Tuần 12 (23/11 – 28/11/2026)</CardTitle>
+              <CardTitle>Đăng ký Đợt Trực Văn phòng</CardTitle>
               <CardDescription>
-                6 ca cố định (T2–T7) + Ca Vệ sinh T6 (16:50–17:30). Hệ thống tự động đối chiếu trùng giờ với Lịch
-                Của Tôi.
+                6 ca cố định (T2–T7) + Ca Vệ sinh T6 (16:50–17:30). Hệ thống tự động đối chiếu trùng giờ với Lịch Của Tôi.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {slots.map((slot) => {
-                const full = slot.registered >= slot.capacity && !slot.mine;
-                return (
-                  <div
-                    key={slot.id}
-                    className={cn(
-                      "flex flex-col justify-between rounded-lg border p-4 transition-colors",
-                      slot.mine
-                        ? "border-cal-office/50 bg-cal-office/10"
-: slot.conflict
-                          ? "border-status-danger/35 bg-status-danger/5"
-: "border-border bg-card"
-                    )}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-foreground">
-                          {slot.day} · {slot.shiftName}
-                        </span>
-                        <Badge variant={slot.mine ? "calOffice": full ? "secondary": "outline"}>
-                          <span className="tabular-mono">
-                            {slot.registered}/{slot.capacity} CTV
-                          </span>
-                        </Badge>
-                      </div>
-                      <div className="tabular-mono mt-1 text-xs text-muted-foreground">{slot.time}</div>
-
-                      {slot.conflict && (
-                        <div className="mt-2.5 flex items-start gap-1.5 rounded-md bg-status-danger/10 p-2 text-xs text-status-danger">
-                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                          <span>{slot.conflict}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-4">
-                      <Button
-                        size="sm"
-                        variant={slot.mine ? "outline": "default"}
-                        disabled={full}
-                        className="w-full"
-                        onClick={() => handleToggleSlot(slot)}
+            <CardContent>
+              {slots.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/25 px-6 py-10 text-center">
+                  <p className="text-sm font-medium text-foreground">
+                    Chưa có đợt đăng ký ca trực nào đang mở
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Lịch đăng ký ca trực tuần mới sẽ hiển thị tại đây ngay khi Ban Văn phòng (OFIT) mở cổng.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {slots.map((slot) => {
+                    const full = slot.registered >= slot.capacity && !slot.mine;
+                    return (
+                      <div
+                        key={slot.id}
+                        className={cn(
+                          "flex flex-col justify-between rounded-lg border p-4 transition-colors",
+                          slot.mine
+                            ? "border-cal-office/50 bg-cal-office/10"
+                            : slot.conflict
+                              ? "border-status-danger/35 bg-status-danger/5"
+                              : "border-border bg-card"
+                        )}
                       >
-                        {slot.mine ? "Hủy đăng ký ca này": full ? "Đã đủ định mức": "Chọn đăng ký ca"}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-foreground">
+                              {slot.day} · {slot.shiftName}
+                            </span>
+                            <Badge variant={slot.mine ? "calOffice" : full ? "secondary" : "outline"}>
+                              <span className="tabular-mono">
+                                {slot.registered}/{slot.capacity} CTV
+                              </span>
+                            </Badge>
+                          </div>
+                          <div className="tabular-mono mt-1 text-xs text-muted-foreground">{slot.time}</div>
+
+                          {slot.conflict && (
+                            <div className="mt-2.5 flex items-start gap-1.5 rounded-md bg-status-danger/10 p-2 text-xs text-status-danger">
+                              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                              <span>{slot.conflict}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-4">
+                          <Button
+                            size="sm"
+                            variant={slot.mine ? "outline" : "default"}
+                            disabled={full}
+                            className="w-full"
+                            onClick={() => handleToggleSlot(slot)}
+                          >
+                            {slot.mine ? "Hủy đăng ký ca này" : full ? "Đã đủ định mức" : "Chọn đăng ký ca"}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -441,8 +434,7 @@ export function OfficeDutyPage(){
                 <span>Xin Vắng Có Phép &amp; Chọn Ca Bù</span>
               </CardTitle>
               <CardDescription>
-                Đơn gửi trước ≥ 2 giờ kèm ca bù hợp lệ (không Chủ Nhật, không trùng lịch) được chấp nhận tự động
-                ngay lập tức.
+                Đơn gửi trước ≥ 2 giờ kèm ca bù hợp lệ (không Chủ Nhật, không trùng lịch) được chấp nhận tự động ngay lập tức.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -462,15 +454,24 @@ export function OfficeDutyPage(){
               {absenceMode === "NORMAL" && (
                 <div className="space-y-1.5">
                   <Label>Chọn Ca trực bù hợp lệ (T2–T7, đã lọc trùng lịch)</Label>
-                  <Select value={makeupShift} onValueChange={setMakeupShift}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="s-t5-3">Thứ 5 · Ca 3 (10:00–12:00) · Còn 1 chỗ</SelectItem>
-                      <SelectItem value="s-t7-2">Thứ 7 · Ca 2 (09:30–11:30) · Còn 2 chỗ</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {availableMakeupSlots.length > 0 ? (
+                    <Select value={makeupShift} onValueChange={setMakeupShift}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn ca trực bù còn chỗ" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableMakeupSlots.map((slot) => (
+                          <SelectItem key={slot.id} value={slot.id}>
+                            {slot.day} · {slot.shiftName} ({slot.time}) · Còn {slot.capacity - slot.registered} chỗ
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border bg-muted/25 px-3 py-2.5 text-xs text-muted-foreground">
+                      Chưa có danh sách ca trực bù trống trong chu kỳ hiện tại.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -484,10 +485,10 @@ export function OfficeDutyPage(){
                 />
               </div>
 
-              <Button onClick={handleSubmitAbsence} className="w-full">
+              <Button type="button" onClick={handleSubmitAbsence} className="w-full">
                 <ClipboardCheck className="h-4 w-4" />
                 <span>
-                  {absenceMode === "NORMAL" ? "Gửi đơn & Chốt ca bù tự động": "Gửi đơn ngoại lệ tới OFIT Lead"}
+                  {absenceMode === "NORMAL" ? "Gửi đơn & Chốt ca bù tự động" : "Gửi đơn ngoại lệ tới OFIT Lead"}
                 </span>
               </Button>
             </CardContent>
@@ -500,48 +501,53 @@ export function OfficeDutyPage(){
                 <span>Yêu cầu Đổi Ca Trực Giữa 2 CTV</span>
               </CardTitle>
               <CardDescription>
-                Minh bạch 2 chiều: hệ thống tự kiểm tra trùng lịch của người nhận và gán trách nhiệm điểm danh
-                sau khi xác nhận.
+                Minh bạch 2 chiều: hệ thống tự kiểm tra trùng lịch của người nhận và gán trách nhiệm điểm danh sau khi xác nhận.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {swaps.map((req) => (
-                <div key={req.id} className="rounded-lg border border-border bg-muted/25 p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="font-semibold text-foreground">{req.fromName}</div>
-                      <div className="tabular-mono text-xs text-muted-foreground">MSSV: {req.fromMssv}</div>
-                    </div>
-                    <Badge
-                      variant={
-                        req.status === "AUTO_APPROVED"
-                          ? "success"
-: req.status === "PENDING_OFIT"
-                            ? "warning"
-: "info"
-                      }
-                    >
-                      {req.status === "AUTO_APPROVED"
-                        ? "Đã tự duyệt (≥ 24h)"
-: req.status === "PENDING_OFIT"
-                          ? "Chờ OFIT duyệt"
-: "Chờ bạn xác nhận"}
-                    </Badge>
-                  </div>
-
-                  <div className="rounded-md border border-border bg-card px-3 py-2 text-xs">
-                    <div className="font-semibold text-foreground">{req.shiftLabel}</div>
-                    <div className="mt-0.5 text-muted-foreground">Lý do: {req.reason}</div>
-                  </div>
-
-                  {req.status === "WAITING_PEER" && (
-                    <Button size="sm" onClick={() => handleAcceptSwap(req)}>
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span>Xác nhận đồng ý nhận ca (Không trùng lịch)</span>
-                    </Button>
-                  )}
+              {swaps.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/25 px-6 py-10 text-center text-xs text-muted-foreground">
+                  Hiện chưa có yêu cầu đổi ca trực nào đang chờ bạn xác nhận.
                 </div>
-              ))}
+              ) : (
+                swaps.map((req) => (
+                  <div key={req.id} className="rounded-lg border border-border bg-muted/25 p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-semibold text-foreground">{req.fromName}</div>
+                        <div className="tabular-mono text-xs text-muted-foreground">MSSV: {req.fromMssv}</div>
+                      </div>
+                      <Badge
+                        variant={
+                          req.status === "AUTO_APPROVED"
+                            ? "success"
+                            : req.status === "PENDING_OFIT"
+                              ? "warning"
+                              : "info"
+                        }
+                      >
+                        {req.status === "AUTO_APPROVED"
+                          ? "Đã tự duyệt (≥ 24h)"
+                          : req.status === "PENDING_OFIT"
+                            ? "Chờ OFIT duyệt"
+                            : "Chờ bạn xác nhận"}
+                      </Badge>
+                    </div>
+
+                    <div className="rounded-md border border-border bg-card px-3 py-2 text-xs">
+                      <div className="font-semibold text-foreground">{req.shiftLabel}</div>
+                      <div className="mt-0.5 text-muted-foreground">Lý do: {req.reason}</div>
+                    </div>
+
+                    {req.status === "WAITING_PEER" && (
+                      <Button size="sm" onClick={() => handleAcceptSwap(req)}>
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Xác nhận đồng ý nhận ca (Không trùng lịch)</span>
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -12,10 +12,10 @@ export function LiveQaStagePage() {
   const activeSessionId = useLiveQaStore((s) => s.activeSessionId);
 
   const sessionOptions = useMemo(() => {
-    const derived = [DEFAULT_QA_SESSION];
+    const derived = DEFAULT_QA_SESSION.id ? [DEFAULT_QA_SESSION] : [];
     for (const evt of storedEvents) {
-      for (const ses of evt.sessions) {
-        if (!ses.activities.liveQa) continue;
+      for (const ses of evt.sessions ?? []) {
+        if (!ses.activities?.liveQa) continue;
         const id = `qa-${evt.id}-${ses.id}`;
         if (derived.some((s) => s.id === id)) continue;
         derived.push({
@@ -31,11 +31,12 @@ export function LiveQaStagePage() {
 
   const targetSessionId = searchParams.get("sessionId") ?? activeSessionId;
   const activeSession =
-    sessionOptions.find((s) => s.id === targetSessionId) ?? DEFAULT_QA_SESSION;
+    sessionOptions.find((s) => s.id === targetSessionId) ?? sessionOptions[0] ?? null;
 
   const sessionQuestions = useMemo(
-    () => questions.filter((q) => q.sessionId === activeSession.id),
-    [questions, activeSession.id]
+    () =>
+      activeSession?.id ? questions.filter((q) => q.sessionId === activeSession.id) : questions,
+    [questions, activeSession?.id]
   );
 
   const stageQuestion = useMemo(
@@ -46,7 +47,11 @@ export function LiveQaStagePage() {
     [sessionQuestions]
   );
 
-  const formattedPin = `${activeSession.pin.slice(0, 3)} ${activeSession.pin.slice(3, 6)}`;
+  const rawPin = (activeSession?.pin ?? DEFAULT_QA_SESSION.pin ?? "").replace(/\D/g, "");
+  const formattedPin =
+    rawPin.length >= 6 ? `${rawPin.slice(0, 3)} ${rawPin.slice(3, 6)}` : "--- ---";
+  const sessionLabel =
+    activeSession?.label || DEFAULT_QA_SESSION.label || "Chưa mở phiên Live Q&A";
   const origin =
     typeof window !== "undefined" ? window.location.origin : "https://yitzone.fit.hcmute.edu.vn";
 
@@ -61,25 +66,29 @@ export function LiveQaStagePage() {
             </span>
             <span className="inline-flex items-center gap-2 tabular-mono text-sm font-semibold text-slate-300">
               <Users className="h-4 w-4 text-sky-300" />
-              <span>{activeSession.label}</span>
+              <span>{sessionLabel}</span>
             </span>
           </div>
 
           <h1 className="font-display text-3xl font-medium leading-[1.2] text-white sm:text-4xl lg:text-5xl">
             {stageQuestion
               ? stageQuestion.content
-              : "Quét mã QR hoặc nhập mã PIN 6 số để gửi câu hỏi trực tiếp tới Diễn giả"}
+              : rawPin
+                ? "Quét mã QR hoặc nhập mã PIN 6 số để gửi câu hỏi trực tiếp tới Diễn giả"
+                : "Đang chờ Ban Tổ chức kích hoạt phiên Live Q&A trên màn hình LED"}
           </h1>
         </div>
 
         <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-white/15 pt-6">
           <span className="text-base font-medium text-slate-200">
-            {stageQuestion ? stageQuestion.authorDisplay : "Chờ MC chọn câu hỏi tiếp theo lên màn hình"}
+            {stageQuestion
+              ? stageQuestion.authorDisplay
+              : "Chờ MC chọn câu hỏi đã kiểm duyệt lên màn hình"}
           </span>
           {stageQuestion && (
             <span className="inline-flex items-center gap-2 rounded-full border border-sky-400/35 bg-sky-400/15 px-4 py-1.5 tabular-mono text-xl font-semibold text-sky-200">
               <ThumbsUp className="h-5 w-5" />
-              <span>{stageQuestion.upvoterIds.length} lượt ủng hộ</span>
+              <span>{stageQuestion.upvoterIds?.length ?? 0} lượt ủng hộ</span>
             </span>
           )}
         </div>
@@ -89,7 +98,7 @@ export function LiveQaStagePage() {
       <div className="flex flex-col items-center justify-center rounded-[20px] border border-white/15 bg-[#0E1529] p-8 text-center lg:col-span-4">
         <div className="rounded-2xl bg-white p-5">
           <QRCodeSVG
-            value={`${origin}/live-qa/${activeSession.pin}`}
+            value={rawPin ? `${origin}/live-qa/${rawPin}` : `${origin}/live-qa`}
             size={184}
             level="M"
           />

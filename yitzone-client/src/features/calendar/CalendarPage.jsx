@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
+  ArrowRight,
   BookOpen,
   Calendar as CalendarIcon,
   CalendarCheck2,
@@ -31,6 +32,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCalendarEvents } from "@/features/calendar/api";
 import { cn } from "@/lib/utils";
 import { useEventStore } from "@/stores/event-store";
 
@@ -85,149 +87,35 @@ const CATEGORY_META = {
   }
 };
 
-const INITIAL_ACTIVITIES = [
-  {
-    id: "cal-1",
-    title: "Hội thảo Cloud Native & DevOps 2026",
-    category: "FACULTY",
-    date: "2026-11-21",
-    startTime: "08:00",
-    endTime: "11:30",
-    location: "Hội trường lớn Khu A",
-    unitLabel: "Đoàn – Hội Khoa CNTT",
-    inMyCalendar: true,
-    benefits: ["Cộng ĐRL", "Cộng CĐDN"],
-    actionLabel: "Quét QR điểm danh",
-    actionTo: "/scanner",
-    actionKind: "SCAN_QR",
-    description: "Chuyên đề kiến trúc Kubernetes và CI/CD thực chiến cùng kỹ sư doanh nghiệp."
-  },
-  {
-    id: "cal-2",
-    title: "Ca trực Văn phòng #3 (Thứ 7)",
-    category: "OFFICE",
-    date: "2026-11-21",
-    startTime: "10:00",
-    endTime: "12:00",
-    location: "Văn phòng Đoàn – Hội A1-204",
-    unitLabel: "Ban Văn phòng (OFIT)",
-    inMyCalendar: true,
-    actionLabel: "Điểm danh ca trực",
-    actionTo: "/office-duty",
-    actionKind: "DUTY_CHECKIN",
-    description: "Ca trực cố định buổi sáng; tự động mở tạm quyền phát vật phẩm tại bàn trực sau khi check-in."
-  },
-  {
-    id: "cal-3",
-    title: "Họp giao ban nội bộ Ban Văn phòng (OFIT)",
-    category: "DEPT",
-    date: "2026-11-22",
-    startTime: "19:30",
-    endTime: "21:00",
-    location: "Phòng họp A1-204 / Google Meet",
-    unitLabel: "Cô lập riêng Ban OFIT",
-    inMyCalendar: true,
-    actionLabel: "Mở lịch trực VP",
-    actionTo: "/office-duty",
-    actionKind: "OPEN_LINK",
-    description: "Tổng kết chuyên cần tháng 11 và phân công bàn giao thiết bị Hackathon."
-  },
-  {
-    id: "cal-4",
-    title: "Tổng duyệt Văn nghệ Chào Tân Sinh viên",
-    category: "ARTS",
-    date: "2026-11-23",
-    startTime: "17:30",
-    endTime: "20:00",
-    location: "Sân khấu Hội trường A",
-    unitLabel: "Ban Văn nghệ (ARTIT)",
-    inMyCalendar: true,
-    actionLabel: "Xem chi tiết tiết mục",
-    actionTo: "/modules",
-    actionKind: "OPEN_LINK",
-    description: "Chạy khớp nhạc Beat, màn hình LED và danh sách đạo cụ sân khấu."
-  },
-  {
-    id: "cal-5",
-    title: "Vòng loại Trắc nghiệm Pháp luật & Quy chế SV",
-    category: "EXAM",
-    date: "2026-11-24",
-    startTime: "14:00",
-    endTime: "15:00",
-    location: "Trực tuyến (Fullscreen Monitor)",
-    unitLabel: "Ban Học thuật & Nghiên cứu",
-    inMyCalendar: true,
-    benefits: ["Cộng ĐRL"],
-    actionLabel: "Vào phòng thi",
-    actionTo: "/modules",
-    actionKind: "ENTER_EXAM",
-    description: "Đề 30 câu trắc nghiệm ngẫu nhiên, thời gian 45 phút, tự động nộp khi hết giờ."
-  },
-  {
-    id: "cal-6",
-    title: "Hạn chót nộp hồ sơ SV5T & Đợt bán Hoodie Gây quỹ",
-    category: "DEADLINE",
-    date: "2026-11-25",
-    startTime: "23:00",
-    endTime: "23:59",
-    location: "Cổng trực tuyến YITZone",
-    unitLabel: "Hội đồng SV5T & Thủ quỹ",
-    inMyCalendar: true,
-    actionLabel: "Mở Cửa hàng",
-    actionTo: "/store",
-    actionKind: "OPEN_LINK",
-    description: "Khóa nhận minh chứng ngoài SV5T đợt 1 và chốt đơn đặt may Hoodie Khoa đợt 2."
-  },
-  {
-    id: "cal-7",
-    title: "UTE Hackathon 2026: Khai mạc & Chia đội",
-    category: "FACULTY",
-    date: "2026-11-26",
-    startTime: "08:00",
-    endTime: "11:30",
-    location: "Hội trường lớn Khu A",
-    unitLabel: "Đoàn – Hội Khoa CNTT",
-    inMyCalendar: false,
-    benefits: ["Cộng ĐRL", "Cộng CĐDN"],
-    actionLabel: "Đăng ký tham gia",
-    actionKind: "REGISTER",
-    description: "Công bố đề bài Smart Campus và kết nối Mentor doanh nghiệp."
-  },
-  {
-    id: "cal-8",
-    title: "Ca Vệ sinh Văn phòng Thứ 6",
-    category: "OFFICE",
-    date: "2026-11-27",
-    startTime: "16:50",
-    endTime: "17:30",
-    location: "Văn phòng Đoàn – Hội A1-204",
-    unitLabel: "Ban Văn phòng (OFIT)",
-    inMyCalendar: true,
-    actionLabel: "Mở Checklist 5 mục",
-    actionTo: "/office-duty",
-    actionKind: "DUTY_CHECKIN",
-    description: "Nối tiếp Ca 6 Thứ 6; hoàn thành Checklist 5 hạng mục và tải ảnh hiện trạng."
-  },
-  {
-    id: "cal-9",
-    title: "Workshop Thiết kế hệ thống cùng Alumni FIT",
-    category: "FACULTY",
-    date: "2026-11-27",
-    startTime: "16:30",
-    endTime: "18:30",
-    location: "Phòng A3-302",
-    unitLabel: "Đoàn – Hội Khoa CNTT",
-    inMyCalendar: false,
-    benefits: ["Cộng ĐRL"],
-    actionLabel: "Đăng ký tham gia",
-    actionKind: "REGISTER",
-    description: "Chia sẻ kinh nghiệm phỏng vấn System Design cho sinh viên năm 3–4."
-  }
-];
+const INITIAL_ACTIVITIES = [];
+
+function toIsoDate(dateObj) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function addDays(dateObj, offset) {
+  const copy = new Date(dateObj);
+  copy.setDate(copy.getDate() + offset);
+  return copy;
+}
+
+function getMondayOfWeek(dateObj) {
+  const copy = new Date(dateObj);
+  const day = copy.getDay(); // 0=Sun, 1=Mon...
+  const diff = day === 0 ? -6 : 1 - day;
+  copy.setDate(copy.getDate() + diff);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+const SHORT_WEEKDAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
 function toMinutes(hhmm) {
-  const [h, m] = hhmm.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
+  const [h, m] = (hhmm || "00:00").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
 }
 
 function isOverlapping(a, b) {
@@ -252,7 +140,7 @@ function buildIcsContent(items) {
       `UID:${item.id}@yitzone.fit.hcmute.edu.vn`,
       `DTSTART;TZID=Asia/Ho_Chi_Minh:${formatIcsDateTime(item.date, item.startTime)}`,
       `DTEND;TZID=Asia/Ho_Chi_Minh:${formatIcsDateTime(item.date, item.endTime)}`,
-      `SUMMARY:[${CATEGORY_META[item.category].shortLabel}] ${item.title}`,
+      `SUMMARY:[${CATEGORY_META[item.category]?.shortLabel ?? "SK"}] ${item.title}`,
       `LOCATION:${item.location}`,
       `DESCRIPTION:${item.description} (${item.unitLabel})`,
       "END:VEVENT"
@@ -274,82 +162,137 @@ function triggerIcsDownload(filename, items) {
   URL.revokeObjectURL(url);
 }
 
-const WEEK_DAYS = [
-  { date: "2026-11-21", short: "T7", num: "21" },
-  { date: "2026-11-22", short: "CN", num: "22" },
-  { date: "2026-11-23", short: "T2", num: "23" },
-  { date: "2026-11-24", short: "T3", num: "24" },
-  { date: "2026-11-25", short: "T4", num: "25" },
-  { date: "2026-11-26", short: "T5", num: "26" },
-  { date: "2026-11-27", short: "T6", num: "27" }
-];
+function normalizeCalendarFeedItem(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const category = CATEGORY_META[raw.category] ? raw.category : "FACULTY";
+  const startIso = typeof raw.startTime === "string" ? raw.startTime : "";
+  const endIso = typeof raw.endTime === "string" ? raw.endTime : "";
+  const date =
+    raw.date || (startIso.includes("T") ? startIso.slice(0, 10) : toIsoDate(new Date()));
+  const startTime = startIso.includes("T")
+    ? startIso.slice(11, 16)
+    : raw.startTime || "08:00";
+  const endTime = endIso.includes("T")
+    ? endIso.slice(11, 16)
+    : raw.endTime || "11:30";
+  const safeActionTo =
+    typeof raw.actionTo === "string" && raw.actionTo.startsWith("/")
+      ? raw.actionTo
+      : undefined;
 
-// November 2026 starts on Sunday (index 6 in Mon-Sun grid)
-const MONTH_CELLS = [
-...Array.from({ length: 6 }, () => ({ date: null, day: null })),
-...Array.from({ length: 30 }, (_, i) => {
-    const day = i + 1;
-    const padded = String(day).padStart(2, "0");
-    return { date: `2026-11-${padded}`, day };
-  })
-];
+  return {
+    id: String(raw.id ?? `feed-${date}-${raw.title}`),
+    title: raw.title ?? "Hoạt động Khoa CNTT",
+    category,
+    date,
+    startTime,
+    endTime,
+    location: raw.location ?? "Khoa CNTT HCM-UTE",
+    unitLabel: raw.unitLabel ?? "Đoàn – Hội Khoa CNTT",
+    inMyCalendar: Boolean(raw.inMyCalendar ?? true),
+    benefits: Array.isArray(raw.benefits) ? raw.benefits : [],
+    actionLabel: raw.actionLabel ?? (safeActionTo ? "Xem chi tiết" : undefined),
+    actionTo: safeActionTo,
+    actionKind: raw.actionKind ?? "OPEN_LINK",
+    description: raw.description ?? ""
+  };
+}
 
 export function CalendarPage({ glassHeader = false } = {}) {
   const [baseActivities, setActivities] = useState(INITIAL_ACTIVITIES);
+  const { data: calendarFeedData } = useCalendarEvents();
   const storedEvents = useEventStore((s) => s.events);
   const storedRegistrations = useEventStore((s) => s.registrations);
 
-  const activities = useMemo(() => {
-    const merged = baseActivities.map((item) => {
-      // If user registered for UTE Hackathon or any matching event in useEventStore, mark inMyCalendar = true
-      const matchedEvent = storedEvents.find(
-        (ev) => item.title.includes(ev.title) || ev.title.includes(item.title)
-      );
-      if (matchedEvent && storedRegistrations[matchedEvent.id]) {
-        return {
-          ...item,
-          inMyCalendar: true,
-          actionLabel: "Mở Vé QR",
-          actionTo: `/scanner?tab=ticket&eventId=${matchedEvent.id}`,
-          actionKind: "SCAN_QR"
-        };
-      }
-      return item;
-    });
+  const [anchorDate, setAnchorDate] = useState(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
+  });
+  const todayIso = useMemo(() => toIsoDate(new Date()), []);
 
-    for (const [evId, reg] of Object.entries(storedRegistrations)) {
-      if (!reg) continue;
-      const ev = storedEvents.find((e) => e.id === evId);
-      if (!ev) continue;
-      const alreadyExists = merged.some(
-        (a) => a.id === `cal-evt-${ev.id}` || a.title.includes(ev.title) || ev.title.includes(a.title)
-      );
-      if (!alreadyExists) {
-        const firstSession = ev.sessions[0];
-        const [rawStart, rawEnd] = (firstSession?.timeRange ?? "08:00 – 11:30")
-          .split(/[–-]/)
-          .map((t) => t.trim());
-        merged.unshift({
-          id: `cal-evt-${ev.id}`,
-          title: ev.title,
-          category: ev.visibility === "INTERNAL_CTV" ? "DEPT" : "FACULTY",
-          date: firstSession?.date ?? "2026-11-26",
-          startTime: rawStart || "08:00",
-          endTime: rawEnd || "11:30",
-          location: ev.location,
-          unitLabel: ev.scope === "DEPT_INTERNAL" ? "Nội bộ Ban" : "Đoàn – Hội Khoa CNTT",
-          inMyCalendar: true,
-          benefits: ev.benefits,
-          actionLabel: "Mở Vé QR",
-          actionTo: `/scanner?tab=ticket&eventId=${ev.id}`,
-          actionKind: "SCAN_QR",
-          description: ev.subtitle
-        });
+  const weekDays = useMemo(() => {
+    const monday = getMondayOfWeek(anchorDate);
+    return Array.from({ length: 7 }, (_, idx) => {
+      const current = addDays(monday, idx);
+      return {
+        date: toIsoDate(current),
+        short: SHORT_WEEKDAY_LABELS[current.getDay()],
+        num: String(current.getDate()).padStart(2, "0")
+      };
+    });
+  }, [anchorDate]);
+
+  const monthCells = useMemo(() => {
+    const year = anchorDate.getFullYear();
+    const month = anchorDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+
+    return [
+      ...Array.from({ length: startOffset }, () => ({ date: null, day: null })),
+      ...Array.from({ length: daysInMonth }, (_, idx) => {
+        const day = idx + 1;
+        const paddedMonth = String(month + 1).padStart(2, "0");
+        const paddedDay = String(day).padStart(2, "0");
+        return { date: `${year}-${paddedMonth}-${paddedDay}`, day };
+      })
+    ];
+  }, [anchorDate]);
+
+  const activities = useMemo(() => {
+    const rawFeed = Array.isArray(calendarFeedData)
+      ? calendarFeedData
+      : Array.isArray(calendarFeedData?.items)
+        ? calendarFeedData.items
+        : [];
+    const fromApi = rawFeed.map(normalizeCalendarFeedItem).filter(Boolean);
+    const merged = [...baseActivities];
+
+    for (const item of fromApi) {
+      if (!merged.some((m) => m.id === item.id)) {
+        merged.push(item);
+      }
+    }
+
+    for (const ev of storedEvents) {
+      if (ev.status !== "PUBLISHED" && ev.status !== "ONGOING") continue;
+      const isRegistered = Boolean(storedRegistrations[ev.id]);
+      const firstSession = (ev.sessions ?? [])[0];
+      const [rawStart, rawEnd] = (firstSession?.timeRange ?? "08:00 – 11:30")
+        .split(/[–-]/)
+        .map((t) => t.trim());
+      const itemId = `cal-evt-${ev.id}`;
+      const existingIdx = merged.findIndex((a) => a.id === itemId);
+      const mappedEvent = {
+        id: itemId,
+        title: ev.title,
+        category: ev.visibility === "INTERNAL_CTV" ? "DEPT" : ev.hasExam ? "EXAM" : "FACULTY",
+        date: firstSession?.date ?? todayIso,
+        startTime: rawStart || "08:00",
+        endTime: rawEnd || "11:30",
+        location: ev.location ?? "Khoa CNTT HCM-UTE",
+        unitLabel: ev.scope === "DEPT_INTERNAL" ? "Nội bộ Ban" : "Đoàn – Hội Khoa CNTT",
+        inMyCalendar: isRegistered,
+        benefits: ev.benefits ?? [],
+        actionLabel: isRegistered ? "Mở Vé QR" : "Xem sự kiện",
+        actionTo: isRegistered
+          ? `/scanner?tab=ticket&eventId=${encodeURIComponent(ev.id)}`
+          : `/events/${ev.id}`,
+        actionKind: isRegistered ? "SCAN_QR" : "OPEN_LINK",
+        description: ev.subtitle ?? ""
+      };
+      if (existingIdx >= 0) {
+        merged[existingIdx] = mappedEvent;
+      } else {
+        merged.push(mappedEvent);
       }
     }
 
     return merged;
-  }, [baseActivities, storedEvents, storedRegistrations]);
+  }, [baseActivities, calendarFeedData, storedEvents, storedRegistrations, todayIso]);
+
   const [scope, setScope] = useState("MINE");
   const [viewMode, setViewMode] = useState(() =>
     typeof window !== "undefined" && window.innerWidth < 768 ? "agenda" : "week"
@@ -362,7 +305,7 @@ export function CalendarPage({ glassHeader = false } = {}) {
     "EXAM",
     "DEADLINE"
   ]);
-  const [selectedId, setSelectedId] = useState(INITIAL_ACTIVITIES[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState("");
   const [conflictDialog, setConflictDialog] = useState(null);
   const [toastNotice, setToastNotice] = useState(null);
 
@@ -373,13 +316,15 @@ export function CalendarPage({ glassHeader = false } = {}) {
     });
   }, [activities, scope, activeCategories]);
 
-  const myActivities = useMemo(() => activities.filter((item) => item.inMyCalendar),
+  const myActivities = useMemo(
+    () => activities.filter((item) => item.inMyCalendar),
     [activities]
   );
 
   // Detect all overlapping pairs in "Lịch Của Tôi" (UC-CAL-02)
-  const myConflictIds = useMemo(() => {
-    const set = new Set;
+  const { myConflictIds, firstConflictPair } = useMemo(() => {
+    const set = new Set();
+    let pair = null;
     for (let i = 0; i < myActivities.length; i++) {
       const a = myActivities[i];
       if (!a) continue;
@@ -388,20 +333,33 @@ export function CalendarPage({ glassHeader = false } = {}) {
         if (b && isOverlapping(a, b)) {
           set.add(a.id);
           set.add(b.id);
+          if (!pair) pair = [a, b];
         }
       }
     }
-    return set;
+    return { myConflictIds: set, firstConflictPair: pair };
   }, [myActivities]);
 
-  const selectedActivity = useMemo(() => activities.find((a) => a.id === selectedId) ?? visibleActivities[0] ?? null,
+  const selectedActivity = useMemo(
+    () => activities.find((a) => a.id === selectedId) ?? visibleActivities[0] ?? null,
     [activities, selectedId, visibleActivities]
   );
 
   const toggleCategory = (cat) => {
     setActiveCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat): [...prev, cat]
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
     );
+  };
+
+  const handleShiftPeriod = (direction) => {
+    setAnchorDate((prev) => {
+      if (viewMode === "month") {
+        const next = new Date(prev);
+        next.setMonth(next.getMonth() + direction);
+        return next;
+      }
+      return addDays(prev, direction * 7);
+    });
   };
 
   const handleRegisterWithConflictCheck = (candidate) => {
@@ -411,7 +369,7 @@ export function CalendarPage({ glassHeader = false } = {}) {
       return;
     }
     setActivities((prev) =>
-      prev.map((a) => (a.id === candidate.id ? {...a, inMyCalendar: true }: a))
+      prev.map((a) => (a.id === candidate.id ? { ...a, inMyCalendar: true } : a))
     );
     setToastNotice(`Đã thêm "${candidate.title}" vào Lịch Của Tôi.`);
   };
@@ -420,18 +378,33 @@ export function CalendarPage({ glassHeader = false } = {}) {
     if (!conflictDialog) return;
     const { candidate } = conflictDialog;
     setActivities((prev) =>
-      prev.map((a) => (a.id === candidate.id ? {...a, inMyCalendar: true }: a))
+      prev.map((a) => (a.id === candidate.id ? { ...a, inMyCalendar: true } : a))
     );
     setToastNotice(`Đã đăng ký "${candidate.title}" (có ghi nhận cảnh báo trùng giờ).`);
     setConflictDialog(null);
   };
 
-  const upcoming24h = useMemo(() => myActivities.filter((a) => a.date === "2026-11-21" || a.date === "2026-11-22"),
-    [myActivities]
+  const tomorrowIso = useMemo(() => toIsoDate(addDays(new Date(), 1)), []);
+  const next7Iso = useMemo(() => toIsoDate(addDays(new Date(), 7)), []);
+
+  const upcoming24h = useMemo(
+    () => myActivities.filter((a) => a.date === todayIso || a.date === tomorrowIso),
+    [myActivities, todayIso, tomorrowIso]
   );
-  const upcoming7d = useMemo(() => myActivities.filter((a) => a.date >= "2026-11-23" && a.date <= "2026-11-28"),
-    [myActivities]
+  const upcoming7d = useMemo(
+    () => myActivities.filter((a) => a.date > tomorrowIso && a.date <= next7Iso),
+    [myActivities, tomorrowIso, next7Iso]
   );
+
+  const monthHeaderLabel = `Tháng ${String(anchorDate.getMonth() + 1).padStart(2, "0")} / ${anchorDate.getFullYear()}`;
+  const weekRangeLabel = useMemo(() => {
+    const first = weekDays[0];
+    const last = weekDays[6];
+    if (!first || !last) return monthHeaderLabel;
+    const fParts = first.date.split("-");
+    const lParts = last.date.split("-");
+    return `Tuần ${fParts[2]}/${fParts[1]} – ${lParts[2]}/${lParts[1]}/${lParts[0]}`;
+  }, [weekDays, monthHeaderLabel]);
 
   return (
     <div className="space-y-6">
@@ -455,14 +428,19 @@ export function CalendarPage({ glassHeader = false } = {}) {
         <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
           <Tabs value={scope} onValueChange={(v) => setScope(v)} className="w-full sm:w-auto">
             <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="MINE" className="flex-1 sm:flex-initial">Lịch Của Tôi ({myActivities.length})</TabsTrigger>
-              <TabsTrigger value="FACULTY_ALL" className="flex-1 sm:flex-initial">Toàn Khoa &amp; Ban</TabsTrigger>
+              <TabsTrigger value="MINE" className="flex-1 sm:flex-initial">
+                Lịch Của Tôi ({myActivities.length})
+              </TabsTrigger>
+              <TabsTrigger value="FACULTY_ALL" className="flex-1 sm:flex-initial">
+                Toàn Khoa &amp; Ban
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 
           <Button
             variant="outline"
             size="sm"
+            disabled={myActivities.length === 0}
             className="h-10 w-full rounded-full bg-card/85 sm:h-9 sm:w-auto"
             onClick={() => {
               triggerIcsDownload("YITZone-Lich-Cua-Toi.ics", myActivities);
@@ -492,20 +470,24 @@ export function CalendarPage({ glassHeader = false } = {}) {
       )}
 
       {/* Conflict Alert Banner (UC-CAL-02) */}
-      {myConflictIds.size > 0 && (
+      {myConflictIds.size > 0 && firstConflictPair && (
         <div className="flex flex-col gap-2 rounded-lg border border-status-danger/35 bg-status-danger/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-2.5 text-status-danger">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
               <span className="font-semibold">Phát hiện đụng lịch trong Lịch Của Tôi: </span>
               <span>
-                Hội thảo Cloud Native &amp; DevOps (08:00–11:30) trùng giờ với Ca trực Văn phòng #3
-                (10:00–12:00) ngày <span className="tabular-mono">21/11/2026</span>.
+                {firstConflictPair[0].title} ({firstConflictPair[0].startTime}–{firstConflictPair[0].endTime}) trùng giờ với{" "}
+                {firstConflictPair[1].title} ({firstConflictPair[1].startTime}–{firstConflictPair[1].endTime}) ngày{" "}
+                <span className="tabular-mono">
+                  {firstConflictPair[0].date.split("-").reverse().join("/")}
+                </span>
+                .
               </span>
             </div>
           </div>
           <Button asChild size="sm" variant="destructive" className="shrink-0">
-            <Link to="/office-duty">Xin vắng / Đổi ca bù ngay</Link>
+            <Link to="/office-duty">Kiểm tra lịch ca trực</Link>
           </Button>
         </div>
       )}
@@ -518,7 +500,7 @@ export function CalendarPage({ glassHeader = false } = {}) {
             role="group"
             aria-label="Bộ lọc 6 nguồn lịch"
           >
-            {(Object.keys(CATEGORY_META)).map((cat) => {
+            {Object.keys(CATEGORY_META).map((cat) => {
               const meta = CATEGORY_META[cat];
               const Icon = meta.icon;
               const active = activeCategories.includes(cat);
@@ -532,7 +514,7 @@ export function CalendarPage({ glassHeader = false } = {}) {
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all",
                     active
                       ? meta.tintClass
-: "border-border bg-muted/40 text-muted-foreground opacity-65 hover:opacity-100"
+                      : "border-border bg-muted/40 text-muted-foreground opacity-65 hover:opacity-100"
                   )}
                 >
                   <span className={cn("h-2 w-2 rounded-full", meta.dotClass)} />
@@ -546,11 +528,25 @@ export function CalendarPage({ glassHeader = false } = {}) {
 
           <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
             <div className="flex items-center gap-1 text-sm font-medium text-foreground">
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" aria-label="Tuần trước">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                aria-label="Kỳ trước"
+                onClick={() => handleShiftPeriod(-1)}
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="tabular-mono px-1 text-xs font-semibold">Tháng 11 / 2026</span>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" aria-label="Tuần sau">
+              <span className="tabular-mono px-1 text-xs font-semibold">{monthHeaderLabel}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                aria-label="Kỳ sau"
+                onClick={() => handleShiftPeriod(1)}
+              >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -576,21 +572,23 @@ export function CalendarPage({ glassHeader = false } = {}) {
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle>Tuần 21/11 – 27/11/2026</CardTitle>
-                  <span className="text-xs text-muted-foreground">Dữ liệu minh họa · Bấm vào thẻ để thao tác nhanh</span>
+                  <CardTitle>{weekRangeLabel}</CardTitle>
+                  <span className="text-xs text-muted-foreground">
+                    {visibleActivities.length} hoạt động hiển thị
+                  </span>
                 </div>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-7">
-                  {WEEK_DAYS.map((day) => {
+                  {weekDays.map((day) => {
                     const dayItems = visibleActivities.filter((a) => a.date === day.date);
-                    const isToday = day.date === "2026-11-21";
+                    const isToday = day.date === todayIso;
                     return (
                       <div
                         key={day.date}
                         className={cn(
                           "flex min-h-[180px] flex-col rounded-lg border p-2.5",
-                          isToday ? "border-primary/45 bg-primary/5": "border-border bg-muted/20"
+                          isToday ? "border-primary/45 bg-primary/5" : "border-border bg-muted/20"
                         )}
                       >
                         <div className="mb-2 flex items-center justify-between border-b border-border/70 pb-1.5">
@@ -598,7 +596,7 @@ export function CalendarPage({ glassHeader = false } = {}) {
                           <span
                             className={cn(
                               "tabular-mono inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
-                              isToday ? "bg-primary text-primary-foreground": "text-foreground"
+                              isToday ? "bg-primary text-primary-foreground" : "text-foreground"
                             )}
                           >
                             {day.num}
@@ -610,7 +608,7 @@ export function CalendarPage({ glassHeader = false } = {}) {
                             <span className="mt-4 text-center text-[11px] text-muted-foreground">
                               Trống lịch
                             </span>
-                          ): (
+                          ) : (
                             dayItems.map((item) => {
                               const meta = CATEGORY_META[item.category];
                               const hasConflict = item.inMyCalendar && myConflictIds.has(item.id);
@@ -657,7 +655,7 @@ export function CalendarPage({ glassHeader = false } = {}) {
           {viewMode === "month" && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle>Lịch Tháng 11 / 2026</CardTitle>
+                <CardTitle>Lịch {monthHeaderLabel}</CardTitle>
                 <CardDescription>Hiển thị trực quan lịch hoạt động theo từng nhóm màu phân loại.</CardDescription>
               </CardHeader>
               <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0">
@@ -667,12 +665,12 @@ export function CalendarPage({ glassHeader = false } = {}) {
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
-                  {MONTH_CELLS.map((cell, idx) => {
+                  {monthCells.map((cell, idx) => {
                     if (!cell.date) {
                       return <div key={`empty-${idx}`} className="h-14 rounded-md bg-muted/20 sm:h-20" />;
                     }
                     const items = visibleActivities.filter((a) => a.date === cell.date);
-                    const isToday = cell.date === "2026-11-21";
+                    const isToday = cell.date === todayIso;
                     const hasSelected = items.some((a) => a.id === selectedActivity?.id);
                     return (
                       <div
@@ -695,7 +693,6 @@ export function CalendarPage({ glassHeader = false } = {}) {
                         >
                           {cell.day}
                         </span>
-                        {/* Mobile: compact colored dots */}
                         <div className="mt-auto flex flex-wrap gap-1 sm:hidden">
                           {items.slice(0, 3).map((item) => (
                             <span
@@ -704,7 +701,6 @@ export function CalendarPage({ glassHeader = false } = {}) {
                             />
                           ))}
                         </div>
-                        {/* Tablet/Desktop: titled chips */}
                         <div className="mt-1 hidden flex-col gap-1 overflow-hidden sm:flex">
                           {items.slice(0, 2).map((item) => (
                             <button
@@ -742,9 +738,9 @@ export function CalendarPage({ glassHeader = false } = {}) {
               <CardContent className="divide-y divide-border p-0">
                 {visibleActivities.length === 0 ? (
                   <div className="p-8 text-center text-sm text-muted-foreground">
-                    Không có hoạt động nào khớp bộ lọc hiện tại.
+                    Chưa có hoạt động nào trong chế độ lọc hiện tại.
                   </div>
-                ): (
+                ) : (
                   visibleActivities.map((item) => {
                     const meta = CATEGORY_META[item.category];
                     const hasConflict = item.inMyCalendar && myConflictIds.has(item.id);
@@ -786,13 +782,13 @@ export function CalendarPage({ glassHeader = false } = {}) {
                             >
                               {item.actionLabel}
                             </Button>
-                          ): item.actionTo ? (
+                          ) : item.actionTo && item.actionLabel ? (
                             <Button asChild size="sm" variant="outline">
                               <Link to={item.actionTo} onClick={(e) => e.stopPropagation()}>
                                 {item.actionLabel}
                               </Link>
                             </Button>
-                          ): null}
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -803,9 +799,9 @@ export function CalendarPage({ glassHeader = false } = {}) {
           )}
         </div>
 
-        {/* Right Column: Quick Detail Inspector (<=300ms) + 24h / 7-Day Reminders */}
+        {/* Right Column: Quick Detail Inspector + 24h / 7-Day Reminders */}
         <div className="space-y-5 lg:col-span-4">
-          {selectedActivity && (
+          {selectedActivity ? (
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -834,9 +830,11 @@ export function CalendarPage({ glassHeader = false } = {}) {
                   </div>
                 </div>
 
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {selectedActivity.description}
-                </p>
+                {selectedActivity.description && (
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {selectedActivity.description}
+                  </p>
+                )}
 
                 {selectedActivity.benefits && selectedActivity.benefits.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -854,7 +852,7 @@ export function CalendarPage({ glassHeader = false } = {}) {
                       <CalendarCheck2 className="h-4 w-4" />
                       <span>{selectedActivity.actionLabel}</span>
                     </Button>
-                  ): selectedActivity.actionTo ? (
+                  ) : selectedActivity.actionTo && selectedActivity.actionLabel ? (
                     <Button asChild>
                       <Link to={selectedActivity.actionTo}>
                         {selectedActivity.actionKind === "SCAN_QR" && <QrCode className="h-4 w-4" />}
@@ -862,20 +860,40 @@ export function CalendarPage({ glassHeader = false } = {}) {
                         <span>{selectedActivity.actionLabel}</span>
                       </Link>
                     </Button>
-                  ): null}
+                  ) : null}
 
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       triggerIcsDownload(`${selectedActivity.id}.ics`, [selectedActivity]);
-                      setToastNotice(`Đã xuất tệp.ics cho "${selectedActivity.title}".`);
+                      setToastNotice(`Đã xuất tệp .ics cho "${selectedActivity.title}".`);
                     }}
                   >
                     <Download className="h-3.5 w-3.5" />
                     <span>Xuất riêng sự kiện này (.ics)</span>
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center gap-2.5 p-6 text-center">
+                <CalendarDays className="h-6 w-6 text-primary/80" />
+                <div className="space-y-1">
+                  <p className="font-display text-base font-medium text-foreground">
+                    Chưa có hoạt động nào được chọn
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Đăng ký sự kiện trên Cổng Sự kiện hoặc chuyển sang mục &ldquo;Toàn Khoa &amp; Ban&rdquo; để theo dõi lịch hoạt động.
+                  </p>
+                </div>
+                <Button asChild variant="outline" size="sm" className="mt-1 rounded-full">
+                  <Link to="/events">
+                    <span>Khám phá Sự kiện</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -891,58 +909,70 @@ export function CalendarPage({ glassHeader = false } = {}) {
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
                   Trong 24 giờ tới ({upcoming24h.length})
                 </div>
-                <div className="space-y-2">
-                  {upcoming24h.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedId(item.id)}
-                      className="flex w-full items-start gap-2.5 rounded-lg border border-border p-2.5 text-left transition-colors hover:bg-muted/50"
-                    >
-                      <span
-                        className={cn(
-                          "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
-                          CATEGORY_META[item.category].dotClass
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-semibold text-foreground">{item.title}</div>
-                        <div className="tabular-mono mt-0.5 text-[11px] text-muted-foreground">
-                          {item.date.slice(8)}/{item.date.slice(5, 7)} · {item.startTime}–{item.endTime}
+                {upcoming24h.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                    Chưa có lịch trong 24 giờ tới.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {upcoming24h.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedId(item.id)}
+                        className="flex w-full items-start gap-2.5 rounded-lg border border-border p-2.5 text-left transition-colors hover:bg-muted/50"
+                      >
+                        <span
+                          className={cn(
+                            "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
+                            CATEGORY_META[item.category].dotClass
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-semibold text-foreground">{item.title}</div>
+                          <div className="tabular-mono mt-0.5 text-[11px] text-muted-foreground">
+                            {item.date.slice(8)}/{item.date.slice(5, 7)} · {item.startTime}–{item.endTime}
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   7 ngày tới ({upcoming7d.length})
                 </div>
-                <div className="space-y-2">
-                  {upcoming7d.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedId(item.id)}
-                      className="flex w-full items-start gap-2.5 rounded-lg border border-border p-2.5 text-left transition-colors hover:bg-muted/50"
-                    >
-                      <span
-                        className={cn(
-                          "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
-                          CATEGORY_META[item.category].dotClass
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-semibold text-foreground">{item.title}</div>
-                        <div className="tabular-mono mt-0.5 text-[11px] text-muted-foreground">
-                          {item.date.slice(8)}/{item.date.slice(5, 7)} · {item.startTime}–{item.endTime}
+                {upcoming7d.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                    Chưa có lịch trong 7 ngày tới.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {upcoming7d.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedId(item.id)}
+                        className="flex w-full items-start gap-2.5 rounded-lg border border-border p-2.5 text-left transition-colors hover:bg-muted/50"
+                      >
+                        <span
+                          className={cn(
+                            "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
+                            CATEGORY_META[item.category].dotClass
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-semibold text-foreground">{item.title}</div>
+                          <div className="tabular-mono mt-0.5 text-[11px] text-muted-foreground">
+                            {item.date.slice(8)}/{item.date.slice(5, 7)} · {item.startTime}–{item.endTime}
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

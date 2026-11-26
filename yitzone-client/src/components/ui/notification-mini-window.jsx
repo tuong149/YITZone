@@ -8,8 +8,7 @@ import {
   ClipboardCheck,
   Inbox,
   ShieldAlert,
-  ShoppingBag,
-  Sparkles
+  ShoppingBag
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +33,6 @@ export function NotificationMiniWindow() {
   const items = useNotificationStore((s) => s.items);
   const markAsRead = useNotificationStore((s) => s.markAsRead);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
-  const triggerSampleNotification = useNotificationStore((s) => s.triggerSampleNotification);
 
   const unreadCount = useMemo(() => items.filter((i) => !i.read).length, [items]);
   const visibleItems = useMemo(() => {
@@ -153,19 +151,6 @@ export function NotificationMiniWindow() {
                 Chưa đọc ({unreadCount})
               </button>
             </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                triggerSampleNotification();
-              }}
-              title="Thử nhận 1 thông báo mới dạng Pop-up"
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              <span>Thử pop-up</span>
-            </button>
           </div>
 
           {/* Scrollable Notification List */}

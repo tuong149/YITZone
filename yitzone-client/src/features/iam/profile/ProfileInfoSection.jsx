@@ -18,12 +18,12 @@ import { Label } from "@/components/ui/label";
 import { formatFacultyDisplayName } from "@/features/iam/data/faculty-major-catalog";
 
 const INITIAL_UNION_PROFILE = {
-  className: "22110CL1A",
-  unionBranch: "Chi đoàn 22110CL1A",
-  phone: "0912345678",
-  unionJoinDate: "2021-03-26",
-  assocJoinDate: "2022-10-15",
-  contactAddress: "TP. Thủ Đức, TP. Hồ Chí Minh"
+  className: "",
+  unionBranch: "",
+  phone: "",
+  unionJoinDate: "",
+  assocJoinDate: "",
+  contactAddress: ""
 };
 
 export function ProfileInfoSection({
@@ -86,7 +86,7 @@ export function ProfileInfoSection({
       setEmailError("Địa chỉ email không hợp lệ. Vui lòng nhập đúng định dạng (VD: tenban@gmail.com).");
       return;
     }
-    if (trimmed.toLowerCase() === email.toLowerCase()) {
+    if (email && trimmed.toLowerCase() === email.toLowerCase()) {
       setEmailError("Email dự phòng phải khác Email trường để vẫn đăng nhập được sau khi tốt nghiệp.");
       return;
     }
@@ -115,22 +115,22 @@ export function ProfileInfoSection({
     ? "Cựu sinh viên / Khách mời ngoài trường"
     : academic?.facultyName
       ? `${formatFacultyDisplayName(academic.facultyName)} · ${academic.majorName} (${academic.majorCode})`
-      : "Khoa Công nghệ Thông tin · Công nghệ Thông tin (110)";
+      : "Chưa xác nhận Khoa – Ngành";
   const cddnBenefitLabel = academic?.isGuestOrAlumni
     ? "Không thuộc diện xét ĐRL / CĐDN"
     : academic
       ? academic.fitFaculty
         ? "Trực thuộc Khoa CNTT (Được tính CĐDN)"
         : `${formatFacultyDisplayName(academic.facultyName)} (ĐRL · CTXH · Không tính CĐDN Khoa CNTT)`
-      : "Trực thuộc Khoa CNTT (Được tính CĐDN)";
+      : "Chờ xác nhận Khoa quản lý";
 
   const lockedFields = [
-    { label: "Họ và tên chính thức", value: fullName },
-    { label: "Mã số sinh viên (MSSV)", value: userId, mono: true },
-    { label: "Email trường (SSO)", value: email },
+    { label: "Họ và tên chính thức", value: fullName || "—" },
+    { label: "Mã số sinh viên (MSSV)", value: userId || "—", mono: true },
+    { label: "Email trường (SSO)", value: email || "—" },
     { label: "Khoa & Ngành đào tạo", value: facultyMajorLabel },
     { label: "Phân loại quyền lợi CĐDN", value: cddnBenefitLabel },
-    { label: "Vòng đời tài khoản", value: "Đang theo học (Chuyển Cựu SV khi tốt nghiệp)" }
+    { label: "Vòng đời tài khoản", value: "Đang hoạt động" }
   ];
 
   return (
@@ -144,7 +144,6 @@ export function ProfileInfoSection({
         </p>
       </section>
 
-      {/* Read-only Roster Identity */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -187,7 +186,6 @@ export function ProfileInfoSection({
         </CardContent>
       </Card>
 
-      {/* Editable Union & Contact Form */}
       <Card className="rounded-[22px]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -207,7 +205,7 @@ export function ProfileInfoSection({
                   id="prof-class"
                   value={form.className}
                   onChange={(e) => updateField("className", e.target.value)}
-                  placeholder="VD: 22110CL1A"
+                  placeholder="Nhập mã lớp sinh viên..."
                 />
               </div>
               <div className="space-y-1.5">
@@ -216,7 +214,7 @@ export function ProfileInfoSection({
                   id="prof-branch"
                   value={form.unionBranch}
                   onChange={(e) => updateField("unionBranch", e.target.value)}
-                  placeholder="VD: Chi đoàn 22110CL1A"
+                  placeholder="Nhập tên Chi đoàn / Chi hội..."
                 />
               </div>
               <div className="space-y-1.5">
@@ -298,7 +296,6 @@ export function ProfileInfoSection({
         </CardContent>
       </Card>
 
-      {/* Personal Backup Email for Alumni Lifecycle */}
       <Card className="rounded-[22px]">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -366,7 +363,7 @@ export function ProfileInfoSection({
                   id="personal-otp"
                   maxLength={6}
                   inputMode="numeric"
-                  placeholder="123456"
+                  placeholder="000000"
                   value={otpValue}
                   onChange={(e) => {
                     setOtpValue(e.target.value.replace(/\D/g, ""));

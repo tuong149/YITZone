@@ -54,16 +54,7 @@ export function StorePage() {
       { replace: true }
     );
   };
-  const [selectedSizes, setSelectedSizes] = useState({
-    "prd-hoodie": "L",
-    "prd-polo": "M",
-    "prd-lanyard": "Free Size",
-    "prd-keychain": "Free Size",
-    "prd-banhtrang": "Cay vừa",
-    "prd-tratac": "500ml",
-    "prd-khoga": "200g",
-    "prd-combo-xtn": "Tiêu chuẩn"
-  });
+  const [selectedSizes, setSelectedSizes] = useState({});
   const [addedToast, setAddedToast] = useState(null);
 
   const items = useCartStore((s) => s.items);
@@ -73,6 +64,8 @@ export function StorePage() {
   const totalAmount = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const hasAnyCatalogProducts =
+    FACULTY_MERCH_PRODUCTS.length > 0 || FUNDRAISING_XTN_PRODUCTS.length > 0;
 
   const filteredMerch = useMemo(
     () =>
@@ -97,15 +90,18 @@ export function StorePage() {
   );
 
   const handleAdd = (p) => {
-    const size = selectedSizes[p.id] ?? p.sizes[0] ?? "Free Size";
+    const sizes = p.sizes ?? [];
+    const size = selectedSizes[p.id] ?? sizes[0] ?? "Free Size";
     addItem(p, size);
     setAddedToast(`Đã thêm "${p.name}" (${size}) vào Giỏ hàng.`);
   };
 
   // Unified Liquid Glass Product Card matching EventsPage.tsx (rounded-[22px] + concentric pills)
   const renderProductCard = (p) => {
-    const activeSize = selectedSizes[p.id] ?? p.sizes[0] ?? "Free Size";
-    const isMultiSize = p.sizes.length > 1;
+    const sizes = p.sizes ?? [];
+    const colors = p.colors ?? [];
+    const activeSize = selectedSizes[p.id] ?? sizes[0] ?? "Free Size";
+    const isMultiSize = sizes.length > 1;
     const isFundraising = p.productType === "FUNDRAISING_ITEM";
 
     return (
@@ -177,7 +173,7 @@ export function StorePage() {
             <div className="min-h-[34px]">
               {isMultiSize ? (
                 <div className="flex flex-wrap gap-1.5">
-                  {p.sizes.map((sz) => (
+                  {sizes.map((sz) => (
                     <button
                       key={sz}
                       type="button"
@@ -195,7 +191,7 @@ export function StorePage() {
                 </div>
               ): (
                 <span className="inline-flex rounded-full border border-border bg-card/70 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  {activeSize} · {p.colors[0]}
+                  {activeSize}{colors[0] ? ` · ${colors[0]}` : ""}
                 </span>
               )}
             </div>
@@ -343,7 +339,7 @@ export function StorePage() {
               </div>
             </div>
             <Badge variant="calDeadline" className="rounded-full px-3 py-1">
-              Hạn chót: 25/11/2026
+              Chiến dịch gây quỹ
             </Badge>
           </div>
 
@@ -357,9 +353,16 @@ export function StorePage() {
         (activeSection === "MERCH" && filteredMerch.length === 0) ||
         (activeSection === "XTN_2027" && filteredFundraising.length === 0)) && (
         <div className="rounded-[22px] border border-dashed border-border bg-card/80 px-6 py-12 text-center">
-          <p className="font-display text-lg font-medium text-foreground">Không tìm thấy sản phẩm phù hợp</p>
+          <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground/70" />
+          <p className="font-display text-lg font-medium text-foreground">
+            {!hasAnyCatalogProducts && !normalizedQuery
+              ? "Chưa có vật phẩm nào đang mở bán"
+              : "Không tìm thấy sản phẩm phù hợp"}
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Thử đổi từ khóa tìm kiếm hoặc chọn sang nhóm sản phẩm khác.
+            {!hasAnyCatalogProducts && !normalizedQuery
+              ? "Các đợt mở bán vật phẩm Khoa và chiến dịch gây quỹ sẽ được cập nhật tại đây khi mở cổng."
+              : "Thử đổi từ khóa tìm kiếm hoặc chọn sang nhóm sản phẩm khác."}
           </p>
         </div>
       )}

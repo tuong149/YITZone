@@ -21,18 +21,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const INITIAL_PROBLEMS = [
-  { id: "p1", code: "FIT-101", title: "Đường đi ngắn nhất trên Mạng lưới Campus", difficulty: "Trung bình", cpuSec: 1.0, ramMb: 256, testcases: 20, published: true },
-  { id: "p2", code: "FIT-102", title: "Phân bổ Ca trực Văn phòng Tối ưu", difficulty: "Dễ", cpuSec: 1.0, ramMb: 128, testcases: 15, published: true },
-  { id: "p3", code: "FIT-103", title: "Truy vấn Tổng đoạn Cây Phân đoạn", difficulty: "Khó", cpuSec: 2.0, ramMb: 512, testcases: 30, published: true }
-];
+const INITIAL_PROBLEMS = [];
 
-const INITIAL_PAIRS = [
-  { id: "pl-1", contest: "ICPC FIT 2026 · FIT-103", studentA: "23110218 · Nguyễn Hoàng Nam", studentB: "23110244 · Lê Minh Trí", similarityPct: 92, flagged: false },
-  { id: "pl-2", contest: "ICPC FIT 2026 · FIT-101", studentA: "22110418 · Trần Đức Thịnh", studentB: "22110345 · Nguyễn Minh Khôi", similarityPct: 34, flagged: false }
-];
+const INITIAL_PAIRS = [];
 
-export function OjAdminPage(){
+export function OjAdminPage() {
   const [problems, setProblems] = useState(INITIAL_PROBLEMS);
   const [pairs, setPairs] = useState(INITIAL_PAIRS);
   const [tags, setTags] = useState(["Graph", "Dijkstra", "Greedy", "DP", "Segment Tree", "Binary Search"]);
@@ -47,7 +40,7 @@ export function OjAdminPage(){
   const handleAddProblem = (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-    const code = `FIT-10${problems.length + 1}`;
+    const code = `FIT-${100 + problems.length + 1}`;
     setProblems((prev) => [
       {
         id: `p-${Date.now()}`,
@@ -56,13 +49,13 @@ export function OjAdminPage(){
         difficulty: newDiff,
         cpuSec: newCpu,
         ramMb: newRam,
-        testcases: 10,
+        testcases: 0,
         published: true
       },
-...prev
+      ...prev
     ]);
     setNewTitle("");
-    setNotice(`Đã xuất bản đề bài ${code} kèm gói Testcase.zip mẫu vào Kho Luyện tập.`);
+    setNotice(`Đã khởi tạo đề bài ${code} trong Kho Luyện tập.`);
   };
 
   const handleConfirmAudit = () => {
@@ -241,7 +234,12 @@ export function OjAdminPage(){
             </CardContent>
           </Card>
 
-          <DataTable columns={problemCols} data={problems} />
+          <DataTable
+            columns={problemCols}
+            data={problems}
+            emptyTitle="Chưa có đề bài nào trong ngân hàng OJ"
+            emptyDescription="Khởi tạo đề bài thuật toán mới và tải lên gói Testcase .zip để mở luyện tập."
+          />
         </TabsContent>
 
         <TabsContent value="plagiarism" className="mt-4 space-y-4">
@@ -256,7 +254,12 @@ export function OjAdminPage(){
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable columns={pairCols} data={pairs} />
+              <DataTable
+                columns={pairCols}
+                data={pairs}
+                emptyTitle="Chưa có dữ liệu quét trùng lặp mã nguồn"
+                emptyDescription="Kết quả đối chiếu AST/Token sẽ tự động hiển thị sau khi đóng kỳ thi lập trình."
+              />
             </CardContent>
           </Card>
         </TabsContent>

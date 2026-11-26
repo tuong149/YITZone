@@ -16,11 +16,7 @@ const INITIAL_CHECKLIST = [
   { id: "ck-5", label: "Đóng chốt cửa sổ, bàn giao chìa khóa văn phòng theo đúng sổ trực", requiredPhoto: false }
 ];
 
-const INITIAL_MANAGED_ASSETS = [
-  { id: "ma-1", code: "OFIT-MIC-01", name: "Bộ Micro không dây Shure (2 tay mic)", category: "REUSABLE", qty: 2, activeLoanCount: 1, status: "ACTIVE" },
-  { id: "ma-2", code: "OFIT-SPK-02", name: "Loa kéo Bluetooth sự kiện 600W", category: "REUSABLE", qty: 1, activeLoanCount: 0, status: "ACTIVE" },
-  { id: "ma-3", code: "OFIT-PEN-05", name: "Bút lông bảng & Giấy A4 văn phòng", category: "CONSUMABLE", qty: 14, activeLoanCount: 0, status: "ACTIVE" }
-];
+const INITIAL_MANAGED_ASSETS = [];
 
 export function OfficeChecklistAssetsCrudTab({ onNotify }) {
   const [checklist, setChecklist] = useState(INITIAL_CHECKLIST);
@@ -189,50 +185,56 @@ export function OfficeChecklistAssetsCrudTab({ onNotify }) {
               </Button>
             </div>
 
-            <div className="space-y-2">
-              {assets.map((asset) => (
-                <div
-                  key={asset.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="tabular-mono text-xs font-semibold text-primary">{asset.code}</span>
-                      <span className="truncate font-medium text-foreground">{asset.name}</span>
-                      <Badge variant={asset.status === "ACTIVE" ? "success": "secondary"}>
-                        {asset.status === "ACTIVE" ? "Đang quản lý": "Đã thanh lý"}
-                      </Badge>
+            {assets.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/25 px-4 py-8 text-center text-xs text-muted-foreground">
+                Chưa có tài sản hoặc vật tư nào trong danh mục quản lý.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {assets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="tabular-mono text-xs font-semibold text-primary">{asset.code}</span>
+                        <span className="truncate font-medium text-foreground">{asset.name}</span>
+                        <Badge variant={asset.status === "ACTIVE" ? "success" : "secondary"}>
+                          {asset.status === "ACTIVE" ? "Đang quản lý" : "Đã thanh lý"}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Số lượng: <span className="tabular-mono">{asset.qty}</span> · Đang cho mượn:{" "}
+                        <span className="tabular-mono">{asset.activeLoanCount}</span>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Số lượng: <span className="tabular-mono">{asset.qty}</span>Đang cho mượn:{" "}
-                      <span className="tabular-mono">{asset.activeLoanCount}</span>
-                    </div>
-                  </div>
 
-                  {asset.status === "ACTIVE" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0"
-                      onClick={() => {
-                        setErrorMsg(null);
-                        if (asset.activeLoanCount > 0) {
-                          setErrorMsg(
-                            `Không thể thanh lý "${asset.name}": đang có ${asset.activeLoanCount} phiếu mượn chưa trả.`
-                          );
-                          return;
-                        }
-                        setDisposeTarget(asset);
-                      }}
-                    >
-                      <Archive className="h-3.5 w-3.5" />
-                      <span>Thanh lý</span>
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
+                    {asset.status === "ACTIVE" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={() => {
+                          setErrorMsg(null);
+                          if (asset.activeLoanCount > 0) {
+                            setErrorMsg(
+                              `Không thể thanh lý "${asset.name}": đang có ${asset.activeLoanCount} phiếu mượn chưa trả.`
+                            );
+                            return;
+                          }
+                          setDisposeTarget(asset);
+                        }}
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                        <span>Thanh lý</span>
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

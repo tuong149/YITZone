@@ -53,7 +53,7 @@ function parseDisplayName(rawName) {
   if (match) {
     return { cleanName: match[1].trim(), roleNote: match[2].trim() };
   }
-  return { cleanName: value || "Nguyễn Minh Khoa", roleNote: null };
+  return { cleanName: value || "Tài khoản YITZone", roleNote: null };
 }
 
 function getInitials(cleanName, fallbackId) {
@@ -71,9 +71,9 @@ export function ProfileSecurityPage() {
   const { section } = useParams();
   const activeKey = section || "overview";
 
-  const userId = useAuthStore((s) => s.userId) ?? "22110345";
-  const rawFullName = useAuthStore((s) => s.fullName) ?? "Nguyễn Minh Khoa";
-  const email = useAuthStore((s) => s.email) ?? "22110345@student.hcmute.edu.vn";
+  const userId = useAuthStore((s) => s.userId) ?? "";
+  const rawFullName = useAuthStore((s) => s.fullName) ?? "";
+  const email = useAuthStore((s) => s.email) ?? "";
   const roleScopes = useAuthStore((s) => s.roleScopes);
   const authorities = useAuthStore((s) => s.authorities);
   const authProvider = useAuthStore((s) => s.authProvider);
@@ -81,7 +81,7 @@ export function ProfileSecurityPage() {
   const onboardingState = loadOnboardingState(userId);
 
   const [accountHealth, setAccountHealth] = useState(() => ({
-    backupEmail: onboardingState?.backupEmail || "minhkhoa.dev@gmail.com",
+    backupEmail: onboardingState?.backupEmail || "",
     backupEmailVerified: false,
     hasPassword:
       typeof onboardingState?.hasPassword === "boolean"
@@ -101,15 +101,13 @@ export function ProfileSecurityPage() {
 
   const { cleanName, roleNote } = parseDisplayName(rawFullName);
   const initials = getInitials(cleanName, userId);
+  const portfolioHref = userId ? `/p/${encodeURIComponent(userId)}` : "/portfolio";
 
   return (
     <div className="py-1">
       <div className="grid items-start gap-6 lg:grid-cols-[268px_minmax(0,1fr)] lg:gap-7">
-        {/* Detached Floating Liquid Glass Sidebar (matches AdminLayout chrome) */}
         <aside className="space-y-3 lg:sticky lg:top-20">
-          {/* Desktop Unified Liquid Glass Rail (>= lg) */}
           <div className="liquid-glass hidden rounded-[26px] p-3.5 lg:block">
-            {/* Identity Header inside Glass Rail */}
             <div className="rounded-[18px] border border-white/60 bg-card/80 p-3.5 shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
               <div className="flex items-center gap-3">
                 <div className="liquid-glass-btn-cobalt flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
@@ -119,7 +117,9 @@ export function ProfileSecurityPage() {
                   <div className="truncate text-sm font-semibold text-foreground" title={cleanName}>
                     {cleanName}
                   </div>
-                  <div className="tabular-mono text-xs text-muted-foreground">{userId}</div>
+                  {userId && (
+                    <div className="tabular-mono text-xs text-muted-foreground">{userId}</div>
+                  )}
                 </div>
               </div>
               {roleNote && (
@@ -128,20 +128,21 @@ export function ProfileSecurityPage() {
                 </div>
               )}
               <div className="mt-3 border-t border-border/70 pt-2.5">
-                <div className="truncate text-xs text-muted-foreground" title={email}>
-                  {email}
-                </div>
+                {email && (
+                  <div className="truncate text-xs text-muted-foreground" title={email}>
+                    {email}
+                  </div>
+                )}
                 <Link
-                  to={`/p/${userId}`}
+                  to={portfolioHref}
                   className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
                 >
-                  <span>Hồ sơ công khai (/p/{userId})</span>
+                  <span>{userId ? `Hồ sơ công khai (/p/${userId})` : "Mở E-Portfolio"}</span>
                   <ExternalLink className="h-3 w-3" />
                 </Link>
               </div>
             </div>
 
-            {/* Primary Account Sections */}
             <nav aria-label="Điều hướng trang cá nhân" className="mt-3.5 space-y-1">
               {PROFILE_SECTIONS.map((item) => {
                 const Icon = item.icon;
@@ -170,7 +171,6 @@ export function ProfileSecurityPage() {
               })}
             </nav>
 
-            {/* Quick Personal Workspaces */}
             <div className="mt-4 border-t border-border/70 pt-3.5">
               <div className="px-3.5 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Không gian cá nhân
@@ -193,7 +193,6 @@ export function ProfileSecurityPage() {
             </div>
           </div>
 
-          {/* Mobile Compact Glass Identity + Scrollable Pill Nav (< lg) */}
           <div className="space-y-3 lg:hidden">
             <div className="liquid-glass flex items-center justify-between gap-3 rounded-[22px] p-4">
               <div className="flex min-w-0 items-center gap-3">
@@ -203,13 +202,15 @@ export function ProfileSecurityPage() {
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-foreground">{cleanName}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    <span className="tabular-mono font-medium text-foreground/80">{userId}</span>
-                    {roleNote ? ` · ${roleNote}` : ""}
+                    {userId && (
+                      <span className="tabular-mono font-medium text-foreground/80">{userId}</span>
+                    )}
+                    {roleNote ? `${userId ? " · " : ""}${roleNote}` : ""}
                   </div>
                 </div>
               </div>
               <Link
-                to={`/p/${userId}`}
+                to={portfolioHref}
                 className="inline-flex shrink-0 items-center gap-1 rounded-full bg-card/85 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm dark:bg-white/10"
               >
                 <span>CV</span>
@@ -245,7 +246,6 @@ export function ProfileSecurityPage() {
           </div>
         </aside>
 
-        {/* Right Main Content Column */}
         <section className="min-w-0">
           {activeKey === "overview" && (
             <ProfileOverviewSection
@@ -290,7 +290,7 @@ export function ProfileSecurityPage() {
               authorities={authorities}
             />
           )}
-          {activeKey === "privacy" && <ProfilePrivacySection />}
+          {activeKey === "privacy" && <ProfilePrivacySection userId={userId} />}
           {activeKey === "app" && (
             <ProfileAppSettingsSection
               accountHealth={accountHealth}

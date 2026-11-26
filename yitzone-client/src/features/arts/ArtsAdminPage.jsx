@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowDown,
@@ -16,55 +16,34 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEventStore } from "@/stores/event-store";
 import { createArtsExportJob, getArtsExportJobStatus } from "./api";
 
-const PROGRAMS = [
-  "Đêm Gala Chào Tân Sinh viên FIT 2026",
-  "Lễ Tổng kết & Tuyên dương Sinh viên 5 tốt 2026"
-];
-
-const INITIAL_ACTS = [
-  {
-    id: "ART-01",
-    eventName: PROGRAMS[0],
-    title: "Mashup Tuổi trẻ Công nghệ",
-    slug: "MashupTuoiTre",
-    genre: "Song/Tốp ca",
-    duration: "04:30",
-    sourceLabel: "Beat.wav · Link LED Drive",
-    performers: ["22110345 Nguyễn Minh Khôi", "23110112 Lê Ngọc Hân"],
-    status: "DA_CHOT"
-  },
-  {
-    id: "ART-02",
-    eventName: PROGRAMS[0],
-    title: "Cyber Pulse Choreography",
-    slug: "CyberPulse",
-    genre: "Nhảy hiện đại",
-    duration: "03:45",
-    sourceLabel: "CyberPulse_Beat.mp3",
-    performers: ["22110418 Trần Đức Thịnh", "24110088 Phạm Khánh Linh"],
-    status: "CHO_DUYET"
-  },
-  {
-    id: "ART-03",
-    eventName: PROGRAMS[0],
-    title: "Acoustic Ballad: Ký ức Đêm Code",
-    slug: "KyUcDemCode",
-    genre: "Nhạc cụ",
-    duration: "04:10",
-    sourceLabel: "Không dùng beat (Hát live)",
-    performers: [],
-    status: "CHO_DUYET"
-  }
-];
+const INITIAL_ACTS = [];
 
 export function ArtsAdminPage() {
-  const [selectedProgram, setSelectedProgram] = useState(PROGRAMS[0]);
+  const events = useEventStore((s) => s.events);
+  const programs = useMemo(
+    () => events.map((e) => ({ id: e.id, title: e.title })),
+    [events]
+  );
+
+  const [selectedProgramId, setSelectedProgramId] = useState(() => programs[0]?.id ?? "");
+  const activeProgram = useMemo(
+    () => programs.find((p) => p.id === selectedProgramId) ?? programs[0] ?? null,
+    [programs, selectedProgramId]
+  );
+
   const [acts, setActs] = useState(INITIAL_ACTS);
   const [zipFeedback, setZipFeedback] = useState(null);
 
-  const visibleActs = acts.filter((a) => a.eventName === selectedProgram);
+  const visibleActs = useMemo(
+    () =>
+      activeProgram
+        ? acts.filter((a) => a.eventId === activeProgram.id || a.eventName === activeProgram.title)
+        : acts,
+    [acts, activeProgram]
+  );
 
   const moveAct = (id, delta) => {
     const idx = acts.findIndex((a) => a.id === id);
@@ -92,15 +71,15 @@ export function ArtsAdminPage() {
   };
 
   const handleDownloadZip = async () => {
-    const fileList = visibleActs
-      .map((a, i) => `${String(i + 1).padStart(2, "0")}_${a.slug}`)
-      .join(", ");
+    if (!activeProgram) return;
     try {
-      const job = await createArtsExportJob("gala-fit-2026");
-      const status = await getArtsExportJobStatus("gala-fit-2026", job.jobId);
+      const job = await createArtsExportJob(activeProgram.id);
+      const status = await getArtsExportJobStatus(activeProgram.id, job.jobId);
       setZipFeedback(`Đã tạo gói tải source (${job.jobId}): ${status.presignedDownloadUrl}`);
     } catch {
-      setZipFeedback(`Đã đóng gói danh sách source theo thứ tự chương trình: ${fileList}`);
+      setZipFeedback(
+        "Không thể kết nối máy chủ đóng gói source âm thanh/LED lúc này. Vui lòng thử lại sau."
+      );
     }
   };
 
@@ -170,7 +149,7 @@ export function ArtsAdminPage() {
       key: "performers",
       header: "Sinh viên biểu diễn",
       render: (act) =>
-        act.performers.length === 0 ? (
+        (act.performers?.length ?? 0) === 0 ? (
           <span className="text-xs text-muted-foreground">Chưa đính kèm</span>
         ) : (
           <div className="space-y-0.5 text-xs text-foreground">
@@ -247,21 +226,29 @@ export function ArtsAdminPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="w-64">
-            <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-              <SelectTrigger aria-label="Chọn chương trình">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PROGRAMS.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="button" size="sm" variant="outline" onClick={() => void handleDownloadZip()}>
+          {programs.length > 0 && activeProgram && (
+            <div className="w-64">
+              <Select value={activeProgram.id} onValueChange={setSelectedProgramId}>
+                <SelectTrigger aria-label="Chọn chương trình">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {programs.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!activeProgram || visibleActs.length === 0}
+            onClick={() => void handleDownloadZip()}
+          >
             <Download className="h-4 w-4" />
             <span>Tải trọn bộ Source (.zip)</span>
           </Button>
@@ -279,9 +266,11 @@ export function ArtsAdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Danh sách Tiết mục — {selectedProgram}</CardTitle>
+          <CardTitle>
+            Danh sách Tiết mục{activeProgram ? ` — ${activeProgram.title}` : ""}
+          </CardTitle>
           <CardDescription>
-            Kéo đổi thứ tự lên/xuống để đánh số tự động khi tải gói source cho kỹ thuật hội trường.
+            Đổi thứ tự lên/xuống để đánh số tự động khi tải gói source cho kỹ thuật hội trường.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -289,7 +278,7 @@ export function ArtsAdminPage() {
             columns={columns}
             data={visibleActs}
             emptyTitle="Chưa có tiết mục nào"
-            emptyDescription="Ban Văn nghệ chưa nộp tiết mục cho chương trình này."
+            emptyDescription="Ban Văn nghệ chưa có tiết mục nào được nộp cho chương trình hiện tại."
           />
         </CardContent>
       </Card>

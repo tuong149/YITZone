@@ -172,10 +172,7 @@ if (typeof window !== "undefined") {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed.accessToken && parsed.userId) {
-        const demoBlocked =
-          parsed.accessToken === "demo-local-offline-token" &&
-          import.meta.env.VITE_DEMO_MODE !== "true";
-        if (demoBlocked || isJwtExpired(parsed.accessToken)) {
+        if (isJwtExpired(parsed.accessToken)) {
           window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
         } else {
           useAuthStore.setState({

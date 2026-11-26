@@ -34,12 +34,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { summarizeSurveyEssays } from "@/features/surveys/api";
 import { SurveyFormBuilder } from "@/features/surveys/SurveyFormBuilder";
+import { extractApiErrorMessage } from "@/lib/api-client";
 import { useSurveyStore } from "@/stores/survey-store";
-
-const RAW_ESSAYS_SAMPLE = `- "Hội thảo rất bổ ích, cảm ơn anh Tuấn ban hậu cần đã hỗ trợ micro nhanh chóng. MSSV mình là 22110345, sđt 0901234567 muốn nhận slide."
-- "Nên tăng thời gian Q&A thêm 15 phút và gửi link GitHub repo trước buổi học. Email: 23110218@student.hcmute.edu.vn."
-- "Khu vực quét QR đầu giờ ở Hội trường A5 hơi đông, đề xuất mở thêm 1 bàn quét mã vạch thẻ SV."`;
 
 function autoRedactPii(text) {
   return text
@@ -73,7 +71,7 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
 
   const [activeTab, setActiveTab] = useState("surveys");
   const [selectedAnalyticsId, setSelectedAnalyticsId] = useState(
-    () => surveys[1]?.id ?? surveys[0]?.id ?? ""
+    () => surveys[0]?.id ?? ""
   );
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
 
@@ -93,15 +91,16 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
   const [newTplMode, setNewTplMode] = useState("IDENTIFIED");
 
   // 2-step AI PII Redaction Preview
-  const [redactedPayload, setRedactedPayload] = useState(() => autoRedactPii(RAW_ESSAYS_SAMPLE));
+  const [redactedPayload, setRedactedPayload] = useState("");
   const [customMaskTerm, setCustomMaskTerm] = useState("");
-  const [aiSummaryGenerated, setAiSummaryGenerated] = useState(false);
+  const [aiSummaryText, setAiSummaryText] = useState(null);
+  const [summarizingAi, setSummarizingAi] = useState(false);
 
   const [notice, setNotice] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
   const activeAnalyticsSurvey =
-    surveys.find((s) => s.id === selectedAnalyticsId) ?? surveys[0];
+    surveys.find((s) => s.id === selectedAnalyticsId) ?? surveys[0] ?? null;
   const isAnonLocked =
     Boolean(activeAnalyticsSurvey) &&
     activeAnalyticsSurvey.mode === "ANONYMOUS" &&
@@ -152,8 +151,56 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
     if (!term) return;
     const regex = new RegExp(escapeRegex(term), "gi");
     setRedactedPayload((prev) => prev.replace(regex, "[ĐÃ ẨN TÊN]"));
-    setAiSummaryGenerated(false);
+    setAiSummaryText(null);
     setCustomMaskTerm("");
+  };
+
+  const handleGenerateAiSummary = async () => {
+    if (!activeAnalyticsSurvey || !redactedPayload.trim() || summarizingAi) return;
+    setErrorMsg(null);
+    setSummarizingAi(true);
+    try {
+      const cleaned = autoRedactPii(redactedPayload.trim());
+      setRedactedPayload(cleaned);
+      const data = await summarizeSurveyEssays(activeAnalyticsSurvey.id, cleaned);
+      setAiSummaryText(typeof data === "string" ? data : data?.summary ?? "");
+    } catch (err) {
+      setErrorMsg(
+        extractApiErrorMessage(
+          err,
+          "Chưa kết nối được dịch vụ AI tóm tắt khảo sát lúc này. Vui lòng thử lại sau."
+        )
+      );
+    } finally {
+      setSummarizingAi(false);
+    }
+  };
+
+  const handleExportSurveysCsv = () => {
+    if (surveys.length === 0) return;
+    const headers = ["Mã khảo sát", "Tên biểu mẫu", "Phạm vi", "Chế độ", "Số câu hỏi", "Số phản hồi", "Trạng thái"];
+    const rows = surveys.map((s) => [
+      s.id,
+      s.title,
+      s.scope,
+      s.mode,
+      String((s.questions ?? []).length),
+      String(s.responsesCount ?? 0),
+      s.status
+    ]);
+    const csv =
+      "\uFEFF" +
+      [headers, ...rows]
+        .map((cols) => cols.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+        .join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `yitzone-surveys-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setNotice(`Đã xuất báo cáo thống kê ${surveys.length} khảo sát định dạng CSV (UTF-8).`);
   };
 
   const surveyColumns = [
@@ -168,7 +215,7 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
             <Badge variant={row.mode === "ANONYMOUS" ? "info" : "secondary"}>
               {row.mode === "ANONYMOUS" ? "Ẩn danh (N ≥ 5)" : "Định danh (Mở E-Cert)"}
             </Badge>
-            <span className="tabular-mono text-[11px]">{row.questions.length} câu hỏi</span>
+            <span className="tabular-mono text-[11px]">{(row.questions ?? []).length} câu hỏi</span>
           </div>
         </div>
       )
@@ -317,12 +364,11 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
             variant="outline"
             size="sm"
             className="rounded-full"
-            onClick={() =>
-              setNotice("Đã xuất báo cáo thống kê khảo sát (.xlsx) đạt chuẩn đối chiếu.")
-            }
+            disabled={surveys.length === 0}
+            onClick={handleExportSurveysCsv}
           >
             <Download className="h-4 w-4" />
-            <span>Xuất Excel (.xlsx)</span>
+            <span>Xuất báo cáo CSV</span>
           </Button>
           <Button
             type="button"
@@ -388,7 +434,23 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
 
         {/* TAB 1: Surveys List */}
         <TabsContent value="surveys" className="mt-4">
-          <DataTable columns={surveyColumns} data={surveys} />
+          <DataTable
+            columns={surveyColumns}
+            data={surveys}
+            emptyTitle="Chưa có biểu mẫu khảo sát nào"
+            emptyDescription="Khởi tạo biểu mẫu khảo sát đầu tiên từ trang trống hoặc từ kho mẫu chuẩn của Khoa."
+            emptyAction={
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-full"
+                onClick={() => setCreateDialogOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                <span>Tạo khảo sát mới</span>
+              </Button>
+            }
+          />
         </TabsContent>
 
         {/* TAB 2: Reusable Survey Templates */}
@@ -456,7 +518,12 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
               </form>
 
               <div className="space-y-2">
-                {templates.map((tpl) => (
+                {templates.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border bg-muted/20 py-10 text-center text-xs text-muted-foreground">
+                    Chưa có mẫu khảo sát chuẩn nào. Nhập tên mẫu ở khung phía trên để tạo mới.
+                  </div>
+                ) : (
+                  templates.map((tpl) => (
                   <div
                     key={tpl.id}
                     className="flex flex-col gap-3 rounded-xl border border-border bg-muted/25 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -503,7 +570,8 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
                       </Button>
                     </div>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -511,7 +579,30 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
 
         {/* TAB 3: Analytics N >= 5 + 2-Step AI PII Redaction */}
         <TabsContent value="analytics" className="mt-4 space-y-5">
-          {activeAnalyticsSurvey && (
+          {!activeAnalyticsSurvey ? (
+            <Card className="rounded-[20px]">
+              <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+                <BarChart3 className="h-8 w-8 text-muted-foreground" />
+                <div className="max-w-md space-y-1">
+                  <p className="font-display text-lg font-medium text-foreground">
+                    Chưa có khảo sát nào để phân tích thống kê
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Hãy tạo biểu mẫu khảo sát và mở cổng thu thập phản hồi để xem phân bố định lượng và tóm tắt AI khử PII.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-1 rounded-full"
+                  onClick={() => setCreateDialogOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Tạo khảo sát mới</span>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
             <>
               <div className="flex flex-wrap items-center gap-3">
                 <Label className="text-xs">Khảo sát đang phân tích:</Label>
@@ -567,7 +658,7 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
                           Chưa có phản hồi nào cho khảo sát này.
                         </p>
                       ) : (
-                        activeAnalyticsSurvey.ratingBreakdown.map((bar) => (
+                        (activeAnalyticsSurvey.ratingBreakdown ?? []).map((bar) => (
                           <div key={bar.label} className="space-y-1">
                             <div className="flex justify-between text-xs">
                               <span className="text-foreground">{bar.label}</span>
@@ -603,8 +694,9 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
                         value={redactedPayload}
                         onChange={(e) => {
                           setRedactedPayload(e.target.value);
-                          setAiSummaryGenerated(false);
+                          setAiSummaryText(null);
                         }}
+                        placeholder="Chưa có phản hồi tự luận nào. Khi có dữ liệu tự luận từ sinh viên, nội dung đã khử MSSV/SĐT/Email sẽ hiển thị tại đây để cán bộ rà soát trước khi gửi AI..."
                         className="font-mono text-xs"
                         aria-label="Nội dung góp ý đã khử định danh"
                       />
@@ -613,20 +705,21 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
                         <Input
                           value={customMaskTerm}
                           onChange={(e) => setCustomMaskTerm(e.target.value)}
-                          placeholder="Nhập tên riêng / từ cần che (VD: anh Tuấn)..."
+                          placeholder="Nhập tên riêng / từ cần che..."
                           className="h-9 flex-1 min-w-[200px] text-xs"
                           aria-label="Tên riêng cần che"
                         />
-                        <Button type="submit" size="sm" variant="outline" disabled={!customMaskTerm.trim()}>
+                        <Button type="submit" size="sm" variant="outline" disabled={!customMaskTerm.trim() || !redactedPayload.trim()}>
                           Che thành [ĐÃ ẨN TÊN]
                         </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
+                          disabled={!redactedPayload.trim()}
                           onClick={() => {
                             setRedactedPayload((prev) => autoRedactPii(prev));
-                            setAiSummaryGenerated(false);
+                            setAiSummaryText(null);
                           }}
                         >
                           <ShieldCheck className="h-3.5 w-3.5" />
@@ -635,30 +728,31 @@ export function SurveyAdminPage({ embeddedEventId } = {}) {
                       </form>
 
                       <div className="flex justify-end pt-1">
-                        <Button type="button" size="sm" onClick={() => setAiSummaryGenerated(true)}>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!redactedPayload.trim() || summarizingAi}
+                          onClick={() => void handleGenerateAiSummary()}
+                        >
                           <Sparkles className="h-4 w-4" />
-                          <span>Xác nhận Đã sạch PII &amp; Gửi AI Tóm tắt</span>
+                          <span>
+                            {summarizingAi
+                              ? "Đang gửi AI tóm tắt..."
+                              : "Xác nhận Đã sạch PII & Gửi AI Tóm tắt"}
+                          </span>
                         </Button>
                       </div>
 
-                      {aiSummaryGenerated && (
+                      {aiSummaryText && (
                         <div
                           role="status"
                           aria-live="polite"
-                          className="space-y-1.5 rounded-xl border border-primary/25 bg-primary/5 p-3.5 text-xs text-foreground"
+                          className="space-y-1.5 rounded-xl border border-primary/25 bg-primary/5 p-3.5 text-xs text-foreground whitespace-pre-wrap"
                         >
                           <div className="font-semibold text-primary">
-                            Báo cáo Tóm tắt 3 mục từ AI (Payload sạch PII):
+                            Báo cáo Tóm tắt từ AI (Payload sạch PII):
                           </div>
-                          <p>
-                            1. <strong>Điểm mạnh:</strong> Nội dung chuyên môn thực chiến cao, hỗ trợ kỹ thuật nhanh.
-                          </p>
-                          <p>
-                            2. <strong>Điểm cần cải thiện:</strong> Thời lượng Q&amp;A ngắn, lối check-in đầu giờ còn ùn nhẹ.
-                          </p>
-                          <p>
-                            3. <strong>Đề xuất hành động:</strong> Mở thêm 1 bàn quét mã vạch 1D thẻ SV và gửi repo trước buổi học.
-                          </p>
+                          <p>{aiSummaryText}</p>
                         </div>
                       )}
                     </CardContent>

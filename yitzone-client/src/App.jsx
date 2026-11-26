@@ -52,7 +52,6 @@ const CmsAdminPage = lazy(() => import("@/features/cms/CmsAdminPage").then((m) =
 const NewsComposePage = lazy(() => import("@/features/cms/NewsComposePage").then((m) => ({ default: m.NewsComposePage })));
 const NewsDetailPage = lazy(() => import("@/features/cms/NewsDetailPage").then((m) => ({ default: m.NewsDetailPage })));
 const NewsPage = lazy(() => import("@/features/cms/NewsPage").then((m) => ({ default: m.NewsPage })));
-const DesignSystemPage = lazy(() => import("@/features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
 const EventAdminPage = lazy(() => import("@/features/events/EventAdminPage").then((m) => ({ default: m.EventAdminPage })));
 const EventCreatePage = lazy(() => import("@/features/events/EventCreatePage").then((m) => ({ default: m.EventCreatePage })));
 const EventDetailPage = lazy(() => import("@/features/events/EventDetailPage").then((m) => ({ default: m.EventDetailPage })));
@@ -74,7 +73,6 @@ const LiveQaAudiencePage = lazy(() => import("@/features/liveqa/LiveQaAudiencePa
 const LiveQaStagePage = lazy(() => import("@/features/liveqa/LiveQaStagePage").then((m) => ({ default: m.LiveQaStagePage })));
 const MinigamePlayerPage = lazy(() => import("@/features/minigame/MinigamePlayerPage").then((m) => ({ default: m.MinigamePlayerPage })));
 const MinigameStagePage = lazy(() => import("@/features/minigame/MinigameStagePage").then((m) => ({ default: m.MinigameStagePage })));
-const ModuleDirectoryPage = lazy(() => import("@/features/modules/ModuleDirectoryPage").then((m) => ({ default: m.ModuleDirectoryPage })));
 const OfficeAdminPage = lazy(() => import("@/features/office/OfficeAdminPage").then((m) => ({ default: m.OfficeAdminPage })));
 const OfficeDutyPage = lazy(() => import("@/features/office/OfficeDutyPage").then((m) => ({ default: m.OfficeDutyPage })));
 const OjAdminPage = lazy(() => import("@/features/oj/OjAdminPage").then((m) => ({ default: m.OjAdminPage })));
@@ -138,7 +136,6 @@ function AdminOverviewPage() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="info">Đơn vị đang thao tác: {activeScopeLabel}</Badge>
-            <Badge variant="warning">Số liệu mẫu · Chưa kết nối máy chủ</Badge>
           </div>
           <h1 className="mt-2 font-display text-2xl font-medium text-foreground sm:text-3xl">
             Việc Cần Xử lý Hôm nay
@@ -164,27 +161,27 @@ function AdminOverviewPage() {
         </div>
       </div>
 
-      {/* 5 Actionable Operational Queue Cards (A5) */}
+      {/* 5 Actionable Operational Queue Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="border-status-warning/35">
+        <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <Badge variant="warning" className="gap-1">
+              <Badge variant="outline" className="gap-1">
                 <Clock className="h-3 w-3" />
-                <span>Còn 41h 20p</span>
+                <span>Cửa sổ 48h</span>
               </Badge>
-              <span className="tabular-mono text-2xl font-bold text-status-warning">4 ca</span>
+              <span className="tabular-mono text-2xl font-bold text-foreground">0 ca</span>
             </div>
-            <CardTitle className="mt-2 text-base">1. Hậu kiểm Điểm danh 48 giờ</CardTitle>
+            <CardTitle className="mt-2 text-base">Hậu kiểm Điểm danh 48 giờ</CardTitle>
             <CardDescription className="text-xs">
-              2 ca cảnh báo nhẹ (+1đ) và 2 ca tín hiệu mạnh (+2đ) đang chặn nút chốt cấp E-Certificate.
+              Rà soát các lượt điểm danh gắn cờ cảnh báo trước khi khóa sổ cấp E-Certificate.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild size="sm" className="w-full rounded-full">
+            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
               <Link to="/admin/attendance">
                 <QrCode className="h-3.5 w-3.5" />
-                <span>Xử lý Hậu kiểm 48h</span>
+                <span>Mở Hậu kiểm 48h</span>
               </Link>
             </Button>
           </CardContent>
@@ -193,12 +190,12 @@ function AdminOverviewPage() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <Badge variant="info">Chờ BTV thẩm định</Badge>
-              <span className="tabular-mono text-2xl font-bold text-primary">1 sự kiện</span>
+              <Badge variant="info">Phê duyệt BTV</Badge>
+              <span className="tabular-mono text-2xl font-bold text-primary">0 sự kiện</span>
             </div>
-            <CardTitle className="mt-2 text-base">2. Sự kiện Chờ Duyệt Xuất bản</CardTitle>
+            <CardTitle className="mt-2 text-base">Sự kiện Chờ Duyệt Xuất bản</CardTitle>
             <CardDescription className="text-xs">
-              UTE Hackathon 2026: Smart Campus đang chờ Ban Thường vụ phê duyệt quyền lợi Cộng ĐRL &amp; CĐDN.
+              Thẩm định kế hoạch sự kiện và nhãn quyền lợi Cộng ĐRL, CTXH, CĐDN trước khi mở cổng đăng ký.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -211,18 +208,18 @@ function AdminOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-status-danger/35">
+        <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <Badge variant="danger" className="gap-1">
+              <Badge variant="outline" className="gap-1">
                 <AlertTriangle className="h-3 w-3" />
-                <span>Quá SLA 24h</span>
+                <span>SLA 24h</span>
               </Badge>
-              <span className="tabular-mono text-2xl font-bold text-status-danger">1 hội thoại</span>
+              <span className="tabular-mono text-2xl font-bold text-foreground">0 hội thoại</span>
             </div>
-            <CardTitle className="mt-2 text-base">3. Hộp thư Sinh viên Quá hạn SLA</CardTitle>
+            <CardTitle className="mt-2 text-base">Hộp thư Sinh viên &amp; SLA</CardTitle>
             <CardDescription className="text-xs">
-              Thắc mắc về tiêu chí Tình nguyện SV5T đã chờ 29 giờ chưa có cán bộ chuyên trách phản hồi.
+              Theo dõi và phản hồi các hội thoại Q&amp;A Messenger từ sinh viên đúng cam kết 24 giờ.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -235,25 +232,25 @@ function AdminOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-status-danger/35">
+        <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <Badge variant="danger" className="gap-1">
+              <Badge variant="outline" className="gap-1">
                 <ShieldAlert className="h-3 w-3" />
-                <span>1 phiếu &gt; 24h</span>
+                <span>Cuối ca trực</span>
               </Badge>
-              <span className="tabular-mono text-2xl font-bold text-foreground">2 phiếu</span>
+              <span className="tabular-mono text-2xl font-bold text-foreground">0 phiếu</span>
             </div>
-            <CardTitle className="mt-2 text-base">4. Phiếu Tiền mặt COD Chưa Bàn giao</CardTitle>
+            <CardTitle className="mt-2 text-base">Phiếu Tiền mặt COD Chờ Bàn giao</CardTitle>
             <CardDescription className="text-xs">
-              Tổng 2.280.000đ tiền mặt thu hộ tại bàn trực đang chờ Thủ quỹ kiểm đếm và ký nhận cuối ca.
+              Đối soát tiền mặt thu hộ tại bàn trực và xác nhận bàn giao cho Thủ quỹ cuối ca.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild size="sm" variant="outline" className="w-full rounded-full">
               <Link to="/admin/store">
                 <Banknote className="h-3.5 w-3.5" />
-                <span>Ký nhận Bàn giao COD</span>
+                <span>Đối soát &amp; Bàn giao COD</span>
               </Link>
             </Button>
           </CardContent>
@@ -263,11 +260,11 @@ function AdminOverviewPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <Badge variant="secondary">Đợt xét cấp Khoa</Badge>
-              <span className="tabular-mono text-2xl font-bold text-primary">3 hồ sơ</span>
+              <span className="tabular-mono text-2xl font-bold text-primary">0 hồ sơ</span>
             </div>
-            <CardTitle className="mt-2 text-base">5. Hồ sơ SV5T &amp; Đơn Phúc khảo</CardTitle>
+            <CardTitle className="mt-2 text-base">Hồ sơ SV5T &amp; Đơn Phúc khảo</CardTitle>
             <CardDescription className="text-xs">
-              Rà soát minh chứng 5 tiêu chí và giải quyết đơn phúc khảo trong cửa sổ 7 ngày công bố.
+              Rà soát minh chứng 5 tiêu chí và giải quyết đơn phúc khảo trong cửa sổ công bố kết quả.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -279,26 +276,6 @@ function AdminOverviewPage() {
             </Button>
           </CardContent>
         </Card>
-
-        {import.meta.env.DEV && (
-          <Card className="border-dashed">
-            <CardHeader className="pb-2">
-              <Badge variant="outline" className="w-fit">Chế độ Phát triển (Dev)</Badge>
-              <CardTitle className="mt-2 text-base">Danh mục 20 Phân hệ &amp; UI Kit</CardTitle>
-              <CardDescription className="text-xs">
-                Chỉ hiển thị trong môi trường phát triển cục bộ để kiểm thử nhanh.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Button asChild size="sm" variant="outline" className="rounded-full">
-                <Link to="/modules">Danh mục 20 Phân hệ</Link>
-              </Button>
-              <Button asChild size="sm" variant="outline" className="rounded-full">
-                <Link to="/design-system">UI Kit</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );
@@ -326,7 +303,7 @@ export function App() {
   const syncFromMe = useAuthStore((s) => s.syncFromMe);
 
   useEffect(() => {
-    if (!accessToken || accessToken === "demo-local-offline-token") {
+    if (!accessToken) {
       return;
     }
     let active = true;
@@ -486,8 +463,6 @@ export function App() {
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/auth/callback" element={<OAuth2CallbackPage />} />
                 <Route path="/yitbot" element={<YitBotPage />} />
-                {import.meta.env.DEV && <Route path="/modules" element={<ModuleDirectoryPage />} />}
-                {import.meta.env.DEV && <Route path="/design-system" element={<DesignSystemPage />} />}
 
                 {/* Authenticated Personal, Activity & Contributor Routes */}
                 <Route element={<ProtectedRoute requireAuth={true} />}>

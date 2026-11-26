@@ -29,6 +29,12 @@ import {
   CancelRegistrationDialog,
   EventRegistrationDialog
 } from "@/features/events/EventRegistrationDialog";
+import {
+  mergeStoredAndApiEvents,
+  normalizeApiEventItem,
+  useEventDetail,
+  useEvents
+} from "@/features/events/api";
 import { EventTeamCompetitionTab } from "@/features/events/EventTeamCompetitionTab";
 import { canViewInternalCtvEvents } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth-store";
@@ -52,18 +58,29 @@ export function EventDetailPage() {
   const roleScopes = useAuthStore((s) => s.roleScopes);
   const canApplyBtc = canViewInternalCtvEvents(isAuthenticated, authorities, roleScopes);
 
-  const events = useEventStore((s) => s.events);
+  const storedEvents = useEventStore((s) => s.events);
+  const { data: apiEventsData } = useEvents();
+  const { data: apiDetailData } = useEventDetail(eventId);
+  const events = useMemo(
+    () => mergeStoredAndApiEvents(storedEvents, apiEventsData),
+    [storedEvents, apiEventsData]
+  );
   const registrations = useEventStore((s) => s.registrations);
   const registerForEvent = useEventStore((s) => s.registerForEvent);
   const cancelRegistration = useEventStore((s) => s.cancelRegistration);
 
-  const event = useMemo(
-    () => (eventId ? events.find((e) => e.id === eventId) : events[0]),
-    [eventId, events]
-  );
+  const event = useMemo(() => {
+    if (eventId) {
+      return (
+        events.find((e) => e.id === eventId) ??
+        (apiDetailData ? normalizeApiEventItem(apiDetailData) : undefined)
+      );
+    }
+    return events[0];
+  }, [eventId, events, apiDetailData]);
 
   const openBtcRoles = useMemo(
-    () => (event && event.btcRoles.length > 0 ? event.btcRoles : FALLBACK_BTC_ROLES),
+    () => (event && (event.btcRoles ?? []).length > 0 ? event.btcRoles : FALLBACK_BTC_ROLES),
     [event]
   );
 
@@ -115,7 +132,7 @@ export function EventDetailPage() {
 
   const registeredRecord = registrations[event.id];
   const registered = Boolean(registeredRecord);
-  const hasCustomForm = event.formMode === "CUSTOM_FORM" && event.formFields.length > 0;
+  const hasCustomForm = event.formMode === "CUSTOM_FORM" && (event.formFields ?? []).length > 0;
   const isUnlimited = event.capacity === 0;
   const remainingSlots = isUnlimited ? null : Math.max(0, event.capacity - event.registeredCount);
   const isSoldOut = remainingSlots !== null && remainingSlots <= 0;
@@ -168,7 +185,7 @@ export function EventDetailPage() {
 
           <div className="relative z-10 flex min-h-[280px] flex-col justify-end gap-4 p-5 text-white sm:min-h-[340px] sm:p-8 lg:p-10">
             <div className="flex flex-wrap items-center gap-2">
-              {event.benefits.map((b) => (
+              {(event.benefits ?? []).map((b) => (
                 <span
                   key={b}
                   className="liquid-glass-on-dark rounded-full px-3 py-1 text-xs font-semibold text-white"
@@ -222,7 +239,7 @@ export function EventDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2.5">
-              {event.highlights.map((text, idx) => (
+              {(event.highlights ?? []).map((text, idx) => (
                 <div key={idx} className="flex items-start gap-2.5 text-sm leading-relaxed text-foreground/90">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <span>{text}</span>
@@ -238,7 +255,7 @@ export function EventDetailPage() {
                 {event.isTeamCompetition && (
                   <TabsTrigger value="team-rounds">Đội thi &amp; Vòng đấu</TabsTrigger>
                 )}
-                <TabsTrigger value="sessions">Lịch trình ({event.sessions.length} buổi)</TabsTrigger>
+                <TabsTrigger value="sessions">Lịch trình ({(event.sessions ?? []).length} buổi)</TabsTrigger>
                 {event.hasExam && <TabsTrigger value="exam">Bài thi Trắc nghiệm</TabsTrigger>}
                 <TabsTrigger value="survey">Khảo sát &amp; E-Cert</TabsTrigger>
                 {canApplyBtc && <TabsTrigger value="btc">Ứng tuyển Ban Tổ chức</TabsTrigger>}
@@ -246,13 +263,20 @@ export function EventDetailPage() {
 
               {event.isTeamCompetition && (
                 <TabsContent value="team-rounds" className="mt-4">
-                  <EventTeamCompetitionTab />
+                  <EventTeamCompetitionTab event={event} />
                 </TabsContent>
               )}
 
               {/* Timeline Schedule */}
               <TabsContent value="sessions" className="mt-4 space-y-4">
-                {event.sessions.map((s) => (
+                {(event.sessions ?? []).length === 0 ? (
+                  <Card className="rounded-[20px] border-dashed">
+                    <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                      Lịch trình chi tiết từng buổi đang được Ban Tổ chức cập nhật.
+                    </CardContent>
+                  </Card>
+                ) : (
+                (event.sessions ?? []).map((s) => (
                   <Card key={s.id} className="overflow-hidden rounded-[20px]">
                     <CardContent className="p-5">
                       <div className="flex items-start gap-4">
@@ -335,7 +359,8 @@ export function EventDetailPage() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                ))
+                )}
               </TabsContent>
 
               {/* Attached Quiz Exam */}
@@ -405,7 +430,7 @@ export function EventDetailPage() {
                   <CardContent className="space-y-4">
                     <div className="flex flex-wrap gap-2">
                       <Button asChild className="liquid-glass-btn-cobalt h-11 rounded-full px-6">
-                        <Link to={`/surveys/${event.id === "EVT-2026-CLOUD" ? "evt-cloud-2026" : event.id}`}>
+                        <Link to={`/surveys/${event.id}`}>
                           <span>Làm khảo sát sự kiện này</span>
                         </Link>
                       </Button>

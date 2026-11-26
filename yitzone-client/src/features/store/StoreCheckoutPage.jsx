@@ -170,7 +170,11 @@ export function StoreCheckoutPage() {
         method: paymentMethod,
         total: finalTotal,
         campaignLabel,
-        deliveryLabel
+        deliveryLabel,
+        qrPayload: order.qrPayload,
+        bankName: order.bankName,
+        accountNo: order.accountNo,
+        accountName: order.accountName
       });
       clearBucket(activeBucketKey);
       idempotencyKeyRef.current = createIdempotencyKey();
@@ -255,7 +259,7 @@ export function StoreCheckoutPage() {
                 {/* Strict 16px white quiet zone around QR per DESIGN.md */}
                 <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
                   <QRCodeSVG
-                    value={`VIETQR|VCB|102988442026|${createdOrder.total}|${createdOrder.orderCode}`}
+                    value={createdOrder.qrPayload || `VIETQR|${createdOrder.orderCode}|${createdOrder.total}`}
                     size={212}
                     level="M"
                   />
@@ -269,14 +273,21 @@ export function StoreCheckoutPage() {
                   </span>
                 </div>
                 <div className="w-full space-y-1.5 rounded-lg border border-border bg-muted/35 p-4 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Ngân hàng thụ hưởng</span>
-                    <span className="font-semibold text-foreground">Vietcombank · DOAN KHOA CNTT</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Số tài khoản</span>
-                    <span className="tabular-mono font-semibold text-foreground">1029 8844 2026</span>
-                  </div>
+                  {createdOrder.bankName && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Ngân hàng thụ hưởng</span>
+                      <span className="font-semibold text-foreground">
+                        {createdOrder.bankName}
+                        {createdOrder.accountName ? ` · ${createdOrder.accountName}` : ""}
+                      </span>
+                    </div>
+                  )}
+                  {createdOrder.accountNo && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Số tài khoản</span>
+                      <span className="tabular-mono font-semibold text-foreground">{createdOrder.accountNo}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Số tiền chính xác</span>
                     <span className="tabular-mono font-semibold text-primary">

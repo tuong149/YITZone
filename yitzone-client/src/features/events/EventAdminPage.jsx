@@ -34,24 +34,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { mergeStoredAndApiEvents, useEvents } from "@/features/events/api";
 import { useEventStore } from "@/stores/event-store";
 
-const INITIAL_NOSHOW = [
-  {
-    id: "ns-1",
-    studentCode: "23110512",
-    fullName: "Phạm Minh Tuấn",
-    noShowCount: 3,
-    lockedUntil: "04/12/2026"
-  }
-];
+const INITIAL_NOSHOW = [];
 
 export function EventAdminPage() {
   const location = useLocation();
   const initialNotice =
     (location.state)?.notice ?? null;
 
-  const events = useEventStore((s) => s.events);
+  const storedEvents = useEventStore((s) => s.events);
+  const { data: apiEventsData } = useEvents();
+  const events = useMemo(
+    () => mergeStoredAndApiEvents(storedEvents, apiEventsData),
+    [storedEvents, apiEventsData]
+  );
   const draftLastSavedAt = useEventStore((s) => s.wizardDraft.lastSavedAt);
   const spotlightEventId = useEventStore((s) => s.homeSpotlight.eventId);
   const setSpotlightEvent = useEventStore((s) => s.setSpotlightEvent);
@@ -403,7 +401,20 @@ export function EventAdminPage() {
             </div>
           </div>
 
-          <DataTable columns={eventCols} data={filteredEvents} />
+          <DataTable
+            columns={eventCols}
+            data={filteredEvents}
+            emptyTitle={
+              events.length === 0
+                ? "Chưa có sự kiện nào trong hệ thống"
+                : "Không tìm thấy sự kiện khớp bộ lọc"
+            }
+            emptyDescription={
+              events.length === 0
+                ? "Nhấn nút 'Tạo sự kiện mới' ở góc phải để khởi tạo kế hoạch sự kiện đầu tiên."
+                : "Thử thay đổi từ khóa tìm kiếm hoặc bộ lọc trạng thái/phạm vi."
+            }
+          />
         </TabsContent>
 
         <TabsContent value="noshow" className="space-y-4">

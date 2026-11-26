@@ -62,7 +62,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
   const setActiveStageCampaignId = useVotingStore((s) => s.setActiveStageCampaignId);
 
   const [sourceFilter, setSourceFilter] = useState("ALL");
-  const [selectedId, setSelectedId] = useState(campaigns[0]?.id ?? "gala-fit-2026");
+  const [selectedId, setSelectedId] = useState(() => campaigns[0]?.id ?? "");
   const [activeTab, setActiveTab] = useState("options");
 
   const [newCandName, setNewCandName] = useState("");
@@ -135,7 +135,8 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
       filteredCampaigns.find((c) => c.id === selectedId) ??
       allCampaigns.find((c) => c.id === selectedId) ??
       filteredCampaigns[0] ??
-      allCampaigns[0],
+      allCampaigns[0] ??
+      null,
     [filteredCampaigns, allCampaigns, selectedId]
   );
 
@@ -147,15 +148,23 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
     storeUpdateCampaign(campaignId, updater, fallback);
   };
 
-  const isLocked = activeCampaign.status !== "DRAFT" || activeCampaign.voterCount > 0;
-  const audienceWeight = 100 - activeCampaign.judgeWeight;
-  const maxVotes = Math.max(1, ...activeCampaign.candidates.map((c) => c.audienceVotes));
-  const totalAudienceVotes = activeCampaign.candidates.reduce((sum, c) => sum + c.audienceVotes, 0);
-  const canShowVoteNumbers =
-    !activeCampaign.isSecretBallot ||
-    (activeCampaign.status === "CLOSED" && Boolean(activeCampaign.secretUnsealed));
+  const isLocked = activeCampaign
+    ? activeCampaign.status !== "DRAFT" || activeCampaign.voterCount > 0
+    : false;
+  const audienceWeight = activeCampaign ? 100 - activeCampaign.judgeWeight : 0;
+  const maxVotes = activeCampaign
+    ? Math.max(1, ...activeCampaign.candidates.map((c) => c.audienceVotes))
+    : 1;
+  const totalAudienceVotes = activeCampaign
+    ? activeCampaign.candidates.reduce((sum, c) => sum + c.audienceVotes, 0)
+    : 0;
+  const canShowVoteNumbers = activeCampaign
+    ? !activeCampaign.isSecretBallot ||
+      (activeCampaign.status === "CLOSED" && Boolean(activeCampaign.secretUnsealed))
+    : false;
 
   const ranked = useMemo(() => {
+    if (!activeCampaign) return [];
     return [...activeCampaign.candidates]
       .map((c) => {
         const normalizedAudience = (c.audienceVotes / maxVotes) * 100;
@@ -165,7 +174,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
         return { ...c, normalizedAudience, finalScore };
       })
       .sort((a, b) => b.finalScore - a.finalScore || b.judgeScore - a.judgeScore);
-  }, [activeCampaign.candidates, activeCampaign.judgeWeight, audienceWeight, maxVotes]);
+  }, [activeCampaign, audienceWeight, maxVotes]);
 
   const handleSelectCampaign = (campaign) => {
     setSelectedId(campaign.id);
@@ -178,6 +187,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
 
   const handleAddCandidate = (e) => {
     e?.preventDefault();
+    if (!activeCampaign) return;
     setErrorMsg(null);
     if (isLocked) {
       setErrorMsg("Chiến dịch đã mở cổng hoặc đã có phiếu — danh sách phương án đã được khóa.");
@@ -204,7 +214,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
   };
 
   const confirmDeleteCandidate = () => {
-    if (!deleteCandTarget || isLocked) return;
+    if (!activeCampaign || !deleteCandTarget || isLocked) return;
     const removedName = deleteCandTarget.name;
     updateCampaign(activeCampaign.id, (c) => ({
       ...c,
@@ -248,6 +258,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
   };
 
   const requestOpenCampaign = () => {
+    if (!activeCampaign) return;
     setErrorMsg(null);
     if (activeCampaign.candidates.length < 2) {
       setErrorMsg("Cần ít nhất 2 ứng viên / phương án trước khi mở cổng bình chọn.");
@@ -268,6 +279,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
   };
 
   const requestCloseCampaign = () => {
+    if (!activeCampaign) return;
     setAuditModal({
       title: "Đóng cổng Bình chọn & Chốt kết quả",
       description:
@@ -283,6 +295,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
   };
 
   const requestUnsealSecretBallot = () => {
+    if (!activeCampaign) return;
     setAuditModal({
       title: "Mở Niêm phong Thùng phiếu Kín & Công bố Kết quả",
       description:
@@ -297,6 +310,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
   };
 
   const requestToggleFreeze = () => {
+    if (!activeCampaign) return;
     const nextFreeze = !activeCampaign.freezeMode;
     setAuditModal({
       title: nextFreeze
@@ -435,89 +449,117 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
           </CardHeader>
 
           <CardContent className="space-y-2 pt-0">
-            {filteredCampaigns.map((campaign) => {
-              const selected = campaign.id === activeCampaign.id;
-              return (
-                <button
-                  key={campaign.id}
-                  type="button"
-                  onClick={() => handleSelectCampaign(campaign)}
-                  className={cn(
-                    "w-full rounded-xl border p-3 text-left transition-colors",
-                    selected
-                      ? "border-primary bg-primary/8"
-                      : "border-border bg-card hover:border-primary/40 hover:bg-muted/35"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
-                      {campaign.title}
-                    </span>
-                    <Badge variant={statusBadgeVariant(campaign.status)} className="shrink-0 text-[10px]">
-                      {statusLabel(campaign.status)}
-                    </Badge>
-                  </div>
+            {filteredCampaigns.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/25 px-4 py-8 text-center text-xs text-muted-foreground">
+                Chưa có chiến dịch bình chọn nào trong danh mục này.
+              </div>
+            ) : (
+              filteredCampaigns.map((campaign) => {
+                const selected = campaign.id === activeCampaign?.id;
+                return (
+                  <button
+                    key={campaign.id}
+                    type="button"
+                    onClick={() => handleSelectCampaign(campaign)}
+                    className={cn(
+                      "w-full rounded-xl border p-3 text-left transition-colors",
+                      selected
+                        ? "border-primary bg-primary/8"
+                        : "border-border bg-card hover:border-primary/40 hover:bg-muted/35"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+                        {campaign.title}
+                      </span>
+                      <Badge variant={statusBadgeVariant(campaign.status)} className="shrink-0 text-[10px]">
+                        {statusLabel(campaign.status)}
+                      </Badge>
+                    </div>
 
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      {campaign.isSecretBallot ? (
-                        <>
-                          <Lock className="h-3 w-3 text-brand-navy dark:text-brand-cyan" />
-                          <span>Phiếu kín</span>
-                        </>
-                      ) : campaign.source === "EVENT" ? (
-                        <>
-                          <QrCode className="h-3 w-3 text-primary" />
-                          <span>Gắn sự kiện</span>
-                        </>
-                      ) : (
-                        <>
-                          <Globe className="h-3 w-3 text-brand-cyan" />
-                          <span>Độc lập</span>
-                        </>
-                      )}
-                    </span>
-                    <span className="tabular-mono">
-                      {campaign.expectedVoters
-                        ? `Đã bỏ phiếu: ${campaign.voterCount}/${campaign.expectedVoters}`
-                        : `Đã bỏ phiếu: ${campaign.voterCount}`}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        {campaign.isSecretBallot ? (
+                          <>
+                            <Lock className="h-3 w-3 text-brand-navy dark:text-brand-cyan" />
+                            <span>Phiếu kín</span>
+                          </>
+                        ) : campaign.source === "EVENT" ? (
+                          <>
+                            <QrCode className="h-3 w-3 text-primary" />
+                            <span>Gắn sự kiện</span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe className="h-3 w-3 text-brand-cyan" />
+                            <span>Độc lập</span>
+                          </>
+                        )}
+                      </span>
+                      <span className="tabular-mono">
+                        {campaign.expectedVoters
+                          ? `Đã bỏ phiếu: ${campaign.voterCount}/${campaign.expectedVoters}`
+                          : `Đã bỏ phiếu: ${campaign.voterCount}`}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </CardContent>
         </Card>
 
         {/* Right Column: Active Campaign Control & Content */}
         <div className="space-y-4 lg:col-span-8">
-          {/* Active Campaign Control Header */}
-          <Card>
-            <CardHeader className="space-y-3 pb-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Badge variant={statusBadgeVariant(activeCampaign.status)}>
-                    {statusLabel(activeCampaign.status)}
-                  </Badge>
-                  <Badge variant={activeCampaign.source === "EVENT" ? "warning" : "info"} className="gap-1">
-                    {activeCampaign.source === "EVENT" ? (
-                      <QrCode className="h-3 w-3" />
-                    ) : (
-                      <Globe className="h-3 w-3" />
-                    )}
-                    <span>
-                      {activeCampaign.source === "EVENT"
-                        ? "Gắn sự kiện · Cần điểm danh"
-                        : "Chiến dịch độc lập"}
-                    </span>
-                  </Badge>
-                  {activeCampaign.isSecretBallot && (
-                    <VerifiedBadge label="Bỏ phiếu Kín · Outbox Shuffle" />
-                  )}
-                  <Badge variant="outline" className="tabular-mono">
-                    PIN: {activeCampaign.pin.slice(0, 3)} {activeCampaign.pin.slice(3, 6)}
-                  </Badge>
+          {!activeCampaign ? (
+            <Card>
+              <CardContent className="space-y-3 px-6 py-12 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Chưa có chiến dịch bình chọn nào được khởi tạo
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Tạo chiến dịch độc lập mới hoặc bật hoạt động Bình chọn khi tạo sự kiện để bắt đầu điều hành.
+                </p>
+                <div>
+                  <Button type="button" size="sm" className="rounded-full" onClick={() => setCreateOpen(true)}>
+                    <Plus className="h-4 w-4" />
+                    <span>Tạo chiến dịch độc lập</span>
+                  </Button>
                 </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Active Campaign Control Header */}
+              <Card>
+                <CardHeader className="space-y-3 pb-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant={statusBadgeVariant(activeCampaign.status)}>
+                        {statusLabel(activeCampaign.status)}
+                      </Badge>
+                      <Badge variant={activeCampaign.source === "EVENT" ? "warning" : "info"} className="gap-1">
+                        {activeCampaign.source === "EVENT" ? (
+                          <QrCode className="h-3 w-3" />
+                        ) : (
+                          <Globe className="h-3 w-3" />
+                        )}
+                        <span>
+                          {activeCampaign.source === "EVENT"
+                            ? "Gắn sự kiện · Cần điểm danh"
+                            : "Chiến dịch độc lập"}
+                        </span>
+                      </Badge>
+                      {activeCampaign.isSecretBallot && (
+                        <VerifiedBadge label="Bỏ phiếu Kín · Outbox Shuffle" />
+                      )}
+                      <Badge variant="outline" className="tabular-mono">
+                        PIN:{" "}
+                        {activeCampaign.pin
+                          ? `${activeCampaign.pin.slice(0, 3)} ${activeCampaign.pin.slice(3, 6)}`
+                          : "--- ---"}
+                      </Badge>
+                    </div>
 
                 {activeCampaign.eventId && !embeddedEventId && (
                   <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground">
@@ -873,6 +915,8 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
               </TabsContent>
             )}
           </Tabs>
+            </>
+          )}
         </div>
       </div>
 
@@ -884,7 +928,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
             <DialogDescription>
               Bạn có chắc chắn muốn xóa phương án{" "}
               <strong className="text-foreground">{deleteCandTarget?.name}</strong> khỏi chiến dịch{" "}
-              <strong className="text-foreground">{activeCampaign.title}</strong>?
+              <strong className="text-foreground">{activeCampaign?.title ?? ""}</strong>?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -953,7 +997,7 @@ export function VotingAdminPage({ embeddedEventId } = {}) {
         onOpenChange={(o) => !o && setAuditModal(null)}
         title={auditModal?.title ?? ""}
         description={auditModal?.description ?? ""}
-        targetSummary={auditModal?.targetSummary ?? activeCampaign.title}
+        targetSummary={auditModal?.targetSummary ?? activeCampaign?.title ?? ""}
         actionCode={auditModal?.code ?? "VOTING_AUDIT"}
         destructive={auditModal?.destructive ?? false}
         onConfirm={() => {

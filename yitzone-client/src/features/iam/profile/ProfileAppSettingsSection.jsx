@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlertCircle,
   BellRing,
   Bot,
   CalendarDays,
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { subscribeWebPush, useVapidPublicKey } from "@/features/pwa/api";
+import { extractApiErrorMessage } from "@/lib/api-client";
 
 const INITIAL_CHANNELS = [
   {
@@ -47,22 +49,18 @@ const INITIAL_CHANNELS = [
   }
 ];
 
-const INITIAL_QUEUE = [
-  {
-    id: "oq-1",
-    title: "Phiếu khảo sát sau Check-out · Cloud Native 2026",
-    policyNote: "Hợp lệ gửi bù trong vòng 24 giờ sau sự kiện",
-    queuedAt: "11:32 · Ngoại tuyến",
-    status: "PENDING"
-  },
-  {
-    id: "oq-2",
-    title: "Câu hỏi Live Q&A #482910",
-    policyNote: "Nếu đồng bộ sau giờ sẽ lưu mục \"Gửi sau sự kiện\"",
-    queuedAt: "11:34 · Ngoại tuyến",
-    status: "PENDING"
+const INITIAL_QUEUE = [];
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
   }
-];
+  return outputArray;
+}
 
 function ToggleSwitch({ checked, onChange, label }) {
   return (
@@ -79,6 +77,7 @@ export function ProfileAppSettingsSection({ accountHealth, onUpdateAccountHealth
   const [channels, setChannels] = useState(INITIAL_CHANNELS);
   const [queue, setQueue] = useState(INITIAL_QUEUE);
   const [syncNotice, setSyncNotice] = useState(null);
+  const [pushError, setPushError] = useState(null);
   const { data: vapidData } = useVapidPublicKey();
 
   const pendingCount = queue.filter((q) => q.status === "PENDING").length;
@@ -90,24 +89,71 @@ export function ProfileAppSettingsSection({ accountHealth, onUpdateAccountHealth
   };
 
   const enablePush = async () => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      try {
-        await Notification.requestPermission();
-      } catch {
-        // Fallback for sandboxed browsers
-      }
+    setSyncNotice(null);
+    setPushError(null);
+
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setPushError("Trình duyệt hiện tại không hỗ trợ API thông báo đẩy Web Push.");
+      return;
     }
+
     try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushError("Bạn chưa cấp quyền thông báo trên trình duyệt. Vui lòng cho phép Notification để tiếp tục.");
+        return;
+      }
+    } catch {
+      setPushError("Không thể yêu cầu quyền thông báo trên trình duyệt hiện tại.");
+      return;
+    }
+
+    if (!vapidData?.publicKey) {
+      setPushError(
+        "Máy chủ chưa cung cấp khóa VAPID công khai để đăng ký Web Push. Vui lòng thử lại khi dịch vụ thông báo sẵn sàng."
+      );
+      return;
+    }
+
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setPushError("Thiết bị hoặc trình duyệt chưa kích hoạt Service Worker / PushManager.");
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const existingSub = await registration.pushManager.getSubscription();
+      const subscription =
+        existingSub ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey)
+        }));
+      const subJson = subscription.toJSON();
+      if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {
+        setPushError("Không đọc được khóa mã hóa từ đăng ký PushManager của trình duyệt.");
+        return;
+      }
+
       await subscribeWebPush({
-        endpoint: "https://fcm.googleapis.com/fcm/send/yitzone-pwa-client",
-        keys: { p256dh: vapidData?.publicKey || "demo-p256dh", auth: "demo-auth" },
+        endpoint: subJson.endpoint,
+        keys: {
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth
+        },
         deviceName: navigator.userAgent.slice(0, 64)
       });
+
       setSyncNotice("Đã đăng ký nhận thông báo đẩy Web Push thành công trên thiết bị này.");
-    } catch {
-      setSyncNotice("Đã bật thông báo đẩy Web Push trên trình duyệt này.");
+      onUpdateAccountHealth({ pushEnabled: true });
+    } catch (err) {
+      setPushError(
+        extractApiErrorMessage(
+          err,
+          "Không thể hoàn tất đăng ký Web Push với máy chủ. Vui lòng thử lại sau."
+        )
+      );
     }
-    onUpdateAccountHealth({ pushEnabled: true });
   };
 
   const syncAllNow = () => {
@@ -131,7 +177,6 @@ export function ProfileAppSettingsSection({ accountHealth, onUpdateAccountHealth
         </Badge>
       </section>
 
-      {/* Notification Channel Preferences */}
       <Card className="overflow-hidden rounded-[22px]">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -182,7 +227,6 @@ export function ProfileAppSettingsSection({ accountHealth, onUpdateAccountHealth
         </CardContent>
       </Card>
 
-      {/* PWA & Web Push Setup */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -213,6 +257,16 @@ export function ProfileAppSettingsSection({ accountHealth, onUpdateAccountHealth
             </Button>
           </div>
 
+          {pushError && (
+            <div
+              role="alert"
+              className="flex items-center gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-xs text-status-danger"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{pushError}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-3">
             <Link
               to="/scanner"
@@ -239,7 +293,6 @@ export function ProfileAppSettingsSection({ accountHealth, onUpdateAccountHealth
         </CardContent>
       </Card>
 
-      {/* Offline Queue */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -258,23 +311,29 @@ export function ProfileAppSettingsSection({ accountHealth, onUpdateAccountHealth
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ul className="divide-y divide-border rounded-md border border-border">
-            {queue.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center"
-              >
-                <div className="space-y-0.5">
-                  <div className="text-sm font-medium text-foreground">{item.title}</div>
-                  <p className="text-xs text-muted-foreground">{item.policyNote}</p>
-                  <span className="tabular-mono text-[11px] text-muted-foreground">{item.queuedAt}</span>
-                </div>
-                <Badge variant={item.status === "SYNCED" ? "success" : "warning"} className="self-start sm:self-center">
-                  {item.status === "SYNCED" ? "Đã đồng bộ" : "Chờ mạng"}
-                </Badge>
-              </li>
-            ))}
-          </ul>
+          {queue.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border bg-muted/20 p-5 text-center text-xs text-muted-foreground">
+              Hàng đợi ngoại tuyến đang trống — mọi thao tác trên thiết bị đã được đồng bộ.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {queue.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-col justify-between gap-2 px-4 py-3 sm:flex-row sm:items-center"
+                >
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-medium text-foreground">{item.title}</div>
+                    <p className="text-xs text-muted-foreground">{item.policyNote}</p>
+                    <span className="tabular-mono text-[11px] text-muted-foreground">{item.queuedAt}</span>
+                  </div>
+                  <Badge variant={item.status === "SYNCED" ? "success" : "warning"} className="self-start sm:self-center">
+                    {item.status === "SYNCED" ? "Đã đồng bộ" : "Chờ mạng"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
 
           {syncNotice && (
             <div

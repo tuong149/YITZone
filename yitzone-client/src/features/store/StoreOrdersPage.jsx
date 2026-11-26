@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -37,6 +37,8 @@ export function StoreOrdersPage() {
   const [supportType, setSupportType] = useState("CHANGE_SIZE");
   const [supportReason, setSupportReason] = useState("");
   const [notice, setNotice] = useState(null);
+  const [uploadingReceiptOrder, setUploadingReceiptOrder] = useState(null);
+  const receiptInputRef = useRef(null);
 
   const handleSubmitSupport = () => {
     if (!supportOrder || supportReason.trim().length < 8) return;
@@ -86,6 +88,23 @@ export function StoreOrdersPage() {
           </button>
         </div>
       )}
+
+      <input
+        ref={receiptInputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && uploadingReceiptOrder) {
+            setNotice(
+              `Đã đính kèm biên lai "${file.name}" cho đơn ${uploadingReceiptOrder.code} (chờ Thủ quỹ đối chiếu sao kê).`
+            );
+          }
+          setUploadingReceiptOrder(null);
+          e.target.value = "";
+        }}
+      />
 
       {orders.length === 0 ? (
         <Card className="rounded-[20px]">
@@ -147,7 +166,8 @@ export function StoreOrdersPage() {
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span>
                     CHỜ THU TIỀN KHI GIAO —{" "}
-                    <span className="tabular-mono">{formatVnd(ord.total)}</span>{ord.deadlineNote}
+                    <span className="tabular-mono">{formatVnd(ord.total)}</span>
+                    {ord.deadlineNote ? ` · ${ord.deadlineNote}` : ""}
                   </span>
                 </div>
               )}
@@ -181,9 +201,10 @@ export function StoreOrdersPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() =>
-                      setNotice(`Đã tải ảnh biên lai tham chiếu cho đơn ${ord.code} (Thủ quỹ đối chiếu sao kê).`)
-                    }
+                    onClick={() => {
+                      setUploadingReceiptOrder(ord);
+                      receiptInputRef.current?.click();
+                    }}
                   >
                     <Upload className="h-3.5 w-3.5" />
                     <span>Tải ảnh biên lai (Tham chiếu)</span>

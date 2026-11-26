@@ -24,53 +24,73 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { mergeStoredAndApiEvents, useEvents } from "@/features/events/api";
 import { useHidBarcodeScanner } from "@/hooks/useHidBarcodeScanner";
 import { apiClient, extractApiErrorMessage } from "@/lib/api-client";
 import { clearSyncedScansOnly, offlineDb, wipeExpiredOfflineBundles } from "@/lib/offline-db";
 import { useEventStore } from "@/stores/event-store";
 
-const FALLBACK_EVENTS = [
-  {
-    id: "EVT-2026-CLOUD",
-    label: "Hội thảo Cloud Native & DevOps 2026",
-    sessions: [{ id: "SESSION-MORNING", label: "Buổi 1 · Khai mạc & Chuyên đề chính" }]
-  }
-];
-
 export function OfflineScannerPage() {
   const [searchParams] = useSearchParams();
+  const queryEventId = searchParams.get("eventId") ?? "";
+  const querySessionId = searchParams.get("sessionId") ?? "";
+
   const storedEvents = useEventStore((s) => s.events);
+  const { data: apiEventsData } = useEvents();
+  const allEvents = useMemo(
+    () => mergeStoredAndApiEvents(storedEvents, apiEventsData),
+    [storedEvents, apiEventsData]
+  );
 
   const eventOptions = useMemo(() => {
-    if (storedEvents.length === 0) return FALLBACK_EVENTS;
-    return storedEvents.map((evt) => ({
+    const mapped = allEvents.map((evt) => ({
       id: evt.id,
       label: evt.title,
       sessions:
-        evt.sessions.length > 0
+        (evt.sessions ?? []).length > 0
           ? evt.sessions.map((ses) => ({
               id: ses.id,
-              label: ses.name || `Buổi ${ses.step}`
+              label: ses.name || `Buổi ${ses.step ?? ""}`.trim()
             }))
           : [{ id: "SESSION-1", label: "Phiên chính" }]
     }));
-  }, [storedEvents]);
+
+    if (queryEventId && !mapped.some((e) => e.id === queryEventId)) {
+      mapped.unshift({
+        id: queryEventId,
+        label: `Sự kiện (${queryEventId})`,
+        sessions: [
+          {
+            id: querySessionId || "SESSION-1",
+            label: querySessionId ? `Phiên ${querySessionId}` : "Phiên chính"
+          }
+        ]
+      });
+    }
+
+    return mapped;
+  }, [allEvents, queryEventId, querySessionId]);
 
   const [eventId, setEventId] = useState(
-    () => searchParams.get("eventId") ?? eventOptions[0].id
+    () => queryEventId || eventOptions[0]?.id || ""
   );
   const selectedEvent = useMemo(
-    () => eventOptions.find((e) => e.id === eventId) ?? eventOptions[0],
+    () => eventOptions.find((e) => e.id === eventId) ?? eventOptions[0] ?? null,
     [eventOptions, eventId]
   );
 
   const [sessionId, setSessionId] = useState(
-    () => searchParams.get("sessionId") ?? selectedEvent.sessions[0].id
+    () => querySessionId || selectedEvent?.sessions?.[0]?.id || ""
   );
   const activeSession = useMemo(
-    () => selectedEvent.sessions.find((s) => s.id === sessionId) ?? selectedEvent.sessions[0],
+    () =>
+      selectedEvent?.sessions?.find((s) => s.id === sessionId) ??
+      selectedEvent?.sessions?.[0] ??
+      null,
     [selectedEvent, sessionId]
   );
+
+  const canScan = Boolean(selectedEvent && activeSession);
 
   const [hidEnabled, setHidEnabled] = useState(true);
   const [inputFocused, setInputFocused] = useState(false);
@@ -108,13 +128,13 @@ export function OfflineScannerPage() {
   const syncedCount = queuedScans.length - pendingCount;
 
   const reloadQueue = useCallback(async () => {
-    const [items, bundle] = await Promise.all([
-      offlineDb.offlineScanQueue.reverse().limit(50).toArray(),
-      offlineDb.offlineBundles.get(selectedEvent.id)
-    ]);
+    const items = await offlineDb.offlineScanQueue.reverse().limit(50).toArray();
+    const bundle = selectedEvent?.id
+      ? await offlineDb.offlineBundles.get(selectedEvent.id)
+      : undefined;
     setQueuedScans(items);
     setClockOffsetMs(bundle?.clockOffsetMs ?? 0);
-  }, [selectedEvent.id]);
+  }, [selectedEvent?.id]);
 
   useEffect(() => {
     void reloadQueue();
@@ -130,6 +150,11 @@ export function OfflineScannerPage() {
 
   const recordBarcodeScan = useCallback(
     async (studentCode) => {
+      if (!selectedEvent || !activeSession) {
+        setScanError("Vui lòng chọn sự kiện và buổi điểm danh trước khi quét thẻ.");
+        return;
+      }
+
       setScanError(null);
       setStatusMessage(null);
 
@@ -144,23 +169,48 @@ export function OfflineScannerPage() {
           tone: "ERROR",
           title: "TRÙNG LẶP — ĐÃ QUÉT TRƯỚC ĐÓ",
           studentCode,
-          studentName: `Sinh viên ${studentCode}`,
-          majorLabel: "Khoa Công nghệ Thông tin",
+          studentName: `Sinh viên (${studentCode})`,
+          majorLabel: "Bản ghi trùng trong hàng đợi hiện trường",
           detail: dupMsg
         });
         return;
       }
 
-      const isWalkIn = studentCode.endsWith("9");
+      const bundle = await offlineDb.offlineBundles.get(selectedEvent.id);
+      const roster = Array.isArray(bundle?.roster) ? bundle.roster : [];
+      const matchedStudent = roster.find(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          (item.studentCode === studentCode || item.mssv === studentCode)
+      );
+
       setLastScanned(studentCode);
-      setScanResultBanner({
-        tone: isWalkIn ? "WALKIN" : "VALID",
-        title: isWalkIn ? "VÃNG LAI (WALK-IN) — GHI NHẬN CHỜ HẬU KIỂM 48H" : "HỢP LỆ — ĐÃ XÁC THỰC THẺ SINH VIÊN",
-        studentCode,
-        studentName: isWalkIn ? `Sinh viên Vãng lai (${studentCode})` : `Nguyễn Minh Khôi (${studentCode})`,
-        majorLabel: isWalkIn ? "Chưa có trong danh sách ĐK trước · Cờ hậu kiểm" : "K22 Công nghệ Phần mềm · Đã đăng ký chính thức",
-        detail: `${selectedEvent.label} · ${activeSession.label}`
-      });
+      if (matchedStudent) {
+        setScanResultBanner({
+          tone: "VALID",
+          title: "HỢP LỆ — ĐÃ XÁC THỰC TRONG DANH SÁCH ĐĂNG KÝ",
+          studentCode,
+          studentName: `${matchedStudent.fullName || matchedStudent.name || "Sinh viên"} (${studentCode})`,
+          majorLabel:
+            matchedStudent.major ||
+            matchedStudent.facultyMajor ||
+            "Đã đối chiếu gói danh sách ngoại tuyến",
+          detail: `${selectedEvent.label} · ${activeSession.label}`
+        });
+      } else {
+        setScanResultBanner({
+          tone: bundle ? "WALKIN" : "VALID",
+          title: bundle
+            ? "GHI NHẬN VÃNG LAI — CHỜ HẬU KIỂM MÁY CHỦ"
+            : "ĐÃ GHI NHẬN VÀO HÀNG ĐỢI NGOẠI TUYẾN",
+          studentCode,
+          studentName: `Sinh viên (${studentCode})`,
+          majorLabel: "Đã ghi nhận vào hàng đợi ngoại tuyến · Chờ đối chiếu máy chủ",
+          detail: `${selectedEvent.label} · ${activeSession.label}`
+        });
+      }
+
       await offlineDb.offlineScanQueue.add({
         eventId: selectedEvent.id,
         sessionId: activeSession.id,
@@ -172,11 +222,11 @@ export function OfflineScannerPage() {
       });
       await reloadQueue();
     },
-    [selectedEvent.id, activeSession.id, activeSession.label, clockOffsetMs, reloadQueue]
+    [selectedEvent, activeSession, clockOffsetMs, reloadQueue]
   );
 
   useHidBarcodeScanner({
-    enabled: hidEnabled,
+    enabled: hidEnabled && canScan,
     maxCharIntervalMs: 50,
     onScan: (studentCode) => {
       void recordBarcodeScan(studentCode);
@@ -188,6 +238,10 @@ export function OfflineScannerPage() {
 
   const handleManualSubmit = async (e) => {
     e.preventDefault();
+    if (!canScan) {
+      setScanError("Chưa có sự kiện nào được chọn để soát vé.");
+      return;
+    }
     const normalized = manualMssv.trim();
     if (!/^[0-9]{8}$/.test(normalized)) {
       setScanError("MSSV phải gồm đúng 8 chữ số.");
@@ -206,6 +260,7 @@ export function OfflineScannerPage() {
   };
 
   const startCameraScanner = async () => {
+    if (!canScan) return;
     setCameraError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError("Thiết bị không hỗ trợ camera hoặc chưa cấp quyền HTTPS. Vui lòng dùng súng HID hoặc nhập MSSV 8 số.");
@@ -253,7 +308,6 @@ export function OfflineScannerPage() {
         return;
       }
 
-      // Group pending scans by eventId so each event syncs to its own endpoint
       const byEvent = new Map();
       for (const item of pending) {
         const list = byEvent.get(item.eventId) ?? [];
@@ -270,7 +324,6 @@ export function OfflineScannerPage() {
           .filter((k) => typeof k === "number");
         if (keys.length === 0) continue;
 
-        // Reuse existing batchId across retries so server deduplicates idempotently
         const batchId = records.find((r) => r.batchId)?.batchId ?? `BATCH-${crypto.randomUUID()}`;
         await offlineDb.offlineScanQueue.where("localSeq").anyOf(keys).modify({ batchId });
 
@@ -352,6 +405,7 @@ export function OfflineScannerPage() {
             size="sm"
             variant={hidEnabled ? "default" : "outline"}
             className="rounded-xl"
+            disabled={!canScan}
             onClick={() => setHidEnabled((v) => !v)}
           >
             <Barcode className="h-4 w-4" />
@@ -406,15 +460,20 @@ export function OfflineScannerPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="scanner-event-select">Sự kiện đang soát vé</Label>
                 <Select
-                  value={selectedEvent.id}
+                  value={selectedEvent?.id ?? ""}
+                  disabled={eventOptions.length === 0}
                   onValueChange={(nextEventId) => {
                     setEventId(nextEventId);
                     const matched = eventOptions.find((opt) => opt.id === nextEventId);
-                    if (matched?.sessions[0]) setSessionId(matched.sessions[0].id);
+                    setSessionId(matched?.sessions?.[0]?.id ?? "");
                   }}
                 >
                   <SelectTrigger id="scanner-event-select" className="rounded-xl">
-                    <SelectValue />
+                    <SelectValue
+                      placeholder={
+                        eventOptions.length === 0 ? "Chưa có sự kiện" : "Chọn sự kiện"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {eventOptions.map((opt) => (
@@ -427,12 +486,18 @@ export function OfflineScannerPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="scanner-session-select">Buổi / Phiên điểm danh</Label>
-                <Select value={activeSession.id} onValueChange={setSessionId}>
+                <Select
+                  value={activeSession?.id ?? ""}
+                  disabled={!selectedEvent || selectedEvent.sessions.length === 0}
+                  onValueChange={setSessionId}
+                >
                   <SelectTrigger id="scanner-session-select" className="rounded-xl">
-                    <SelectValue />
+                    <SelectValue
+                      placeholder={!selectedEvent ? "Chưa có phiên" : "Chọn phiên"}
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {selectedEvent.sessions.map((ses) => (
+                    {(selectedEvent?.sessions ?? []).map((ses) => (
                       <SelectItem key={ses.id} value={ses.id}>
                         {ses.label}
                       </SelectItem>
@@ -442,17 +507,28 @@ export function OfflineScannerPage() {
               </div>
             </div>
 
+            {!canScan && (
+              <div className="flex items-start gap-2.5 rounded-xl border border-dashed border-border bg-muted/30 px-3.5 py-3 text-xs text-muted-foreground">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>
+                  Chưa có sự kiện nào đang mở để soát vé. Hãy khởi tạo hoặc mở từ trang điều hành sự kiện để bắt đầu quét thẻ.
+                </span>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-muted/40 px-3.5 py-2.5 text-xs text-muted-foreground">
               <Badge
-                variant={hidEnabled && !inputFocused ? "success" : "warning"}
+                variant={canScan && hidEnabled && !inputFocused ? "success" : "warning"}
                 className="gap-1 rounded-full text-[11px]"
               >
                 <Radio className="h-3 w-3" />
-                {!hidEnabled
-                  ? "Súng quét HID đã tắt"
-                  : inputFocused
-                    ? "Tạm dừng HID (đang nhập liệu)"
-                    : "Đang nghe máy quét HID"}
+                {!canScan
+                  ? "Chờ chọn sự kiện"
+                  : !hidEnabled
+                    ? "Súng quét HID đã tắt"
+                    : inputFocused
+                      ? "Tạm dừng HID (đang nhập liệu)"
+                      : "Đang nghe máy quét HID"}
               </Badge>
               <span className="inline-flex items-center gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 text-primary" />
@@ -493,6 +569,7 @@ export function OfflineScannerPage() {
                   type="button"
                   size="sm"
                   variant="outline"
+                  disabled={!canScan}
                   onClick={() => void startCameraScanner()}
                   className="shrink-0 rounded-xl bg-card"
                 >
@@ -514,15 +591,20 @@ export function OfflineScannerPage() {
                 inputMode="numeric"
                 pattern="[0-9]*"
                 maxLength={8}
+                disabled={!canScan}
                 value={manualMssv}
                 onChange={(e) => setManualMssv(e.target.value)}
                 onFocus={() => setInputFocused(true)}
                 onBlur={() => setInputFocused(false)}
-                placeholder="Nhập MSSV 8 số (VD: 22110123)"
+                placeholder="Nhập MSSV 8 số (VD: 23110001)"
                 className="tabular-mono h-12 flex-1 rounded-xl text-base sm:h-11 sm:text-sm"
                 aria-label="Mã số sinh viên 8 chữ số"
               />
-              <Button type="submit" className="h-12 w-full shrink-0 rounded-xl px-6 sm:h-11 sm:w-auto">
+              <Button
+                type="submit"
+                disabled={!canScan}
+                className="h-12 w-full shrink-0 rounded-xl px-6 sm:h-11 sm:w-auto"
+              >
                 Ghi nhận
               </Button>
             </form>

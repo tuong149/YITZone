@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
+  AlertCircle,
   CheckCircle2,
   Download,
   FileJson,
@@ -13,45 +14,69 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requestPersonalDataExport } from "@/features/iam/api";
+import { loadOnboardingState } from "@/features/iam/data/onboarding-storage";
+import { extractApiErrorMessage } from "@/lib/api-client";
+import { useAuthStore } from "@/stores/auth-store";
 
-const INITIAL_CONSENTS = [
-  {
-    id: "cs-1",
-    type: "Xử lý Dữ liệu Cá nhân Cơ bản",
-    policyVersion: "v2.2.1 · Luật 91/2025/QH15",
-    consentedAt: "2026-09-05 08:12",
-    note: "Phục vụ định danh MSSV, điểm danh sự kiện và cấp E-Certificate."
-  },
-  {
-    id: "cs-2",
-    type: "Đối chiếu Ảnh thẻ Sinh viên tại Quầy Soát vé",
-    policyVersion: "v2.2.1 · NĐ 356/2025",
-    consentedAt: "2026-09-10 14:20",
-    note: "Chỉ hiển thị cho Lễ tân được phân quyền soát vé khi kiểm tra thẻ sinh viên vật lý."
-  },
-  {
-    id: "cs-3",
-    type: "Tương tác Trợ lý Ảo YITBot & Gợi ý CV (Khử định danh)",
-    policyVersion: "v2.2.1 · NĐ 330/2026",
-    consentedAt: "2026-10-01 19:05",
-    note: "Payload gửi LLM luôn đi qua lớp khử định danh PII Redactor."
-  }
-];
+export function ProfilePrivacySection({ userId: propUserId }) {
+  const storeUserId = useAuthStore((s) => s.userId);
+  const effectiveUserId = propUserId || storeUserId || "";
 
-export function ProfilePrivacySection() {
+  const consents = useMemo(() => {
+    const saved = loadOnboardingState(effectiveUserId);
+    if (!saved?.consents) return [];
+    const at = saved.completedAt || saved.updatedAt;
+    const formattedAt = at ? new Date(at).toLocaleString("vi-VN") : "Đã xác nhận";
+    const items = [];
+    if (saved.consents.pdplBasic) {
+      items.push({
+        id: "cs-pdpl",
+        type: "Xử lý Dữ liệu Cá nhân Cơ bản",
+        policyVersion: "Luật 91/2025/QH15",
+        consentedAt: formattedAt,
+        note: "Phục vụ định danh MSSV, điểm danh sự kiện và cấp E-Certificate."
+      });
+    }
+    if (saved.consents.photoCheckin) {
+      items.push({
+        id: "cs-photo",
+        type: "Đối chiếu Ảnh thẻ Sinh viên tại Quầy Soát vé",
+        policyVersion: "NĐ 356/2025",
+        consentedAt: formattedAt,
+        note: "Chỉ hiển thị cho Lễ tân được phân quyền soát vé khi kiểm tra thẻ sinh viên vật lý."
+      });
+    }
+    if (saved.consents.yitbotDeidentified) {
+      items.push({
+        id: "cs-yitbot",
+        type: "Tương tác Trợ lý Ảo YITBot & Gợi ý CV (Khử định danh)",
+        policyVersion: "NĐ 330/2026",
+        consentedAt: formattedAt,
+        note: "Payload gửi LLM luôn đi qua lớp khử định danh PII Redactor."
+      });
+    }
+    return items;
+  }, [effectiveUserId]);
+
   const [exportNotice, setExportNotice] = useState(null);
+  const [exportError, setExportError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletionSubmitted, setDeletionSubmitted] = useState(null);
 
   const handleExport = async (format) => {
+    setExportNotice(null);
+    setExportError(null);
     try {
       const res = await requestPersonalDataExport();
       setExportNotice(
-        `Đã khởi tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format} cho tài khoản ${res.userId}.`
+        `Đã khởi tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format} cho tài khoản ${res.userId ?? effectiveUserId}.`
       );
-    } catch {
-      setExportNotice(
-        `Đã tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format}. Bạn có thể tải về từ mục Thông báo.`
+    } catch (err) {
+      setExportError(
+        extractApiErrorMessage(
+          err,
+          "Không thể khởi tạo yêu cầu xuất bản sao dữ liệu cá nhân. Vui lòng thử lại sau."
+        )
       );
     }
   };
@@ -72,7 +97,6 @@ export function ProfilePrivacySection() {
         </Badge>
       </section>
 
-      {/* Consent Records */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -84,29 +108,34 @@ export function ProfilePrivacySection() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <ul className="divide-y divide-border border-t border-border">
-            {INITIAL_CONSENTS.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col justify-between gap-2 px-5 py-4 sm:flex-row sm:items-center"
-              >
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-foreground">{item.type}</div>
-                  <p className="text-xs text-muted-foreground">{item.note}</p>
-                  <div className="tabular-mono text-[11px] text-muted-foreground">
-                    {item.policyVersion} · Xác nhận lúc {item.consentedAt}
+          {consents.length === 0 ? (
+            <div className="border-t border-border p-6 text-center text-xs text-muted-foreground">
+              Chưa có bản ghi đồng ý xử lý dữ liệu nào được lưu trong phiên hiện tại.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border border-t border-border">
+              {consents.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-col justify-between gap-2 px-5 py-4 sm:flex-row sm:items-center"
+                >
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-foreground">{item.type}</div>
+                    <p className="text-xs text-muted-foreground">{item.note}</p>
+                    <div className="tabular-mono text-[11px] text-muted-foreground">
+                      {item.policyVersion} · Xác nhận lúc {item.consentedAt}
+                    </div>
                   </div>
-                </div>
-                <Badge variant="success" className="self-start sm:self-center">
-                  Đang hiệu lực
-                </Badge>
-              </li>
-            ))}
-          </ul>
+                  <Badge variant="success" className="self-start sm:self-center">
+                    Đang hiệu lực
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 
-      {/* Data Export */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -137,10 +166,18 @@ export function ProfilePrivacySection() {
               <span>{exportNotice}</span>
             </div>
           )}
+          {exportError && (
+            <div
+              role="alert"
+              className="flex items-center gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-xs text-status-danger"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{exportError}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Account Deletion */}
       <Card className="rounded-[22px] border-status-danger/35">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base text-status-danger">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CheckCircle2,
@@ -16,36 +16,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEventStore } from "@/stores/event-store";
 
-const PROGRAMS = [
-  "Đêm Gala Chào Tân Sinh viên FIT 2026",
-  "Lễ Tổng kết & Tuyên dương Sinh viên 5 tốt 2026"
-];
-
-const INITIAL_ACTS = [
-  {
-    id: "ART-01",
-    order: 1,
-    eventName: PROGRAMS[0],
-    title: "Mashup Tuổi trẻ Công nghệ",
-    genre: "Song/Tốp ca",
-    duration: "04:30",
-    sourceLabel: "01_MashupTuoiTre_Beat.wav · Link LED Drive",
-    performers: ["22110345 Nguyễn Minh Khôi", "23110112 Lê Ngọc Hân"],
-    status: "DA_CHOT"
-  },
-  {
-    id: "ART-02",
-    order: 2,
-    eventName: PROGRAMS[0],
-    title: "Cyber Pulse Choreography",
-    genre: "Nhảy hiện đại",
-    duration: "03:45",
-    sourceLabel: "02_CyberPulse_Beat.mp3",
-    performers: ["22110418 Trần Đức Thịnh", "24110088 Phạm Khánh Linh"],
-    status: "CHO_DUYET"
-  }
-];
+const INITIAL_ACTS = [];
 
 function slugify(input) {
   return input
@@ -56,7 +29,18 @@ function slugify(input) {
 }
 
 export function ArtsPortalPage() {
-  const [selectedProgram, setSelectedProgram] = useState(PROGRAMS[0]);
+  const events = useEventStore((s) => s.events);
+  const programs = useMemo(
+    () => events.map((e) => ({ id: e.id, title: e.title })),
+    [events]
+  );
+
+  const [selectedProgramId, setSelectedProgramId] = useState(() => programs[0]?.id ?? "");
+  const activeProgram = useMemo(
+    () => programs.find((p) => p.id === selectedProgramId) ?? programs[0] ?? null,
+    [programs, selectedProgramId]
+  );
+
   const [acts, setActs] = useState(INITIAL_ACTS);
   const [title, setTitle] = useState("");
   const [genre, setGenre] = useState("Đơn ca");
@@ -65,7 +49,13 @@ export function ArtsPortalPage() {
   const [performersText, setPerformersText] = useState("");
   const [feedback, setFeedback] = useState(null);
 
-  const visibleActs = acts.filter((a) => a.eventName === selectedProgram);
+  const visibleActs = useMemo(
+    () =>
+      activeProgram
+        ? acts.filter((a) => a.eventId === activeProgram.id || a.eventName === activeProgram.title)
+        : acts,
+    [acts, activeProgram]
+  );
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -73,13 +63,15 @@ export function ArtsPortalPage() {
     const nextOrder = visibleActs.length + 1;
     const prefix = String(nextOrder).padStart(2, "0");
     const slug = slugify(title.trim()) || "TietMuc";
+    const programLabel = activeProgram?.title ?? "Chương trình Văn nghệ Khoa CNTT";
 
     setActs((prev) => [
       ...prev,
       {
         id: `ART-${Date.now()}`,
         order: nextOrder,
-        eventName: selectedProgram,
+        eventId: activeProgram?.id ?? "",
+        eventName: programLabel,
         title: title.trim(),
         genre,
         duration: duration.trim() || "04:00",
@@ -94,7 +86,7 @@ export function ArtsPortalPage() {
     setTitle("");
     setSourceLink("");
     setPerformersText("");
-    setFeedback(`Đã nộp tiết mục #${prefix} cho chương trình "${selectedProgram}".`);
+    setFeedback(`Đã nộp tiết mục #${prefix} cho "${programLabel}".`);
   };
 
   return (
@@ -109,20 +101,26 @@ export function ArtsPortalPage() {
               Gửi danh sách tiết mục, file/link source nhạc nền &amp; video LED và danh sách sinh viên biểu diễn cho từng chương trình của Khoa.
             </p>
           </div>
-          <div className="w-full shrink-0 sm:w-80">
-            <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-              <SelectTrigger aria-label="Chọn chương trình">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PROGRAMS.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {programs.length > 0 && activeProgram ? (
+            <div className="w-full shrink-0 sm:w-80">
+              <Select value={activeProgram.id} onValueChange={setSelectedProgramId}>
+                <SelectTrigger aria-label="Chọn chương trình">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {programs.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <Badge variant="outline" className="w-fit rounded-full">
+              Chưa có chương trình sự kiện đang mở
+            </Badge>
+          )}
         </div>
       </section>
 
@@ -152,7 +150,7 @@ export function ArtsPortalPage() {
                   id="art-title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="VD: Giai điệu Tự hào FIT"
+                  placeholder="Nhập tên tiết mục biểu diễn..."
                 />
               </div>
 
@@ -189,7 +187,7 @@ export function ArtsPortalPage() {
                   id="art-source"
                   value={sourceLink}
                   onChange={(e) => setSourceLink(e.target.value)}
-                  placeholder="VD: https://drive.google.com/... hoặc Beat.wav"
+                  placeholder="Dán liên kết Google Drive hoặc tên tệp âm thanh..."
                 />
               </div>
 
@@ -199,11 +197,15 @@ export function ArtsPortalPage() {
                   id="art-cast"
                   value={performersText}
                   onChange={(e) => setPerformersText(e.target.value)}
-                  placeholder="VD: 22110418 Trần Đức Thịnh, 23110112 Lê Ngọc Hân"
+                  placeholder="Nhập MSSV và họ tên thành viên biểu diễn..."
                 />
               </div>
 
-              <Button type="submit" className="liquid-glass-btn-cobalt w-full rounded-full">
+              <Button
+                type="submit"
+                disabled={!title.trim()}
+                className="liquid-glass-btn-cobalt w-full rounded-full"
+              >
                 <Plus className="h-4 w-4" />
                 Nộp tiết mục
               </Button>

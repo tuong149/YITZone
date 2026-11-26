@@ -90,14 +90,14 @@ export function CmsAdminPage(){
   // Editorial review dialog (UC-CMS-02)
   const [reviewingArticle, setReviewingArticle] = useState(null);
   const [feedbackNote, setFeedbackNote] = useState("");
-  const [scheduleDatetime, setScheduleDatetime] = useState("2026-11-26T08:00");
+  const [scheduleDatetime, setScheduleDatetime] = useState("");
 
   // Unpublish audit dialog
   const [unpublishTarget, setUnpublishTarget] = useState(null);
 
   // Internal composer state (UC-CMS-01)
   const [draftTitle, setDraftTitle] = useState("");
-  const [draftCategoryId, setDraftCategoryId] = useState(categories[0]?.id ?? "cat-doan-hoi");
+  const [draftCategoryId, setDraftCategoryId] = useState(() => categories[0]?.id ?? "");
   const [draftTags, setDraftTags] = useState("Đoàn - Hội, FIT HCM-UTE");
   const [draftBody, setDraftBody] = useState("");
   const [draftCoverError, setDraftCoverError] = useState(null);
@@ -149,7 +149,7 @@ export function CmsAdminPage(){
   const handlePublishNow = (article) => {
     updateArticle(article.id, {
       status: "PUBLISHED",
-      publishedAt: "21/11/2026 · Vừa xuất bản",
+      publishedAt: `${new Date().toLocaleDateString("vi-VN")} · Vừa xuất bản`,
       scheduledAt: undefined,
       editorialNote: undefined
     });
@@ -158,7 +158,8 @@ export function CmsAdminPage(){
   };
 
   const handleSchedulePublish = (article) => {
-    const formatted = scheduleDatetime.replace("T", "");
+    if (!scheduleDatetime) return;
+    const formatted = scheduleDatetime.replace("T", " ");
     updateArticle(article.id, {
       status: "SCHEDULED",
       scheduledAt: formatted,
@@ -636,7 +637,7 @@ export function CmsAdminPage(){
                     <Label>Chuyên mục</Label>
                     <Select value={draftCategoryId} onValueChange={setDraftCategoryId}>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Chọn chuyên mục" />
                       </SelectTrigger>
                       <SelectContent>
                         {categories
@@ -848,6 +849,7 @@ export function CmsAdminPage(){
                 <Button
                   type="button"
                   variant="secondary"
+                  disabled={!scheduleDatetime}
                   onClick={() => handleSchedulePublish(reviewingArticle)}
                 >
                   <CalendarClock className="h-4 w-4" />

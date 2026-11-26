@@ -22,18 +22,28 @@ export function NewsDetailPage(){
   const articles = useCmsStore((s) => s.articles);
   const categories = useCmsStore((s) => s.categories);
 
-  const article =
-    articles.find((a) => a.slug === slug) ??
-    articles.find((a) => a.status === "PUBLISHED") ??
-    articles[0];
+  const article = slug ? articles.find((a) => a.slug === slug) : undefined;
 
   if (!article) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          Không tìm thấy bài viết yêu cầu.
-        </CardContent>
-      </Card>
+      <div className="mx-auto max-w-xl py-10">
+        <Card className="rounded-[24px]">
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <h1 className="font-display text-xl font-medium text-foreground">
+              Không tìm thấy bài viết
+            </h1>
+            <p className="max-w-md text-sm text-muted-foreground">
+              Bài viết bạn yêu cầu không tồn tại, chưa được xuất bản hoặc đã bị gỡ khỏi hệ thống.
+            </p>
+            <Button asChild variant="outline" size="sm" className="mt-2 rounded-full">
+              <Link to="/news">
+                <ArrowLeft className="h-4 w-4" />
+                <span>Quay lại Bản tin Blog</span>
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -115,7 +125,7 @@ export function NewsDetailPage(){
         </figure>
 
         <div className="space-y-5 text-[15px] leading-[1.7] text-foreground/90">
-          {article.sections.map((block, idx) => {
+          {(article.sections ?? []).map((block, idx) => {
             if (block.type === "heading") {
               return (
                 <h2
@@ -220,7 +230,7 @@ export function NewsDetailPage(){
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
-          {article.tags.map((tag) => (
+          {(article.tags ?? []).map((tag) => (
             <Badge key={tag} variant="secondary">
               #{tag}
             </Badge>
@@ -228,38 +238,40 @@ export function NewsDetailPage(){
         </div>
       </article>
 
-      <section className="space-y-4 border-t border-border pt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-xl font-medium text-foreground">Bài viết cùng chuyên trang</h2>
-          <Link to="/news" className="text-xs font-semibold text-primary hover:underline">
-            Xem tất cả
-          </Link>
-        </div>
+      {related.length > 0 && (
+        <section className="space-y-4 border-t border-border pt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-xl font-medium text-foreground">Bài viết cùng chuyên trang</h2>
+            <Link to="/news" className="text-xs font-semibold text-primary hover:underline">
+              Xem tất cả
+            </Link>
+          </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {related.map((item) => (
-            <Card key={item.id} className="transition-colors hover:border-primary/45">
-              <CardHeader className="pb-2">
-                <Badge variant="outline" className="w-fit">
-                  {categories.find((c) => c.id === item.categoryId)?.name ?? "Bản tin"}
-                </Badge>
-                <CardTitle className="mt-2 line-clamp-2 text-base leading-snug">
-                  <Link to={`/news/${item.slug}`} className="hover:text-primary">
-                    {item.title}
+          <div className="grid gap-4 md:grid-cols-3">
+            {related.map((item) => (
+              <Card key={item.id} className="transition-colors hover:border-primary/45">
+                <CardHeader className="pb-2">
+                  <Badge variant="outline" className="w-fit">
+                    {categories.find((c) => c.id === item.categoryId)?.name ?? "Bản tin"}
+                  </Badge>
+                  <CardTitle className="mt-2 line-clamp-2 text-base leading-snug">
+                    <Link to={`/news/${item.slug}`} className="hover:text-primary">
+                      {item.title}
+                    </Link>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="tabular-mono">{item.publishedAt}</span>
+                  <Link to={`/news/${item.slug}`} className="inline-flex items-center gap-1 font-semibold text-primary">
+                    <span>Đọc</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
                   </Link>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="tabular-mono">{item.publishedAt}</span>
-                <Link to={`/news/${item.slug}`} className="inline-flex items-center gap-1 font-semibold text-primary">
-                  <span>Đọc</span>
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

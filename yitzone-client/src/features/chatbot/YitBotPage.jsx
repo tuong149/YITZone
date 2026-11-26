@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { getAuthHeaders } from "@/lib/api-client";
-import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 
 const QUICK_PROMPTS = [
@@ -39,75 +38,13 @@ const QUICK_PROMPTS = [
 ];
 
 function parseSseDataLine(rawLine) {
-  const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1): rawLine;
+  const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
   if (!line.startsWith("data:")) return null;
-  return line.startsWith("data: ") ? line.slice(6): line.slice(5);
+  return line.startsWith("data: ") ? line.slice(6) : line.slice(5);
 }
 
-function buildLocalFallback(
-  question,
-  circuitBreakerOpen,
-  inOjContest,
-  userId
-) {
-  if (circuitBreakerOpen) {
-    return {
-      modeTag: "FAQ Tĩnh (Circuit Breaker)",
-      content:
-        "Ngân sách AI tháng hiện đã chạm ngưỡng trần — hệ thống tự động chuyển sang **Chế độ FAQ Tĩnh**:\n\n- **Quy chế SV5T:** Đạt đủ 5 tiêu chí (*Đạo đức, Học tập, Thể lực, Tình nguyện, Hội nhập*), không vi phạm kỷ luật.\n- **Điểm danh 48h:** Mọi khiếu nại điểm danh gửi trong vòng 48 giờ sau sự kiện.\n\nNếu cần giải đáp chuyên sâu hơn, vui lòng chuyển tiếp trực tiếp đến Ban Chấp hành.",
-      citations: [{ docTitle: "Kho FAQ Tĩnh Đoàn - Hội FIT", clause: "Mục 1–4", effective: "Đang hiệu lực" }]
-    };
-  }
-
-  const lower = question.toLowerCase();
-
-  if (lower.includes("oj") || lower.includes("dijkstra") || lower.includes("thuật toán") || lower.includes("biên dịch")) {
-    if (inOjContest) {
-      return {
-        modeTag: "Gợi ý OJ",
-        content:
-          "**Từ chối gợi ý:** Tài khoản của bạn đang tham gia một **Contest Online Judge** đang diễn ra. `YITBot` tạm khóa hỗ trợ thuật toán cho các bài thuộc Contest để đảm bảo công bằng."
-      };
-    }
-    return {
-      modeTag: "Gợi ý OJ",
-      content:
-        "Dưới đây là **gợi ý tư duy từng bước** (không in sẵn toàn bộ mã nguồn đáp án theo quy chế học thuật):\n\n1. Kiểm tra trọng số cạnh: đảm bảo mọi cạnh đều **không âm** trước khi áp dụng Dijkstra.\n2. Khởi tạo mảng `dist[v] = +∞`, riêng `dist[start] = 0` và đưa `(0, start)` vào `PriorityQueue` (Min-Heap).\n3. Khi lấy `(d, u)` từ hàng đợi, bỏ qua ngay nếu `d > dist[u]` để tránh duyệt lặp.\n4. Thử tự kiểm tra độ phức tạp `O((V + E) log V)` với test mẫu biên `N = 10^5`.",
-      citations: [{ docTitle: "Hướng dẫn Luyện tập OJ FIT", clause: "Chế độ Gợi ý Sư phạm", effective: "" }]
-    };
-  }
-
-  if (lower.includes("đrl") || lower.includes("ctxh") || lower.includes("quyền lợi") || lower.includes("đơn hàng") || lower.includes("của tôi")) {
-    const identity = userId ?? "22110418";
-    return {
-      modeTag: "Tra cứu Cá nhân",
-      content: `Kết quả tra cứu theo tài khoản đang đăng nhập (\`${identity}\`):\n\n- **Sự kiện đã ghi nhận quyền lợi (HK1 2026–2027):**\n  - *Hội thảo Cloud Native & DevOps 2026* — Đã cấp E-Cert · Nhãn quyền lợi: \`Cộng ĐRL\`, \`Cộng CĐDN\`\n  - *Ngày hội Tình nguyện Mùa Hè Xanh FIT* — Đã cấp E-Cert · Nhãn quyền lợi: \`Cộng CTXH\`\n- **Sự kiện sắp tới đã đăng ký:** *FIT Tech Talk: Distributed Systems* (Thứ 7, 08:30 · Hội trường A5)\n- **Đơn hàng Cửa hàng FIT:** \`#ORD-2026-084\` — Áo Khoa CNTT (Size L) · *Sẵn sàng nhận tại bàn trực Văn phòng OFIT*.`
-    };
-  }
-
-  if (lower.includes("2028") || lower.includes("nghỉ tết")) {
-    return {
-      modeTag: "RAG Quy chế",
-      noOfficialInfo: true,
-      content:
-        "**Chưa có thông tin chính thức** trong kho văn bản quy chế đã được BTV phê duyệt cho nội dung bạn vừa hỏi. Để tránh suy đoán sai lệch, vui lòng bấm **Nhắn tin trực tiếp với Ban Chấp hành** bên dưới để được cán bộ phản hồi chính xác."
-    };
-  }
-
-  return {
-    modeTag: "RAG Quy chế",
-    content:
-      "Theo quy chế xét chọn **Sinh viên 5 tốt cấp Khoa CNTT** đã được BTV phê duyệt:\n\n1. **Đạo đức tốt:** Điểm rèn luyện đạt từ **80 điểm** trở lên, không vi phạm kỷ luật.\n2. **Học tập tốt:** Điểm trung bình tích lũy năm học đạt từ **3.0/4.0** (hoặc có sản phẩm NCKH/giải học thuật).\n3. **Thể lực tốt:** Đạt danh hiệu *Thanh niên khỏe* hoặc hoàn thành cự ly giải chạy Khoa.\n4. **Tình nguyện tốt:** Tối thiểu **5 ngày** tình nguyện/năm học (đồng bộ tự động từ E-Cert YITZone).\n5. **Hội nhập tốt:** Đạt chuẩn ngoại ngữ theo niên khóa hoặc tham gia hoạt động giao lưu quốc tế.",
-    citations: [
-      { docTitle: "Quy chế Xét chọn SV5T Khoa CNTT (Số 12/QC-HSV)", clause: "Điều 4, Khoản 1–5", effective: "Hiệu lực 2026–2027" },
-      { docTitle: "Hướng dẫn Nộp minh chứng E-Cert tự động", clause: "Mục 2.3", effective: "Hiệu lực 2026" }
-    ]
-  };
-}
-
-export function YitBotPage(){
+export function YitBotPage() {
   const navigate = useNavigate();
-  const userId = useAuthStore((s) => s.userId);
 
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([
@@ -116,16 +53,12 @@ export function YitBotPage(){
       role: "assistant",
       modeTag: "RAG Quy chế",
       content:
-        "Xin chào! Mình là **YITBot** — Trợ lý Ảo Đoàn - Hội Khoa CNTT. Mình trả lời quy chế **có trích dẫn điều khoản được BTV duyệt**, tra cứu ĐRL/CTXH theo phiên cá nhân và gợi ý tư duy bài tập Online Judge.",
-      citations: [
-        { docTitle: "Kho Quy chế Đoàn - Hội FIT (Đã duyệt BTV)", clause: "18 văn bản hiệu lực", effective: "Đã re-index" }
-      ]
+        "Xin chào! Mình là **YITBot** — Trợ lý Ảo Đoàn - Hội Khoa CNTT. Mình trả lời quy chế **có trích dẫn điều khoản được BTV duyệt**, tra cứu ĐRL/CTXH theo phiên cá nhân và gợi ý tư duy bài tập Online Judge."
     }
   ]);
   const [streaming, setStreaming] = useState(false);
   const [examLocked, setExamLocked] = useState(false);
   const [circuitBreaker, setCircuitBreaker] = useState(false);
-  const [inOjContest, setInOjContest] = useState(false);
   const [escalateOpen, setEscalateOpen] = useState(false);
   const abortControllerRef = useRef(null);
 
@@ -155,9 +88,6 @@ export function YitBotPage(){
     setStreaming(true);
 
     try {
-      if (circuitBreaker || inOjContest) {
-        throw new Error("LOCAL_POLICY_SIMULATION");
-      }
       const headers = getAuthHeaders({
         "Content-Type": "application/json",
         Accept: "text/event-stream"
@@ -168,8 +98,60 @@ export function YitBotPage(){
         body: JSON.stringify({ message: trimmed }),
         signal: controller.signal
       });
-      if (!response.ok || !response.body) {
+
+      if (!response.ok) {
+        let serverDetail = "";
+        try {
+          const errPayload = await response.json();
+          serverDetail = errPayload?.detail || errPayload?.message || "";
+        } catch {
+          // Ignore non-JSON error body
+        }
+
+        if (response.status === 423 || response.status === 403) {
+          if (response.status === 423) setExamLocked(true);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    modeTag: "Tạm khóa Phiên thi / Contest",
+                    content:
+                      serverDetail ||
+                      "Tài khoản của bạn hiện đang tham gia phiên làm bài Thi Trắc nghiệm hoặc Contest Online Judge. YITBot tạm khóa hỗ trợ cho tới khi bạn nộp bài."
+                  }
+                : m
+            )
+          );
+          setStreaming(false);
+          return;
+        }
+
+        if (response.status === 503) {
+          setCircuitBreaker(true);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    modeTag: "Ngắt mạch Ngân sách AI",
+                    noOfficialInfo: true,
+                    content:
+                      serverDetail ||
+                      "Hệ thống YITBot AI hiện đang kích hoạt mạch ngắt ngân sách (Circuit Breaker). Vui lòng chuyển tiếp câu hỏi sang Hộp thư Ban Chấp hành để được hỗ trợ trực tiếp."
+                  }
+                : m
+            )
+          );
+          setStreaming(false);
+          return;
+        }
+
         throw new Error(`HTTP ${response.status}`);
+      }
+
+      if (!response.body) {
+        throw new Error("EMPTY_STREAM");
       }
 
       const reader = response.body.getReader();
@@ -192,7 +174,7 @@ export function YitBotPage(){
             }
             accumulated += data;
             setMessages((prev) =>
-              prev.map((m) => (m.id === assistantId ? {...m, content: accumulated }: m))
+              prev.map((m) => (m.id === assistantId ? { ...m, content: accumulated } : m))
             );
           }
         }
@@ -202,18 +184,26 @@ export function YitBotPage(){
       if (err instanceof DOMException && err.name === "AbortError") {
         return;
       }
-      const fallback = buildLocalFallback(trimmed, circuitBreaker, inOjContest, userId);
       setMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? {...m,...fallback }: m))
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                noOfficialInfo: true,
+                content:
+                  "Không thể kết nối máy chủ YITBot AI lúc này. Vui lòng thử lại sau hoặc chuyển tiếp câu hỏi sang Hộp thư Ban Chấp hành."
+              }
+            : m
+        )
       );
       setStreaming(false);
     }
   };
 
   const summaryForBch = messages
-.slice(-4)
-.map((m) => `${m.role === "user" ? "SV": "YITBot"}: ${m.content.replace(/\n+/g, " ").slice(0, 140)}`)
-.join("\n");
+    .slice(-4)
+    .map((m) => `${m.role === "user" ? "SV" : "YITBot"}: ${m.content.replace(/\n+/g, " ").slice(0, 140)}`)
+    .join("\n");
 
   const handleConfirmEscalate = () => {
     setEscalateOpen(false);
@@ -256,53 +246,6 @@ export function YitBotPage(){
             </Button>
           </div>
         </div>
-
-        {/* Simulation controls strip */}
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-4 text-xs">
-          <span className="tabular-mono font-medium text-muted-foreground">
-            Hạn mức hôm nay: <strong className="text-foreground">18 / 30 câu</strong>
-          </span>
-          {import.meta.env.DEV && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setExamLocked((v) => !v)}
-                className={cn(
-                  "rounded-full border px-3 py-1 font-medium transition-colors",
-                  examLocked
-                    ? "border-status-danger/40 bg-status-danger/10 text-status-danger"
-                    : "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {examLocked ? "Đang khóa (Thi Trắc nghiệm)" : "Mô phỏng khóa khi Thi"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCircuitBreaker((v) => !v)}
-                className={cn(
-                  "rounded-full border px-3 py-1 font-medium transition-colors",
-                  circuitBreaker
-                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-                    : "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {circuitBreaker ? "Circuit Breaker: FAQ Tĩnh" : "Mô phỏng vượt ngân sách"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setInOjContest((v) => !v)}
-                className={cn(
-                  "rounded-full border px-3 py-1 font-medium transition-colors",
-                  inOjContest
-                    ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
-                    : "border-border/80 bg-card/70 text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {inOjContest ? "Đang thi Contest OJ" : "Mô phỏng Contest OJ"}
-              </button>
-            </div>
-          )}
-        </div>
       </section>
 
       {examLocked && (
@@ -343,7 +286,7 @@ export function YitBotPage(){
                 <Badge variant="info" className="animate-pulse rounded-full">
                   YITBot đang trả lời...
                 </Badge>
-              ): (
+              ) : (
                 <span className="tabular-mono text-xs text-muted-foreground">
                   {messages.length} tin nhắn
                 </span>
@@ -358,7 +301,7 @@ export function YitBotPage(){
                   key={msg.id}
                   className={cn(
                     "flex items-start gap-3",
-                    msg.role === "user" ? "justify-end": "justify-start"
+                    msg.role === "user" ? "justify-end" : "justify-start"
                   )}
                 >
                   {msg.role === "assistant" && (
@@ -372,16 +315,16 @@ export function YitBotPage(){
                       "max-w-[84%] space-y-2.5 px-4 py-3 text-sm leading-relaxed",
                       msg.role === "user"
                         ? "rounded-2xl rounded-tr-md bg-primary text-primary-foreground"
-: "rounded-2xl rounded-tl-md bg-muted/55 text-foreground"
+                        : "rounded-2xl rounded-tl-md bg-muted/55 text-foreground"
                     )}
                   >
                     {msg.role === "assistant" && msg.modeTag && (
                       <div className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-cyan">
                         {msg.modeTag === "Gợi ý OJ" ? (
                           <Code2 className="h-3.5 w-3.5" />
-                        ): msg.modeTag === "Tra cứu Cá nhân" ? (
+                        ) : msg.modeTag === "Tra cứu Cá nhân" ? (
                           <UserCheck className="h-3.5 w-3.5" />
-                        ): (
+                        ) : (
                           <Sparkles className="h-3.5 w-3.5" />
                         )}
                         <span>{msg.modeTag}</span>
@@ -442,7 +385,7 @@ export function YitBotPage(){
                   placeholder={
                     examLocked
                       ? "YITBot đang bị khóa trong thời gian thi..."
-: "Hỏi quy chế ĐRL, CTXH, SV5T, tra cứu cá nhân hoặc gợi ý bài OJ..."
+                      : "Hỏi quy chế ĐRL, CTXH, SV5T, tra cứu cá nhân hoặc gợi ý bài OJ..."
                   }
                   className="h-9 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
                 />
@@ -451,7 +394,7 @@ export function YitBotPage(){
                     <Square className="h-3.5 w-3.5" />
                     <span>Dừng</span>
                   </Button>
-                ): (
+                ) : (
                   <Button
                     type="submit"
                     size="sm"
@@ -472,7 +415,7 @@ export function YitBotPage(){
             <div>
               <h2 className="font-display text-base font-medium text-foreground">Câu hỏi Gợi ý Nhanh</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Kiểm thử 4 luồng RAG, Cá nhân, OJ và Chống bịa đặt
+                Chọn nhanh chủ đề quy chế, quyền lợi cá nhân hoặc gợi ý học thuật
               </p>
             </div>
             <div className="space-y-2">

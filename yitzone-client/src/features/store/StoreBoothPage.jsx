@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlertCircle,
   ArrowLeft,
   Banknote,
   Barcode,
   CheckCircle2,
   PackageCheck,
   QrCode,
+  Search,
   ShieldCheck,
   ShoppingBag,
   UserCheck
@@ -16,6 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  fulfillStoreOrder,
+  lookupStoreOrdersByBarcode,
+  submitCodHandover
+} from "@/features/store/api";
+import { extractApiErrorMessage } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 
 export function StoreBoothPage() {
@@ -26,6 +34,10 @@ export function StoreBoothPage() {
   const [studentCard1D, setStudentCard1D] = useState("");
   const [collectCod, setCollectCod] = useState(false);
   const [codAmountInput, setCodAmountInput] = useState("");
+  const [matchedOrders, setMatchedOrders] = useState([]);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submittingHandover, setSubmittingHandover] = useState(false);
   const [deliveries, setDeliveries] = useState([]);
   const [statusBanner, setStatusBanner] = useState(null);
   const [handoverSubmitted, setHandoverSubmitted] = useState(false);
@@ -33,9 +45,60 @@ export function StoreBoothPage() {
   const totalCodCash = deliveries.reduce((sum, d) => sum + d.codAmount, 0);
   const codOrdersCount = deliveries.filter((d) => d.codAmount > 0).length;
 
-  const handleConfirmDelivery = (e) => {
+  const handleLookupByBarcode = async () => {
+    const cleanedMssv = studentCard1D.trim();
+    if (!/^[0-9]{8}$/.test(cleanedMssv)) {
+      setStatusBanner({
+        tone: "ERROR",
+        title: "Mã thẻ sinh viên không hợp lệ",
+        detail: "Mã vạch 1D trên thẻ sinh viên phải gồm đúng 8 chữ số MSSV để tra cứu đơn hàng."
+      });
+      return;
+    }
+    setLookingUp(true);
+    setStatusBanner(null);
+    try {
+      const orders = await lookupStoreOrdersByBarcode(cleanedMssv);
+      const list = Array.isArray(orders) ? orders : [];
+      setMatchedOrders(list);
+      if (list.length === 0) {
+        setStatusBanner({
+          tone: "ERROR",
+          title: "Không tìm thấy đơn hàng chờ nhận",
+          detail: `Sinh viên ${cleanedMssv} hiện không có đơn hàng nào đang chờ bàn giao tại quầy.`
+        });
+      } else {
+        const first = list[0];
+        if (first?.orderCode) setOrderQr(first.orderCode);
+        if (first?.paymentMethod === "COD") {
+          setCollectCod(true);
+          if (typeof first.totalAmount === "number") {
+            setCodAmountInput(String(first.totalAmount));
+          }
+        }
+      }
+    } catch (err) {
+      setMatchedOrders([]);
+      setStatusBanner({
+        tone: "ERROR",
+        title: "Không thể tra cứu đơn hàng theo thẻ SV",
+        detail: extractApiErrorMessage(
+          err,
+          "Chưa kết nối được máy chủ Cửa hàng để tra cứu đơn hàng theo mã vạch 1D."
+        )
+      });
+    } finally {
+      setLookingUp(false);
+    }
+  };
+
+  const handleConfirmDelivery = async (e) => {
     e.preventDefault();
-    const cleanedOrder = orderQr.trim().toUpperCase();
+    if (submitting) return;
+    const rawOrder = orderQr.trim().toUpperCase();
+    const cleanedOrder = rawOrder.startsWith("YIT-PICKUP|")
+      ? (rawOrder.split("|")[1] ?? rawOrder)
+      : rawOrder;
     const cleanedMssv = studentCard1D.trim();
     if (!cleanedOrder) {
       setStatusBanner({
@@ -54,27 +117,79 @@ export function StoreBoothPage() {
       return;
     }
 
-    const codVal = collectCod ? Math.max(0, Number(codAmountInput) || 0) : 0;
-    const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-    const record = {
-      id: `dlv-${Date.now()}`,
-      orderCode: cleanedOrder,
-      studentMssv: cleanedMssv,
-      paymentType: codVal > 0 ? "COD" : "VIETQR",
-      codAmount: codVal,
-      deliveredAt: nowStr
-    };
+    setSubmitting(true);
+    setStatusBanner(null);
+    try {
+      const fulfilled = await fulfillStoreOrder(cleanedOrder);
+      const serverCod =
+        fulfilled?.paymentMethod === "COD" && typeof fulfilled?.totalAmount === "number"
+          ? fulfilled.totalAmount
+          : null;
+      const codVal =
+        serverCod !== null
+          ? serverCod
+          : collectCod
+            ? Math.max(0, Number(codAmountInput) || 0)
+            : 0;
+      const nowStr = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+      const finalCode = fulfilled?.orderCode ?? cleanedOrder;
+      const record = {
+        id: `dlv-${Date.now()}`,
+        orderCode: finalCode,
+        studentMssv: cleanedMssv,
+        paymentType: codVal > 0 ? "COD" : "VIETQR",
+        codAmount: codVal,
+        deliveredAt: nowStr
+      };
 
-    setDeliveries((prev) => [record, ...prev]);
-    setStatusBanner({
-      tone: "SUCCESS",
-      title: `Hợp lệ — Đã bàn giao đơn ${cleanedOrder}`,
-      detail: `MSSV nhận hàng: ${cleanedMssv}${codVal > 0 ? ` · Thu COD ${codVal.toLocaleString("vi-VN")}đ` : " · Đã thanh toán VietQR"}`
-    });
-    setOrderQr("");
-    setStudentCard1D("");
-    setCodAmountInput("");
-    setCollectCod(false);
+      setDeliveries((prev) => [record, ...prev]);
+      setMatchedOrders((prev) => prev.filter((o) => o.orderCode !== finalCode));
+      setStatusBanner({
+        tone: "SUCCESS",
+        title: `Hợp lệ — Đã bàn giao đơn ${finalCode}`,
+        detail: `MSSV nhận hàng: ${cleanedMssv}${codVal > 0 ? ` · Thu COD ${codVal.toLocaleString("vi-VN")}đ` : " · Đã thanh toán VietQR"}`
+      });
+      setOrderQr("");
+      setStudentCard1D("");
+      setCodAmountInput("");
+      setCollectCod(false);
+    } catch (err) {
+      setStatusBanner({
+        tone: "ERROR",
+        title: "Không thể xác nhận bàn giao đơn hàng",
+        detail: extractApiErrorMessage(
+          err,
+          "Không thể đối chiếu đơn hàng với máy chủ Cửa hàng. Vui lòng kiểm tra mã đơn hoặc kết nối mạng."
+        )
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitHandover = async () => {
+    if (deliveries.length === 0 || submittingHandover) return;
+    setSubmittingHandover(true);
+    setStatusBanner(null);
+    try {
+      await submitCodHandover({
+        ordersCount: codOrdersCount,
+        cashCollected: totalCodCash,
+        orderCodes: deliveries.map((d) => d.orderCode)
+      });
+      setHandoverSubmitted(true);
+    } catch (err) {
+      setStatusBanner({
+        tone: "ERROR",
+        title: "Không thể chốt Phiếu bàn giao COD",
+        detail: extractApiErrorMessage(
+          err,
+          "Chưa kết nối được máy chủ để lưu Phiếu bàn giao COD cuối ca."
+        )
+      });
+    } finally {
+      setSubmittingHandover(false);
+    }
   };
 
   return (
@@ -110,7 +225,11 @@ export function StoreBoothPage() {
             <div className="text-sm font-semibold">{statusBanner.title}</div>
             <div className="text-xs text-foreground">{statusBanner.detail}</div>
           </div>
-          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          {statusBanner.tone === "SUCCESS" ? (
+            <CheckCircle2 className="h-5 w-5 shrink-0" />
+          ) : (
+            <AlertCircle className="h-5 w-5 shrink-0" />
+          )}
         </div>
       )}
 
@@ -146,17 +265,58 @@ export function StoreBoothPage() {
                     <Barcode className="h-3.5 w-3.5 text-primary" />
                     <span>2. Mã vạch 1D Thẻ SV nhận hàng</span>
                   </Label>
-                  <Input
-                    id="booth-student-1d"
-                    value={studentCard1D}
-                    onChange={(e) => setStudentCard1D(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                    inputMode="numeric"
-                    maxLength={8}
-                    placeholder="Nhập hoặc quét 8 số MSSV"
-                    className="tabular-mono h-11 rounded-xl font-medium"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="booth-student-1d"
+                      value={studentCard1D}
+                      onChange={(e) => setStudentCard1D(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                      inputMode="numeric"
+                      maxLength={8}
+                      placeholder="Nhập hoặc quét 8 số MSSV"
+                      className="tabular-mono h-11 rounded-xl font-medium"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={lookingUp || studentCard1D.length !== 8}
+                      onClick={() => void handleLookupByBarcode()}
+                      className="h-11 shrink-0 rounded-xl px-3"
+                      title="Tra cứu đơn chờ nhận theo mã vạch thẻ SV"
+                    >
+                      <Search className="h-4 w-4" />
+                      <span className="sr-only sm:not-sr-only">{lookingUp ? "Đang tìm..." : "Tra cứu"}</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
+
+              {matchedOrders.length > 0 && (
+                <div className="space-y-1.5 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs">
+                  <div className="font-semibold text-foreground">
+                    Đơn hàng chờ nhận của sinh viên ({matchedOrders.length}):
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {matchedOrders.map((ord) => (
+                      <button
+                        key={ord.orderCode}
+                        type="button"
+                        onClick={() => {
+                          setOrderQr(ord.orderCode);
+                          setCollectCod(ord.paymentMethod === "COD");
+                          setCodAmountInput(
+                            ord.paymentMethod === "COD" && typeof ord.totalAmount === "number"
+                              ? String(ord.totalAmount)
+                              : ""
+                          );
+                        }}
+                        className="tabular-mono rounded-full border border-border bg-card px-3 py-1 font-medium text-foreground hover:border-primary"
+                      >
+                        {ord.orderCode} ({ord.paymentMethod})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2.5 rounded-xl border border-border bg-muted/30 p-3.5">
                 <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-foreground">
@@ -178,16 +338,16 @@ export function StoreBoothPage() {
                       value={codAmountInput}
                       onChange={(e) => setCodAmountInput(e.target.value.replace(/\D/g, ""))}
                       inputMode="numeric"
-                      placeholder="185000"
+                      placeholder="Nhập số tiền..."
                       className="tabular-mono h-9 max-w-[180px] rounded-xl"
                     />
                   </div>
                 )}
               </div>
 
-              <Button type="submit" size="lg" className="w-full rounded-xl">
+              <Button type="submit" size="lg" disabled={submitting} className="w-full rounded-xl">
                 <UserCheck className="h-4 w-4" />
-                <span>Xác nhận Giao Vật phẩm</span>
+                <span>{submitting ? "Đang xác nhận..." : "Xác nhận Giao Vật phẩm"}</span>
               </Button>
             </form>
           </CardContent>
@@ -231,12 +391,16 @@ export function StoreBoothPage() {
                 type="button"
                 variant="outline"
                 size="lg"
-                disabled={deliveries.length === 0}
+                disabled={deliveries.length === 0 || submittingHandover}
                 className="w-full rounded-xl"
-                onClick={() => setHandoverSubmitted(true)}
+                onClick={() => void handleSubmitHandover()}
               >
                 <ShoppingBag className="h-4 w-4 text-primary" />
-                <span>Chốt Phiếu Bàn giao COD ({totalCodCash.toLocaleString("vi-VN")}đ)</span>
+                <span>
+                  {submittingHandover
+                    ? "Đang gửi phiếu bàn giao..."
+                    : `Chốt Phiếu Bàn giao COD (${totalCodCash.toLocaleString("vi-VN")}đ)`}
+                </span>
               </Button>
             )}
           </CardContent>

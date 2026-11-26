@@ -44,3 +44,20 @@ export async function fulfillStoreOrder(
   if (!res.data.success) throw new Error(res.data.detail);
   return res.data.data;
 }
+
+export async function validateStoreVoucher(payload) {
+  const res = await apiClient.post("/store/vouchers/validate", payload);
+  if (!res.data.success) throw new Error(res.data.detail);
+  return res.data.data;
+}
+
+export async function submitCodHandover(
+  payload,
+  idempotencyKey = createIdempotencyKey()
+) {
+  const res = await apiClient.post("/store/cod-handovers", payload, {
+    headers: { "Idempotency-Key": idempotencyKey }
+  });
+  if (!res.data.success) throw new Error(res.data.detail);
+  return res.data.data;
+}

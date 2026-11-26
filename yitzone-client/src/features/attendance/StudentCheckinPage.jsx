@@ -160,8 +160,8 @@ export function StudentCheckinPage() {
       setSubmitting(true);
 
       try {
-        const matchedTicket = registeredTickets.find(
-          (t) => cleaned.includes(t.eventId) || cleaned.includes("CLOUD")
+        const matchedTicket = registeredTickets.find((t) =>
+          cleaned.includes(t.eventId.toUpperCase())
         );
         const eventId = matchedTicket?.eventId ?? activeTicket?.eventId ?? "GENERAL";
         const sessionId = cleaned.split("|")[2] ?? "SESSION-1";

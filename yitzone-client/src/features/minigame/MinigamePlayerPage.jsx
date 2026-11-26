@@ -16,12 +16,10 @@ import {
   KeyRound,
   MonitorPlay,
   QrCode,
-  RefreshCw,
   ScanLine,
   ShieldCheck,
   Trophy,
   Users,
-  WifiOff,
   XCircle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -42,106 +40,13 @@ import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { cn, maskStudentCode } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 
-const MINIGAME_ROOMS = [
-  {
-    id: "room-fit-arena",
-    title: "Đấu trường Công nghệ FIT 2026",
-    eventLabel: "Hội thảo Cloud Native & DevOps 2026",
-    description:
-      "Tranh tài kiến thức Đoàn – Hội & Công nghệ trực tiếp cùng màn hình LED hội trường, tính điểm tốc độ và chuỗi thắng Streak.",
-    pin: "739 204",
-    requireAttendance: true,
-    userCheckedIn: true,
-    accessRuleNote: "Yêu cầu đã điểm danh sự kiện · Tài khoản của bạn đã điểm danh",
-    status: "OPEN",
-    timeWindow: "Đang mở phòng · Chờ nhịp MC",
-    questionCount: 10,
-    playerCount: 194
-  },
-  {
-    id: "room-freshman-quiz",
-    title: "Đố vui Nhanh: Hành trang Tân Sinh viên IT",
-    eventLabel: "Chuỗi hoạt động Chào đón Tân Sinh viên",
-    description:
-      "Chơi trực tuyến ngay tại nhà để tìm hiểu về Khoa CNTT, điểm rèn luyện, phong trào SV5T và nhận quà lưu niệm.",
-    pin: "518 092",
-    requireAttendance: false,
-    userCheckedIn: false,
-    accessRuleNote: "Không cần điểm danh sự kiện · Mở tự do cho sinh viên tham gia",
-    status: "OPEN",
-    timeWindow: "Đang mở · Đến 22:00 hôm nay",
-    questionCount: 8,
-    playerCount: 86
-  },
-  {
-    id: "room-sec-bell",
-    title: "Rung chuông vàng Tuần lễ An toàn Thông tin",
-    eventLabel: "FIT Security Week 2026",
-    description:
-      "Thử thách phản xạ nhanh về bảo mật ứng dụng web, mật mã và an toàn mạng tại hội trường.",
-    pin: "904 115",
-    requireAttendance: true,
-    userCheckedIn: false,
-    accessRuleNote: "Cần quét QR điểm danh tại Hội trường A5 để mở khóa phòng chơi",
-    status: "OPEN",
-    timeWindow: "Đang mở phòng · Hội trường A5",
-    questionCount: 15,
-    playerCount: 72
-  }
-];
+const MINIGAME_ROOMS = [];
 
-const DEMO_QUESTIONS = [
-  {
-    id: "q1",
-    kind: "SINGLE",
-    prompt: "Khoa Công nghệ Thông tin HCM-UTE vận hành bao nhiêu Ban chuyên môn trực thuộc Đoàn - Hội?",
-    timeLimitSec: 20,
-    baseScore: 1000,
-    options: [
-      { key: "A", text: "3 Ban (Văn phòng, Truyền thông, Học thuật)" },
-      { key: "B", text: "4 Ban (OFIT, EMFIT, ARTIT, SV5T)" },
-      { key: "C", text: "5 Ban chuyên môn và 6 Tổ" },
-      { key: "D", text: "2 Ban điều phối chung" }
-    ],
-    correctKeys: ["B"]
-  },
-  {
-    id: "q2",
-    kind: "MULTI",
-    prompt: "Chọn ĐỦ các tiêu chí xét danh hiệu Sinh viên 5 tốt (chấm đúng khi chọn đủ toàn bộ):",
-    timeLimitSec: 30,
-    baseScore: 2000,
-    options: [
-      { key: "A", text: "Đạo đức tốt & Học tập tốt" },
-      { key: "B", text: "Thể lực tốt & Tình nguyện tốt" },
-      { key: "C", text: "Hội nhập tốt" },
-      { key: "D", text: "Bắt buộc có giải thưởng quốc tế" }
-    ],
-    correctKeys: ["A", "B", "C"]
-  },
-  {
-    id: "q3",
-    kind: "TRUE_FALSE",
-    prompt: "Khi thí sinh đang làm bài Thi Trắc nghiệm trên YITZone, trợ lý YITBot AI sẽ tự động tạm khóa riêng cho tài khoản đó.",
-    timeLimitSec: 10,
-    baseScore: 1000,
-    options: [
-      { key: "T", text: "Đúng — Khóa tự động đến khi nộp bài" },
-      { key: "F", text: "Sai — Vẫn mở tra cứu tự do" }
-    ],
-    correctKeys: ["T"]
-  }
-];
+const QUESTIONS = [];
 
 const PROFANITY_BLOCKLIST = ["spam", "hack", "cheat", "badword"];
 
-const TOP_LEADERBOARD = [
-  { rank: 1, maskedName: "Nguyễn Minh Khôi ·...345", score: 4280, streak: 3 },
-  { rank: 2, maskedName: "Trần Thảo Vy ·...812", score: 3940, streak: 3 },
-  { rank: 3, maskedName: "Lê Quốc Bảo ·...109", score: 3610, streak: 2 },
-  { rank: 4, maskedName: "Phạm Gia Huy ·...554", score: 3120, streak: 1 },
-  { rank: 5, maskedName: "Võ Ngọc Anh ·...901", score: 2890, streak: 2 }
-];
+const TOP_LEADERBOARD = [];
 
 function computeServerBoundedScore(
   baseScore,
@@ -176,10 +81,10 @@ export function MinigamePlayerPage() {
   const [phase, setPhase] = useState(
     initialMatchedRoom ? "join" : "catalog"
   );
-  const [pin, setPin] = useState(formattedQrPin ?? "739 204");
+  const [pin, setPin] = useState(formattedQrPin ?? "");
   const [isGuest, setIsGuest] = useState(false);
-  const [displayName, setDisplayName] = useState(authFullName ?? "Trần Đức Thịnh");
-  const [mssv, setMssv] = useState(authUserId ?? "22110418");
+  const [displayName, setDisplayName] = useState(authFullName ?? "");
+  const [mssv, setMssv] = useState(authUserId ?? "");
   const [joinError, setJoinError] = useState(
     formattedQrPin && !initialMatchedRoom
       ? "Không tìm thấy phòng, kiểm tra lại PIN trên màn hình LED."
@@ -188,13 +93,11 @@ export function MinigamePlayerPage() {
 
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(DEMO_QUESTIONS[0].timeLimitSec);
+  const [timeLeft, setTimeLeft] = useState(() => QUESTIONS[0]?.timeLimitSec ?? 20);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
   const [lastGain, setLastGain] = useState(null);
-  const [reconnecting, setReconnecting] = useState(false);
-  const [recoveryNotice, setRecoveryNotice] = useState(null);
 
   // In-page QR Scanner & Room QR Share modal state
   const [qrScanOpen, setQrScanOpen] = useState(false);
@@ -320,14 +223,14 @@ export function MinigamePlayerPage() {
     [accessFilter]
   );
 
-  const currentQuestion = DEMO_QUESTIONS[qIndex] ?? DEMO_QUESTIONS[0];
+  const currentQuestion = QUESTIONS[qIndex] ?? QUESTIONS[0] ?? null;
   const maskedPlayerLabel = useMemo(() => {
     if (isGuest) return `${displayName.trim() || "Khách mời"} · Khách`;
     return maskStudentCode(mssv, displayName.trim() || "Sinh viên FIT");
   }, [displayName, isGuest, mssv]);
 
   useEffect(() => {
-    if (phase !== "playing" || submitted || reconnecting) return;
+    if (phase !== "playing" || submitted || !currentQuestion) return;
     if (timeLeft <= 0) {
       setSubmitted(true);
       setStreak(0);
@@ -338,7 +241,7 @@ export function MinigamePlayerPage() {
       setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [phase, submitted, timeLeft, reconnecting]);
+  }, [phase, submitted, timeLeft, currentQuestion]);
 
   const openRoomJoin = (room) => {
     setSelectedRoom(room);
@@ -391,6 +294,11 @@ export function MinigamePlayerPage() {
       setJoinError("Tên hiển thị chứa từ ngữ bị chặn bởi bộ lọc Khách mời.");
       return;
     }
+    const firstQuestion = QUESTIONS[0];
+    if (!firstQuestion) {
+      setJoinError("Phòng chơi đang chờ MC mở câu hỏi từ máy chủ.");
+      return;
+    }
     setSelectedRoom(matched);
     setJoinError(null);
     setQIndex(0);
@@ -399,12 +307,12 @@ export function MinigamePlayerPage() {
     setSelected([]);
     setSubmitted(false);
     setLastGain(null);
-    setTimeLeft(DEMO_QUESTIONS[0].timeLimitSec);
+    setTimeLeft(firstQuestion.timeLimitSec);
     setPhase("playing");
   };
 
   const toggleOption = (key) => {
-    if (submitted || reconnecting) return;
+    if (submitted || !currentQuestion) return;
     if (currentQuestion.kind === "MULTI") {
       setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
     } else {
@@ -413,7 +321,7 @@ export function MinigamePlayerPage() {
   };
 
   const handleSubmitAnswer = () => {
-    if (submitted || selected.length === 0) return;
+    if (submitted || selected.length === 0 || !currentQuestion) return;
     const expected = [...currentQuestion.correctKeys].sort().join(",");
     const actual = [...selected].sort().join(",");
     const isCorrect = expected === actual;
@@ -438,27 +346,17 @@ export function MinigamePlayerPage() {
   };
 
   const handleNextQuestion = () => {
-    if (qIndex + 1 >= DEMO_QUESTIONS.length) {
+    const nextIdx = qIndex + 1;
+    const nextQuestion = QUESTIONS[nextIdx];
+    if (!nextQuestion) {
       setPhase("result");
       return;
     }
-    const nextIdx = qIndex + 1;
     setQIndex(nextIdx);
     setSelected([]);
     setSubmitted(false);
     setLastGain(null);
-    setTimeLeft(DEMO_QUESTIONS[nextIdx].timeLimitSec);
-  };
-
-  const handleSimulateDisconnect = () => {
-    setReconnecting(true);
-    setRecoveryNotice(null);
-    window.setTimeout(() => {
-      setReconnecting(false);
-      setRecoveryNotice(
-        `Đã khôi phục phiên phòng ${pin}: bảo toàn ${score.toLocaleString("vi-VN")} điểm, chuỗi thắng ×${streak} và đồng bộ câu ${qIndex + 1}/${DEMO_QUESTIONS.length}.`
-      );
-    }, 1000);
+    setTimeLeft(nextQuestion.timeLimitSec);
   };
 
   return (
@@ -509,7 +407,7 @@ export function MinigamePlayerPage() {
                     if (joinError) setJoinError(null);
                   }}
                   inputMode="numeric"
-                  placeholder="Nhập mã PIN 6 số (VD: 739 204)"
+                  placeholder="Nhập mã PIN 6 số trên màn hình LED"
                   className="tabular-mono h-11 flex-1 rounded-full text-base tracking-wider sm:h-10 sm:text-sm"
                   aria-label="Nhập nhanh mã PIN phòng minigame"
                 />
@@ -554,8 +452,18 @@ export function MinigamePlayerPage() {
           </Tabs>
 
           {/* Program Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredRooms.map((room) => {
+          {filteredRooms.length === 0 ? (
+            <Card className="rounded-[22px] border border-dashed border-border/80">
+              <CardContent className="px-6 py-12 text-center">
+                <Gamepad2 className="mx-auto h-9 w-9 text-muted-foreground/70" />
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  Chưa có chương trình Minigame nào đang mở — bạn vẫn có thể nhập mã PIN 6 số trên màn hình LED để tham gia
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredRooms.map((room) => {
               const isOpen = room.status === "OPEN";
               const needsCheckin = isOpen && room.requireAttendance && !room.userCheckedIn;
               const canEnter = isOpen && (!room.requireAttendance || room.userCheckedIn);
@@ -649,7 +557,8 @@ export function MinigamePlayerPage() {
                 </Card>
               );
             })}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -689,7 +598,7 @@ export function MinigamePlayerPage() {
                         value={pin}
                         onChange={(e) => setPin(e.target.value)}
                         className="tabular-mono h-11 rounded-xl text-base font-semibold tracking-widest sm:h-10"
-                        placeholder="739 204"
+                        placeholder="Nhập 6 chữ số"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -796,7 +705,7 @@ export function MinigamePlayerPage() {
       )}
 
       {/* PHASE 2: PLAYING */}
-      {phase === "playing" && (
+      {phase === "playing" && currentQuestion && (
         <div className="space-y-4">
           <div className="liquid-glass flex flex-wrap items-center justify-between gap-2.5 rounded-2xl px-4 py-2.5 sm:rounded-full sm:px-5">
             <div className="flex flex-wrap items-center gap-2">
@@ -808,7 +717,7 @@ export function MinigamePlayerPage() {
                 {maskedPlayerLabel}
               </span>
               <Badge variant="secondary" className="rounded-full tabular-mono">
-                Câu {qIndex + 1}/{DEMO_QUESTIONS.length}
+                Câu {qIndex + 1}/{QUESTIONS.length}
               </Badge>
             </div>
 
@@ -820,35 +729,8 @@ export function MinigamePlayerPage() {
               <div className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 tabular-mono text-xs font-semibold text-primary">
                 {score.toLocaleString("vi-VN")} điểm
               </div>
-              {import.meta.env.DEV && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full"
-                  onClick={handleSimulateDisconnect}
-                  disabled={reconnecting}
-                >
-                  <RefreshCw className={cn("h-3.5 w-3.5", reconnecting && "animate-spin")} />
-                  <span className="hidden sm:inline">Mô phỏng rớt mạng</span>
-                </Button>
-              )}
             </div>
           </div>
-
-          {reconnecting && (
-            <div className="flex items-center gap-2 rounded-xl border border-status-warning/35 bg-status-warning/10 px-4 py-2.5 text-sm font-medium text-status-warning">
-              <WifiOff className="h-4 w-4 shrink-0" />
-              Đang kết nối lại máy chủ phòng chơi và khôi phục trạng thái phiên...
-            </div>
-          )}
-
-          {recoveryNotice && (
-            <div className="flex items-center gap-2 rounded-xl border border-status-success/35 bg-status-success/10 px-4 py-2.5 text-sm font-medium text-status-success">
-              <ShieldCheck className="h-4 w-4 shrink-0" />
-              {recoveryNotice}
-            </div>
-          )}
 
           <Card className="rounded-[20px]">
             <CardHeader className="space-y-3">
@@ -897,7 +779,7 @@ export function MinigamePlayerPage() {
                     <button
                       key={opt.key}
                       type="button"
-                      disabled={submitted || reconnecting}
+                      disabled={submitted}
                       onClick={() => toggleOption(opt.key)}
                       className={cn(
                         "flex min-h-[56px] items-start gap-3 rounded-xl border p-4 text-left text-sm transition-colors",
@@ -966,7 +848,7 @@ export function MinigamePlayerPage() {
                     className="liquid-glass-btn-cobalt h-11 w-full rounded-full sm:w-auto sm:px-6"
                     onClick={handleNextQuestion}
                   >
-                    {qIndex + 1 >= DEMO_QUESTIONS.length ? "Xem Bảng Vinh danh" : "Sang câu tiếp theo"}
+                    {qIndex + 1 >= QUESTIONS.length ? "Xem Bảng Vinh danh" : "Sang câu tiếp theo"}
                   </Button>
                 )}
               </div>

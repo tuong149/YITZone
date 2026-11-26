@@ -25,12 +25,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { formatVietnameseDateTime } from "@/components/ui/date-time-picker";
 import { cn } from "@/lib/utils";
-import { INITIAL_CRITERIA_TREE } from "./sv5t-data";
+import { useAwardCampaigns } from "./api";
+import { cloneFreshCriteriaTree, INITIAL_AWARD_CYCLES } from "./sv5t-data";
 
 function getCriterionProgress(criterion) {
-  const autoConditions = criterion.conditions.filter((c) => c.source === "YITZONE_AUTO");
-  const externalConditions = criterion.conditions.filter((c) => c.source === "EXTERNAL_PROOF");
+  const conditions = criterion.conditions ?? [];
+  const autoConditions = conditions.filter((c) => c.source === "YITZONE_AUTO");
+  const externalConditions = conditions.filter((c) => c.source === "EXTERNAL_PROOF");
   const autoDone = autoConditions.filter((c) => c.achieved).length;
   const externalPending = externalConditions.filter((c) => !c.achieved).length;
   const autoPct = autoConditions.length > 0 ? Math.round((autoDone / autoConditions.length) * 100) : null;
@@ -39,38 +42,26 @@ function getCriterionProgress(criterion) {
 }
 
 export function Sv5tPortalPage() {
-  const [goalRegistered, setGoalRegistered] = useState(true);
-  const [selectedAutoIds, setSelectedAutoIds] = useState([
-    "dd-m2",
-    "dd-o1",
-    "ht-o1",
-    "tl-o1",
-    "tn-m1",
-    "tn-o1",
-    "hn-o1"
-  ]);
-  const [uploadedProofs, setUploadedProofs] = useState([
-    {
-      id: "up-1",
-      criterionKey: "HOC_TAP",
-      criterionTitle: "Học tập tốt",
-      conditionId: "ht-m1",
-      conditionLabel: "Điểm trung bình chung học tập năm học đạt ngưỡng quy định (Bảng điểm chính thức)",
-      fileName: "BangDiem_HK1_HK2_22110345.pdf",
-      sizeLabel: "1.40 MB",
-      kind: "PDF"
-    },
-    {
-      id: "up-2",
-      criterionKey: "HOI_NHAP",
-      criterionTitle: "Hội nhập tốt",
-      conditionId: "hn-m1",
-      conditionLabel: "Chứng chỉ ngoại ngữ đạt chuẩn quy định (IELTS / TOEIC / VSTEP còn hiệu lực)",
-      fileName: "TOEIC_785_Certificate.jpg",
-      sizeLabel: "1.80 MB",
-      kind: "IMAGE"
-    }
-  ]);
+  const { data: apiCampaigns } = useAwardCampaigns();
+  const activeCycle = useMemo(() => {
+    const fromApi = Array.isArray(apiCampaigns)
+      ? apiCampaigns.find((c) => c.status === "OPEN") ?? apiCampaigns[0]
+      : null;
+    if (fromApi) return fromApi;
+    return INITIAL_AWARD_CYCLES.find((c) => c.status === "OPEN") ?? INITIAL_AWARD_CYCLES[0] ?? null;
+  }, [apiCampaigns]);
+
+  const criteriaTree = useMemo(
+    () =>
+      Array.isArray(activeCycle?.criteriaTree) && activeCycle.criteriaTree.length > 0
+        ? activeCycle.criteriaTree
+        : cloneFreshCriteriaTree(),
+    [activeCycle]
+  );
+
+  const [goalRegistered, setGoalRegistered] = useState(false);
+  const [selectedAutoIds, setSelectedAutoIds] = useState([]);
+  const [uploadedProofs, setUploadedProofs] = useState([]);
   const [selectedCriterionKey, setSelectedCriterionKey] = useState("DAO_DUC");
   const [uploadTarget, setUploadTarget] = useState(null);
   const [draggingConditionId, setDraggingConditionId] = useState(null);
@@ -83,17 +74,18 @@ export function Sv5tPortalPage() {
   const [appealSent, setAppealSent] = useState(false);
 
   const selectedCriterionIndex = useMemo(
-    () => Math.max(0, INITIAL_CRITERIA_TREE.findIndex((c) => c.key === selectedCriterionKey)),
-    [selectedCriterionKey]
+    () => Math.max(0, criteriaTree.findIndex((c) => c.key === selectedCriterionKey)),
+    [criteriaTree, selectedCriterionKey]
   );
 
-  const selectedCriterionObj = INITIAL_CRITERIA_TREE[selectedCriterionIndex] ?? INITIAL_CRITERIA_TREE[0];
+  const selectedCriterionObj = criteriaTree[selectedCriterionIndex] ?? criteriaTree[0] ?? null;
 
   const criteriaSubmissionStatus = useMemo(() => {
     const uploadedCondIds = new Set(uploadedProofs.map((p) => p.conditionId));
-    return INITIAL_CRITERIA_TREE.map((crit) => {
-      const mandatory = crit.conditions.filter((c) => c.group === "MANDATORY");
-      const optional = crit.conditions.filter((c) => c.group === "OPTIONAL");
+    return criteriaTree.map((crit) => {
+      const conditions = crit.conditions ?? [];
+      const mandatory = conditions.filter((c) => c.group === "MANDATORY");
+      const optional = conditions.filter((c) => c.group === "OPTIONAL");
       const isConditionCovered = (cond) =>
         (cond.source === "YITZONE_AUTO" && cond.achieved && selectedAutoIds.includes(cond.id)) ||
         uploadedCondIds.has(cond.id);
@@ -113,7 +105,7 @@ export function Sv5tPortalPage() {
         missingCount: mandatoryMissing + optionalMissing
       };
     });
-  }, [selectedAutoIds, uploadedProofs]);
+  }, [criteriaTree, selectedAutoIds, uploadedProofs]);
 
   const activeCriterionStatus =
     criteriaSubmissionStatus[selectedCriterionIndex] ?? criteriaSubmissionStatus[0];
@@ -170,6 +162,57 @@ export function Sv5tPortalPage() {
     setUploadError(null);
   };
 
+  if (!activeCycle) {
+    return (
+      <div className="space-y-7">
+        <section className="liquid-glass flex flex-col gap-4 rounded-[26px] p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <h1 className="font-display text-3xl font-medium leading-[1.15] tracking-tight text-foreground sm:text-4xl">
+              Phong trào &amp; Xét duyệt Sinh viên 5 tốt
+            </h1>
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Đăng ký mục tiêu phấn đấu từ đầu năm học, tự động đồng bộ minh chứng E-Certificate từ YITZone và nộp hồ sơ
+              xét duyệt trực tuyến khi mở đợt.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+            <Button asChild variant="outline" className="rounded-full">
+              <Link to="/public/honor-roll">
+                <Trophy className="h-4 w-4 text-brand-navy dark:text-brand-cyan" />
+                <span>Bảng vàng Vinh danh</span>
+              </Link>
+            </Button>
+          </div>
+        </section>
+
+        <Card className="rounded-[24px]">
+          <CardContent className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Award className="h-6 w-6" />
+            </div>
+            <div className="max-w-lg space-y-1.5">
+              <h2 className="font-display text-xl font-medium text-foreground">
+                Chưa có đợt xét chọn Sinh viên 5 tốt nào đang mở
+              </h2>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Hiện tại Ban Thường vụ Đoàn – Hội Khoa CNTT chưa mở cổng tiếp nhận hồ sơ xét duyệt Sinh viên 5 tốt. Khi
+                đợt xét mới được công bố, cây 5 tiêu chí và cổng nộp minh chứng sẽ hiển thị ngay tại đây.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm" className="mt-2 rounded-full">
+              <Link to="/public/honor-roll">
+                <Trophy className="h-4 w-4" />
+                <span>Xem Bảng vàng Vinh danh các năm</span>
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const myApplication = activeCycle.myApplication ?? null;
+
   return (
     <div className="space-y-7">
       {/* Unified Liquid Glass Page Header */}
@@ -180,7 +223,7 @@ export function Sv5tPortalPage() {
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Đăng ký mục tiêu từ đầu năm học, tự động đồng bộ minh chứng E-Certificate từ YITZone và nộp hồ sơ xét
-            duyệt đợt năm học 2025–2026.
+            duyệt {activeCycle.academicYear ? `đợt năm học ${activeCycle.academicYear}` : "trực tuyến"}.
           </p>
         </div>
 
@@ -192,7 +235,11 @@ export function Sv5tPortalPage() {
             onClick={() => setGoalRegistered((v) => !v)}
           >
             <Flag className="h-4 w-4" />
-            <span>{goalRegistered ? "Đã đăng ký mục tiêu 2025–2026" : "Đăng ký mục tiêu SV5T"}</span>
+            <span>
+              {goalRegistered
+                ? `Đã đăng ký mục tiêu ${activeCycle.academicYear ?? ""}`.trim()
+                : "Đăng ký mục tiêu SV5T"}
+            </span>
           </Button>
           <Button asChild variant="outline" className="rounded-full">
             <Link to="/public/honor-roll">
@@ -206,14 +253,19 @@ export function Sv5tPortalPage() {
       {/* Active Cycle Banner */}
       <div className="flex flex-col gap-3 rounded-[18px] border border-brand-navy/25 bg-brand-navy/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-brand-cyan/25 dark:bg-brand-cyan/10">
         <div className="flex flex-wrap items-center gap-3">
-          <VerifiedBadge label="Đợt xét SV5T 2025–2026 · Đang mở cổng" />
-          <span className="text-sm text-foreground">
-            Hạn nộp hồ sơ:{" "}
-            <strong className="tabular-mono font-semibold text-cal-deadline">30/11/2026 · 23:59</strong>
-          </span>
+          <VerifiedBadge label={`${activeCycle.name ?? "Đợt xét SV5T"} · Đang mở cổng`} />
+          {activeCycle.deadline && (
+            <span className="text-sm text-foreground">
+              Hạn nộp hồ sơ:{" "}
+              <strong className="tabular-mono font-semibold text-cal-deadline">
+                {formatVietnameseDateTime(activeCycle.deadline, true)}
+              </strong>
+            </span>
+          )}
         </div>
         <span className="text-xs text-muted-foreground">
-          Cổng phúc khảo sau sơ khảo: <strong className="tabular-mono text-foreground">72 giờ</strong>
+          Cổng phúc khảo sau sơ khảo:{" "}
+          <strong className="tabular-mono text-foreground">{activeCycle.appealHours ?? "72"} giờ</strong>
         </span>
       </div>
 
@@ -234,10 +286,11 @@ export function Sv5tPortalPage() {
           )}
 
           <div className="space-y-4">
-            {INITIAL_CRITERIA_TREE.map((criterion) => {
+            {criteriaTree.map((criterion) => {
               const { autoDone, autoConditions, externalPending, autoPct } = getCriterionProgress(criterion);
-              const mandatoryList = criterion.conditions.filter((c) => c.group === "MANDATORY");
-              const optionalList = criterion.conditions.filter((c) => c.group === "OPTIONAL");
+              const conditions = criterion.conditions ?? [];
+              const mandatoryList = conditions.filter((c) => c.group === "MANDATORY");
+              const optionalList = conditions.filter((c) => c.group === "OPTIONAL");
 
               return (
                 <Card key={criterion.key}>
@@ -365,8 +418,8 @@ export function Sv5tPortalPage() {
             <div className="flex items-center gap-3 rounded-xl border border-status-success/30 bg-status-success/10 px-4 py-3 text-sm text-status-success">
               <CheckCircle2 className="h-5 w-5 shrink-0" />
               <span>
-                Hồ sơ xét duyệt SV5T 2025–2026 đã được nộp thành công ({readyCriteriaCount}/5 tiêu chí đủ minh chứng ·{" "}
-                {selectedAutoIds.length} minh chứng YITZone · {uploadedProofs.length} tệp ngoài). Đang chờ CTV Ban SV5T thẩm tra sơ bộ.
+                Hồ sơ xét duyệt SV5T đã được nộp thành công ({readyCriteriaCount}/5 tiêu chí đủ minh chứng ·{" "}
+                {selectedAutoIds.length} minh chứng YITZone · {uploadedProofs.length} tệp ngoài). Đang chờ Ban SV5T thẩm tra sơ bộ.
               </span>
             </div>
           )}
@@ -476,6 +529,7 @@ export function Sv5tPortalPage() {
             </aside>
 
             {/* Right Workspace: Selected Criterion Sub-Criteria with Inline Proof Attachment */}
+            {selectedCriterionObj && activeCriterionStatus && (
             <Card className="rounded-[22px] lg:col-span-8">
               <CardHeader className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
@@ -515,12 +569,12 @@ export function Sv5tPortalPage() {
                   {
                     groupKey: "MANDATORY",
                     heading: "(a) Tiêu chí bắt buộc — Phải đạt toàn bộ",
-                    items: selectedCriterionObj.conditions.filter((c) => c.group === "MANDATORY")
+                    items: (selectedCriterionObj.conditions ?? []).filter((c) => c.group === "MANDATORY")
                   },
                   {
                     groupKey: "OPTIONAL",
                     heading: `(b) Tiêu chí khác — Đạt tối thiểu ${selectedCriterionObj.optionalMinRequired} điều kiện`,
-                    items: selectedCriterionObj.conditions.filter((c) => c.group === "OPTIONAL")
+                    items: (selectedCriterionObj.conditions ?? []).filter((c) => c.group === "OPTIONAL")
                   }
                 ].map((section) => (
                   <section key={section.groupKey} className="space-y-3">
@@ -706,7 +760,7 @@ export function Sv5tPortalPage() {
                     className="rounded-full"
                     disabled={selectedCriterionIndex === 0}
                     onClick={() => {
-                      const prev = INITIAL_CRITERIA_TREE[selectedCriterionIndex - 1];
+                      const prev = criteriaTree[selectedCriterionIndex - 1];
                       if (prev) setSelectedCriterionKey(prev.key);
                     }}
                   >
@@ -718,9 +772,9 @@ export function Sv5tPortalPage() {
                     variant="outline"
                     size="sm"
                     className="rounded-full"
-                    disabled={selectedCriterionIndex === INITIAL_CRITERIA_TREE.length - 1}
+                    disabled={selectedCriterionIndex === criteriaTree.length - 1}
                     onClick={() => {
-                      const next = INITIAL_CRITERIA_TREE[selectedCriterionIndex + 1];
+                      const next = criteriaTree[selectedCriterionIndex + 1];
                       if (next) setSelectedCriterionKey(next.key);
                     }}
                   >
@@ -730,6 +784,7 @@ export function Sv5tPortalPage() {
                 </div>
               </CardContent>
             </Card>
+            )}
           </div>
         </TabsContent>
 
@@ -738,77 +793,86 @@ export function Sv5tPortalPage() {
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle>Kết quả Sơ khảo &amp; Cổng Phúc khảo 72 Giờ</CardTitle>
+                <CardTitle>Kết quả Sơ khảo &amp; Cổng Phúc khảo {activeCycle.appealHours ?? "72"} Giờ</CardTitle>
                 <CardDescription>
-                  Khi có tiêu chí bị đánh dấu Cần bổ sung hoặc Không đạt ở vòng sơ khảo, bạn có đúng 72 giờ để gửi giải
+                  Khi có tiêu chí bị đánh dấu Cần bổ sung hoặc Không đạt ở vòng sơ khảo, bạn có đúng {activeCycle.appealHours ?? "72"} giờ để gửi giải
                   trình kèm minh chứng bổ sung trước khi BTV khóa sổ.
                 </CardDescription>
               </div>
-              <Badge variant="warning" className="tabular-mono px-3 py-1">
-                <Clock className="h-3.5 w-3.5" />
-                <span>Còn lại: 46:18:05</span>
-              </Badge>
+              {myApplication?.appealRemainingLabel && (
+                <Badge variant="warning" className="tabular-mono px-3 py-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>Còn lại: {myApplication.appealRemainingLabel}</span>
+                </Badge>
+              )}
             </CardHeader>
 
             <CardContent className="space-y-5">
-              <div className="grid gap-3 sm:grid-cols-5">
-                {[
-                  { name: "Đạo đức tốt", ok: true },
-                  { name: "Học tập tốt", ok: true },
-                  { name: "Thể lực tốt", ok: false },
-                  { name: "Tình nguyện tốt", ok: true },
-                  { name: "Hội nhập tốt", ok: true }
-                ].map((item) => (
-                  <div
-                    key={item.name}
-                    className="rounded-xl border border-border bg-muted/30 p-3 text-center"
-                  >
-                    <div className="text-xs font-semibold text-foreground">{item.name}</div>
-                    <div className="mt-2">
-                      {item.ok ? (
-                        <Badge variant="success">Đạt sơ khảo</Badge>
-                      ) : (
-                        <Badge variant="warning">Cần bổ sung</Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-xl border border-status-warning/30 bg-status-warning/10 p-4 text-sm text-foreground">
-                <div className="font-semibold text-status-warning">Ghi chú từ Ban SV5T (Tiêu chí Thể lực tốt):</div>
-                <p className="mt-1 text-muted-foreground">
-                  Ảnh giấy xác nhận &ldquo;Thanh niên khỏe&rdquo; bị mờ con dấu đơn vị cấp. Vui lòng tải lại bản scan rõ
-                  nét hoặc đính kèm chứng nhận hoàn thành giải chạy HCM-UTE Run.
-                </p>
-              </div>
-
-              {appealSent ? (
-                <div className="flex items-center gap-2.5 rounded-xl border border-status-success/30 bg-status-success/10 px-4 py-3 text-sm text-status-success">
-                  <ShieldCheck className="h-4 w-4 shrink-0" />
-                  <span>
-                    Đã gửi đơn phúc khảo trong khung 72 giờ. Hội đồng BCH/BTV sẽ phản hồi trước khi chốt Bảng vàng.
-                  </span>
+              {!myApplication ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-12 text-center">
+                  <Clock className="h-8 w-8 text-muted-foreground" />
+                  <p className="mt-3 font-display text-lg font-medium text-foreground">
+                    Chưa có kết quả thẩm tra sơ khảo
+                  </p>
+                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    Kết quả rà soát từng tiêu chí và biểu mẫu gửi đơn phúc khảo sẽ mở tại đây sau khi Ban SV5T hoàn tất thẩm tra sơ bộ hồ sơ của bạn.
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <Label htmlFor="sv5t-appeal-text">Nội dung giải trình phúc khảo</Label>
-                  <Textarea
-                    id="sv5t-appeal-text"
-                    rows={3}
-                    value={appealText}
-                    onChange={(e) => setAppealText(e.target.value)}
-                    placeholder="Trình bày căn cứ giải trình và thông tin minh chứng bổ sung..."
-                  />
-                  <Button
-                    type="button"
-                    disabled={appealText.trim().length < 12}
-                    onClick={() => setAppealSent(true)}
-                  >
-                    <Send className="h-4 w-4" />
-                    <span>Gửi Phúc khảo (Trong hạn 72h)</span>
-                  </Button>
-                </div>
+                <>
+                  <div className="grid gap-3 sm:grid-cols-5">
+                    {(myApplication.criteriaReview ?? []).map((item) => (
+                      <div
+                        key={item.key ?? item.title}
+                        className="rounded-xl border border-border bg-muted/30 p-3 text-center"
+                      >
+                        <div className="text-xs font-semibold text-foreground">{item.title}</div>
+                        <div className="mt-2">
+                          {item.status === "OK" ? (
+                            <Badge variant="success">Đạt sơ khảo</Badge>
+                          ) : (
+                            <Badge variant="warning">Cần bổ sung</Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {myApplication.preliminaryNote && (
+                    <div className="rounded-xl border border-status-warning/30 bg-status-warning/10 p-4 text-sm text-foreground">
+                      <div className="font-semibold text-status-warning">Ghi chú từ Ban SV5T:</div>
+                      <p className="mt-1 text-muted-foreground">{myApplication.preliminaryNote}</p>
+                    </div>
+                  )}
+
+                  {appealSent ? (
+                    <div className="flex items-center gap-2.5 rounded-xl border border-status-success/30 bg-status-success/10 px-4 py-3 text-sm text-status-success">
+                      <ShieldCheck className="h-4 w-4 shrink-0" />
+                      <span>
+                        Đã gửi đơn phúc khảo trong khung {activeCycle.appealHours ?? "72"} giờ. Hội đồng BCH/BTV sẽ phản hồi trước khi chốt Bảng vàng.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <Label htmlFor="sv5t-appeal-text">Nội dung giải trình phúc khảo</Label>
+                      <Textarea
+                        id="sv5t-appeal-text"
+                        rows={3}
+                        value={appealText}
+                        onChange={(e) => setAppealText(e.target.value)}
+                        placeholder="Trình bày căn cứ giải trình và thông tin minh chứng bổ sung..."
+                      />
+                      <Button
+                        type="button"
+                        disabled={appealText.trim().length < 12}
+                        onClick={() => setAppealSent(true)}
+                      >
+                        <Send className="h-4 w-4" />
+                        <span>Gửi Phúc khảo (Trong hạn {activeCycle.appealHours ?? "72"}h)</span>
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

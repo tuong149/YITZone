@@ -16,11 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-const SAMPLE_CODES = {
-  CERT: { code: "YIT-2026-CLD-0184", label: "Mã mẫu E-Certificate" },
-  PORTFOLIO: { code: "22110418", label: "MSSV mẫu E-Portfolio" }
-};
-
 const PUBLIC_RESOURCES = [
   {
     to: "/public/honor-roll",
@@ -58,8 +53,8 @@ export function VerifyLookupPage() {
     if (!cleaned) {
       setErrorMessage(
         kind === "CERT"
-          ? "Vui lòng nhập mã E-Certificate (ví dụ: YIT-2026-CLD-0184)."
-          : "Vui lòng nhập MSSV hoặc tên hồ sơ E-Portfolio (ví dụ: 22110418)."
+          ? "Vui lòng nhập mã E-Certificate in dưới mã QR trên tệp PDF."
+          : "Vui lòng nhập MSSV 8 chữ số hoặc tên định danh hồ sơ E-Portfolio."
       );
       return;
     }
@@ -76,11 +71,8 @@ export function VerifyLookupPage() {
     navigateToResult(verifyKind, lookupCode);
   };
 
-  const sample = SAMPLE_CODES[verifyKind];
-
   return (
     <div className="mx-auto max-w-3xl space-y-8 py-4 sm:py-8">
-      {/* Header */}
       <header className="space-y-3">
         <VerifiedBadge label="Đối soát trực tiếp sổ cái Đoàn – Hội Khoa CNTT · Không cần đăng nhập" />
         <h1 className="font-display text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
@@ -91,7 +83,6 @@ export function VerifyLookupPage() {
         </p>
       </header>
 
-      {/* Focused Verification Workbench */}
       <section
         aria-label="Biểu mẫu tra cứu xác thực"
         className="liquid-glass rounded-[24px] p-5 sm:p-7"
@@ -155,7 +146,9 @@ export function VerifyLookupPage() {
                   if (errorMessage) setErrorMessage(null);
                 }}
                 placeholder={
-                  verifyKind === "CERT" ? "VD: YIT-2026-CLD-0184" : "VD: 22110418"
+                  verifyKind === "CERT"
+                    ? "Nhập mã chứng nhận E-Certificate..."
+                    : "Nhập MSSV 8 chữ số..."
                 }
                 aria-invalid={Boolean(errorMessage)}
                 aria-describedby={errorMessage ? "verify-lookup-error" : "verify-lookup-hint"}
@@ -181,23 +174,12 @@ export function VerifyLookupPage() {
               {errorMessage}
             </p>
           ) : (
-            <div
+            <p
               id="verify-lookup-hint"
-              className="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-muted-foreground"
+              className="pt-0.5 text-xs text-muted-foreground"
             >
-              <span>Thử nhanh với dữ liệu minh họa:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setLookupCode(sample.code);
-                  navigateToResult(verifyKind, sample.code);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-2.5 py-1 tabular-mono text-xs font-medium text-foreground transition-colors hover:border-primary/50 hover:text-primary"
-              >
-                <span>{sample.code}</span>
-                <ArrowRight className="h-3 w-3" />
-              </button>
-            </div>
+              Nhập mã in bên dưới QR trên chứng nhận PDF hoặc MSSV 8 chữ số để đối chiếu.
+            </p>
           )}
         </form>
 
@@ -209,7 +191,6 @@ export function VerifyLookupPage() {
         </div>
       </section>
 
-      {/* Secondary Public Directory Strip */}
       <section aria-label="Thông tin công khai liên quan" className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Tài nguyên công khai khác

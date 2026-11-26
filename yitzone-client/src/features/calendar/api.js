@@ -7,10 +7,12 @@ export async function fetchAggregatedCalendar() {
   return res.data.data;
 }
 
-export function useAggregatedCalendar(){
+export function useAggregatedCalendar() {
   return useQuery({
     queryKey: ["calendar", "feed"],
     queryFn: fetchAggregatedCalendar,
     retry: false
   });
 }
+
+export const useCalendarEvents = useAggregatedCalendar;

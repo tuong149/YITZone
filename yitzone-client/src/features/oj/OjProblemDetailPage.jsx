@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  AlertCircle,
   ArrowLeft,
   BotOff,
-  CheckCircle2,
+  Code2,
   Cpu,
   HardDrive,
   Play,
@@ -16,89 +17,151 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiClient, extractApiErrorMessage } from "@/lib/api-client";
+import { useOjProblems } from "./api";
 
 const STARTER_CODE = {
   "C++20": `#include <bits/stdc++.h>
 using namespace std;
 
-int main {
+int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
-    int n, m;
-    if (!(cin >> n >> m)) return 0;
-    // Dijkstra O((V + E) log V)
-    cout << 0 << "\\n";
     return 0;
 }`,
-  "Python 3": `import sys, heapq
+  "Python 3": `import sys
 
-def solve:
-    data = sys.stdin.read().split
+def solve():
+    data = sys.stdin.read().split()
     if not data:
         return
-    print(0)
 
 if __name__ == "__main__":
-    solve`,
+    solve()`,
   "Java 21": `import java.io.*;
 import java.util.*;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        System.out.println(0);
     }
 }`,
   C: `#include <stdio.h>
 
 int main(void) {
-    printf("0\\n");
     return 0;
 }`
 };
 
-const INITIAL_SUBMISSIONS = [
-  { id: "SUB-8841", time: "21:14:08", lang: "C++20", verdict: "AC", runtimeMs: 84, memoryMb: 18.4, score: "100/100" },
-  { id: "SUB-8832", time: "21:06:51", lang: "Python 3", verdict: "TLE", runtimeMs: 1000, memoryMb: 42.1, score: "60/100" }
-];
+const INITIAL_SUBMISSIONS = [];
 
-export function OjProblemDetailPage(){
+export function OjProblemDetailPage() {
   const { id } = useParams();
-  const problemId = (id ?? "fit-101").toUpperCase();
-  const isContestProblem = problemId === "FIT-103";
+  const { data: apiProblems, isLoading } = useOjProblems();
+
+  const problem = useMemo(() => {
+    if (!id || !apiProblems) return null;
+    const lowered = id.toLowerCase();
+    return (
+      apiProblems.find(
+        (p) =>
+          String(p.id).toLowerCase() === lowered ||
+          String(p.code ?? "").toLowerCase() === lowered
+      ) ?? null
+    );
+  }, [apiProblems, id]);
 
   const [lang, setLang] = useState("C++20");
   const [code, setCode] = useState(STARTER_CODE["C++20"] ?? "");
   const [submissions, setSubmissions] = useState(INITIAL_SUBMISSIONS);
   const [judging, setJudging] = useState(false);
-  const [sampleOutput, setSampleOutput] = useState(null);
+  const [runnerNotice, setRunnerNotice] = useState(null);
 
   const handleLanguageChange = (nextLang) => {
     setLang(nextLang);
     setCode(STARTER_CODE[nextLang] ?? "");
   };
 
-  const handleRunSample = () => {
-    setSampleOutput("Test mẫu #1: Output = 7 (Kỳ vọng: 7) · 12 ms · 4.2 MB · Hợp lệ");
+  const handleRunSample = async () => {
+    if (!problem || !code.trim() || judging) return;
+    setRunnerNotice(null);
+    setJudging(true);
+    try {
+      const res = await apiClient.post(
+        `/oj/problems/${encodeURIComponent(problem.id)}/run-sample`,
+        { language: lang, sourceCode: code }
+      );
+      setRunnerNotice(res.data?.data?.summary ?? "Đã chạy test mẫu trên máy chủ Sandbox.");
+    } catch (err) {
+      setRunnerNotice(
+        extractApiErrorMessage(
+          err,
+          "Không thể kết nối cụm máy chấm Sandbox để chạy Test mẫu lúc này."
+        )
+      );
+    } finally {
+      setJudging(false);
+    }
   };
 
-  const handleSubmit = () => {
-    if (!code.trim() || judging) return;
+  const handleSubmit = async () => {
+    if (!problem || !code.trim() || judging) return;
+    setRunnerNotice(null);
     setJudging(true);
-    window.setTimeout(() => {
-      const verdict = code.includes("while(true)") ? "TLE": "AC";
-      const entry = {
-        id: `SUB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-        time: new Date().toLocaleTimeString("vi-VN"),
-        lang,
-        verdict,
-        runtimeMs: verdict === "AC" ? 68: 1000,
-        memoryMb: 16.2,
-        score: verdict === "AC" ? "100/100": "0/100"
-      };
-      setSubmissions((prev) => [entry,...prev]);
+    try {
+      const res = await apiClient.post(
+        `/oj/problems/${encodeURIComponent(problem.id)}/submissions`,
+        { language: lang, sourceCode: code }
+      );
+      if (res.data?.data) {
+        setSubmissions((prev) => [res.data.data, ...prev]);
+      }
+    } catch (err) {
+      setRunnerNotice(
+        extractApiErrorMessage(
+          err,
+          "Không thể gửi bài nộp tới máy chủ Online Judge lúc này. Vui lòng thử lại sau."
+        )
+      );
+    } finally {
       setJudging(false);
-    }, 700);
+    }
   };
+
+  if (!problem) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <Button asChild variant="outline" size="sm" className="rounded-full">
+            <Link to="/oj">
+              <ArrowLeft className="h-4 w-4" />
+              <span>Danh sách bài</span>
+            </Link>
+          </Button>
+        </div>
+
+        <Card className="rounded-[20px]">
+          <CardContent className="flex flex-col items-center justify-center px-6 py-14 text-center">
+            <Code2 className="h-10 w-10 text-muted-foreground/70" />
+            <h1 className="mt-4 font-display text-xl font-medium text-foreground">
+              {isLoading
+                ? "Đang tải nội dung đề bài từ máy chủ..."
+                : "Chưa tìm thấy đề bài trên máy chủ Online Judge"}
+            </h1>
+            <p className="mt-1.5 max-w-md text-xs leading-relaxed text-muted-foreground">
+              {isLoading
+                ? "Vui lòng chờ giây lát trong khi hệ thống đồng bộ thông tin đề bài và bộ giới hạn Sandbox."
+                : `Đề bài ${id ? `(${id}) ` : ""}hiện chưa được xuất bản hoặc chưa kết nối được với máy chủ Online Judge.`}
+            </p>
+            <div className="mt-5">
+              <Button asChild size="sm" className="rounded-full">
+                <Link to="/oj">Quay lại Kho Bài tập</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -112,7 +175,10 @@ export function OjProblemDetailPage(){
           </Button>
           <div>
             <h1 className="font-display text-2xl font-medium text-foreground">
-              <span className="tabular-mono text-primary">{problemId}</span>Đường đi ngắn nhất trên Mạng lưới Campus
+              {problem.code && (
+                <span className="tabular-mono mr-2 text-primary">{problem.code}</span>
+              )}
+              <span>{problem.title}</span>
             </h1>
           </div>
         </div>
@@ -120,18 +186,18 @@ export function OjProblemDetailPage(){
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="rounded-full tabular-mono">
             <Cpu className="h-3 w-3" />
-            CPU 1.0s
+            CPU {problem.cpuSec ?? 1.0}s
           </Badge>
           <Badge variant="secondary" className="rounded-full tabular-mono">
             <HardDrive className="h-3 w-3" />
-            RAM 256MB · OLE 16MB
+            RAM {problem.ramMb ?? 256}MB · OLE 16MB
           </Badge>
-          {isContestProblem ? (
+          {problem.inActiveContest ? (
             <Badge variant="danger" className="rounded-full">
               <BotOff className="h-3.5 w-3.5" />
               YITBot khóa (Đang thi Contest)
             </Badge>
-          ): (
+          ) : (
             <Button asChild size="sm" variant="outline" className="rounded-full">
               <Link to="/yitbot">
                 <Sparkles className="h-3.5 w-3.5 text-brand-cyan" />
@@ -147,30 +213,44 @@ export function OjProblemDetailPage(){
         <Card className="rounded-[20px] lg:col-span-5">
           <CardHeader>
             <CardTitle className="text-lg">Đề bài Thuật toán</CardTitle>
-            <CardDescription>Thực thi trong Sandbox cô lập không mạng · Hỗ trợ C, C++, Python, Java</CardDescription>
+            <CardDescription>
+              Thực thi trong Sandbox cô lập không mạng · Hỗ trợ C, C++, Python, Java
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-relaxed text-foreground">
-            <p>
-              Cho đồ thị có hướng gồm <span className="tabular-mono font-semibold">N</span> tòa nhà học thuật (<span className="tabular-mono">1 ≤ N ≤ 10⁵</span>) và <span className="tabular-mono font-semibold">M</span> tuyến hành lang nối hai tòa nhà với thời gian di chuyển không âm <span className="tabular-mono">wᵢ</span>. Hãy tìm thời gian ngắn nhất để đi từ tòa nhà <strong>1</strong> đến tòa nhà <strong>N</strong>.
+            <p className="whitespace-pre-line">
+              {problem.statement ?? "Nội dung chi tiết đề bài được cung cấp trực tiếp từ máy chủ."}
             </p>
 
-            <div className="space-y-1.5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Định dạng Input</div>
-              <p className="text-xs text-muted-foreground">
-                Dòng đầu chứa hai số nguyên <span className="tabular-mono">N, M</span>. <span className="tabular-mono">M</span> dòng tiếp theo mỗi dòng chứa <span className="tabular-mono">u, v, w</span>.
-              </p>
-            </div>
+            {problem.inputSpec && (
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Định dạng Input
+                </div>
+                <p className="text-xs text-muted-foreground">{problem.inputSpec}</p>
+              </div>
+            )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-border bg-muted/40 p-3">
-                <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Sample Input</div>
-                <pre className="tabular-mono text-xs text-foreground">{`4 5\n1 2 2\n1 3 5\n2 3 1\n2 4 6\n3 4 4`}</pre>
+            {(problem.sampleInput || problem.sampleOutput) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-border bg-muted/40 p-3">
+                  <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
+                    Sample Input
+                  </div>
+                  <pre className="tabular-mono text-xs text-foreground">
+                    {problem.sampleInput ?? ""}
+                  </pre>
+                </div>
+                <div className="rounded-xl border border-border bg-muted/40 p-3">
+                  <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
+                    Sample Output
+                  </div>
+                  <pre className="tabular-mono text-xs text-foreground">
+                    {problem.sampleOutput ?? ""}
+                  </pre>
+                </div>
               </div>
-              <div className="rounded-xl border border-border bg-muted/40 p-3">
-                <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Sample Output</div>
-                <pre className="tabular-mono text-xs text-foreground">{`7`}</pre>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -211,10 +291,10 @@ export function OjProblemDetailPage(){
               </div>
 
               <div className="space-y-3 border-t border-border/80 bg-muted/25 px-4 py-3.5">
-                {sampleOutput && (
-                  <div className="flex items-center gap-2 rounded-xl border border-status-success/35 bg-status-success/10 px-3.5 py-2 tabular-mono text-xs text-status-success">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span>{sampleOutput}</span>
+                {runnerNotice && (
+                  <div className="flex items-center gap-2 rounded-xl border border-status-warning/35 bg-status-warning/10 px-3.5 py-2 text-xs text-status-warning">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{runnerNotice}</span>
                   </div>
                 )}
 
@@ -224,7 +304,14 @@ export function OjProblemDetailPage(){
                     Sandbox cô lập · Tự cắt tiến trình nếu stdout &gt; 16MB (OLE)
                   </span>
                   <div className="flex gap-2">
-                    <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={handleRunSample}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      disabled={judging || !code.trim()}
+                      onClick={() => void handleRunSample()}
+                    >
                       <Play className="h-3.5 w-3.5" />
                       Chạy Test mẫu
                     </Button>
@@ -232,41 +319,53 @@ export function OjProblemDetailPage(){
                       type="button"
                       size="sm"
                       className="liquid-glass-btn-cobalt rounded-full px-5"
-                      onClick={handleSubmit}
-                      disabled={judging}
+                      onClick={() => void handleSubmit()}
+                      disabled={judging || !code.trim()}
                     >
                       <Send className="h-3.5 w-3.5" />
-                      {judging ? "Đang chấm...": "Nộp bài"}
+                      {judging ? "Đang chấm..." : "Nộp bài"}
                     </Button>
                   </div>
                 </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="history" className="m-0 p-4 space-y-2.5">
-              {submissions.map((sub) => (
-                <div
-                  key={sub.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="tabular-mono font-semibold text-foreground">{sub.id}</span>
-                    <Badge
-                      variant={sub.verdict === "AC" ? "success": sub.verdict === "TLE" ? "warning": "danger"}
-                      className="tabular-mono"
-                    >
-                      {sub.verdict}
-                    </Badge>
-                    <Badge variant="secondary">{sub.lang}</Badge>
-                  </div>
-                  <div className="flex items-center gap-4 tabular-mono text-muted-foreground">
-                    <span>{sub.runtimeMs} ms</span>
-                    <span>{sub.memoryMb} MB</span>
-                    <span className="font-semibold text-foreground">{sub.score}</span>
-                    <span>{sub.time}</span>
-                  </div>
+            <TabsContent value="history" className="m-0 space-y-2.5 p-4">
+              {submissions.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/25 px-4 py-8 text-center text-xs text-muted-foreground">
+                  Chưa có lịch sử nộp bài cho đề bài này.
                 </div>
-              ))}
+              ) : (
+                submissions.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card px-4 py-3 text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="tabular-mono font-semibold text-foreground">{sub.id}</span>
+                      <Badge
+                        variant={
+                          sub.verdict === "AC"
+                            ? "success"
+                            : sub.verdict === "TLE"
+                              ? "warning"
+                              : "danger"
+                        }
+                        className="tabular-mono"
+                      >
+                        {sub.verdict}
+                      </Badge>
+                      <Badge variant="secondary">{sub.lang}</Badge>
+                    </div>
+                    <div className="flex items-center gap-4 tabular-mono text-muted-foreground">
+                      <span>{sub.runtimeMs} ms</span>
+                      <span>{sub.memoryMb} MB</span>
+                      <span className="font-semibold text-foreground">{sub.score}</span>
+                      <span>{sub.time}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </TabsContent>
           </Tabs>
         </Card>

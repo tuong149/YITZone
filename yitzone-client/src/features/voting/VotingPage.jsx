@@ -36,97 +36,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useVotingStore } from "@/stores/voting-store";
 import { castVotingBallot } from "./api";
 
-const VOTING_CAMPAIGNS = [
-  {
-    id: "gala-fit-2026",
-    title: "Bình chọn Tiết mục được Yêu thích nhất — Đêm Gala FIT 2026",
-    eventLabel: "Đêm Gala Văn nghệ FIT 2026",
-    description:
-      "Điểm chung cuộc kết hợp 60% Ban Giám khảo và 40% Khán giả đã điểm danh tham dự trực tiếp tại Hội trường Lớn.",
-    requireAttendance: true,
-    userCheckedIn: true,
-    accessRuleNote: "Yêu cầu đã quét QR điểm danh sự kiện · Tài khoản của bạn đã điểm danh",
-    status: "OPEN",
-    timeWindow: "Đang mở · Đóng lúc 21:30 hôm nay",
-    location: "Hội trường Lớn Khu A · HCM-UTE",
-    isSecretBallot: false,
-    allowChangeVote: true,
-    minSelect: 1,
-    maxSelect: 2,
-    turnoutText: "429 lượt bình chọn",
-    options: [
-      { id: "act-1", code: "01", title: "Mashup Tuổi trẻ FIT", subtitle: "Đội Hát ARTIT", votes: 148 },
-      { id: "act-2", code: "02", title: "Nhảy Hiện đại Cyber Pulse", subtitle: "Tổ Nhảy ARTIT", votes: 162 },
-      { id: "act-3", code: "03", title: "Hòa tấu Guitar & Cajon", subtitle: "CLB Acoustic FIT", votes: 119 }
-    ]
-  },
-  {
-    id: "fit-shirt-2026",
-    title: "Bình chọn Mẫu Áo Khoa CNTT Phiên bản 2026",
-    eventLabel: "Chiến dịch Nhận diện Khoa CNTT",
-    description:
-      "Mọi sinh viên Khoa CNTT có thể bình chọn trực tuyến từ xa để chọn mẫu thiết kế áo đồng phục chính thức năm học 2026–2027.",
-    requireAttendance: false,
-    userCheckedIn: false,
-    accessRuleNote: "Không cần điểm danh sự kiện · Mở tự do cho sinh viên đã đăng nhập",
-    status: "OPEN",
-    timeWindow: "Đang mở · Đến 23:59 ngày 30/11/2026",
-    location: "Trực tuyến trên YITZone",
-    isSecretBallot: false,
-    allowChangeVote: true,
-    minSelect: 1,
-    maxSelect: 1,
-    turnoutText: "612 sinh viên đã bình chọn",
-    options: [
-      { id: "shirt-a", code: "A", title: "Mẫu Cobalt Constellation", subtitle: "Xanh YIT Cobalt phối họa tiết lưới đồ thị", votes: 294 },
-      { id: "shirt-b", code: "B", title: "Mẫu Midnight Navy Tech", subtitle: "Xanh Navy học thuật tối giản, cổ polo dệt", votes: 218 },
-      { id: "shirt-c", code: "C", title: "Mẫu Orbital White", subtitle: "Trắng kem phối viền xanh Cyan trẻ trung", votes: 100 }
-    ]
-  },
-  {
-    id: "congress-2026",
-    title: "Biểu quyết Nghị quyết Đại hội Đoàn Khoa CNTT 2026",
-    eventLabel: "Đại hội Đại biểu Đoàn Khoa CNTT",
-    description:
-      "Chế độ Bỏ phiếu Kín tắt hoàn toàn kiểm phiếu thời gian thực, tách danh tính cử tri khỏi lá phiếu (Outbox Shuffle) và cấp mã biên nhận SHA-256 một lần.",
-    requireAttendance: true,
-    userCheckedIn: true,
-    accessRuleNote: "Yêu cầu đã điểm danh phiên Đại hội · Đã xác nhận có mặt",
-    status: "OPEN",
-    timeWindow: "Đang mở · Phiên toàn thể",
-    location: "Hội trường A5 · HCM-UTE",
-    isSecretBallot: true,
-    isResolution: true,
-    allowChangeVote: false,
-    minSelect: 1,
-    maxSelect: 1,
-    turnoutText: "118 / 150 đại biểu đã bỏ phiếu",
-    options: [
-      { id: "opt-yes", title: "Tán thành Nghị quyết Đại hội nhiệm kỳ 2026–2027" },
-      { id: "opt-no", title: "Không tán thành" },
-      { id: "opt-abstain", title: "Không có ý kiến" }
-    ]
-  },
-  {
-    id: "fit-awards-2026",
-    title: "Bình chọn Gương mặt Truyền cảm hứng FIT Awards 2026",
-    eventLabel: "Lễ Tổng kết & Tuyên dương cuối năm",
-    description:
-      "Bình chọn gương mặt sinh viên tiêu biểu có đóng góp nổi bật cho cộng đồng học thuật và phong trào Khoa.",
-    requireAttendance: true,
-    userCheckedIn: false,
-    accessRuleNote: "Cần quét QR điểm danh tại sự kiện Lễ Tổng kết để mở khóa lá phiếu",
-    status: "OPEN",
-    timeWindow: "Đang mở · Đóng lúc 20:00 ngày 05/12/2026",
-    location: "Hội trường Lớn Khu A · HCM-UTE",
-    isSecretBallot: false,
-    allowChangeVote: true,
-    minSelect: 1,
-    maxSelect: 3,
-    turnoutText: "145 lượt bình chọn",
-    options: []
-  }
-];
+const VOTING_CAMPAIGNS = [];
 
 export function VotingPage() {
   const authorities = useAuthStore((s) => s.authorities);
@@ -138,9 +48,7 @@ export function VotingPage() {
   const [activeCampaignId, setActiveCampaignId] = useState(null);
 
   // Per-campaign selections & submission state
-  const [selections, setSelections] = useState({
-    "gala-fit-2026": ["act-2"]
-  });
+  const [selections, setSelections] = useState({});
   const [submittedMap, setSubmittedMap] = useState({});
   const [secretReceipts, setSecretReceipts] = useState({});
   const [submitError, setSubmitError] = useState(null);
@@ -174,7 +82,9 @@ export function VotingPage() {
           allowChangeVote: !sc.isSecretBallot,
           minSelect: 1,
           maxSelect: 1,
-          turnoutText: `${sc.voterCount} lượt đã bỏ phiếu`,
+          voterCount: sc.voterCount ?? 0,
+          expectedVoters: sc.expectedVoters,
+          turnoutText: `${sc.voterCount ?? 0} lượt đã bỏ phiếu`,
           options: sc.candidates.map((cand) => ({
             id: cand.id,
             code: cand.code,
@@ -336,8 +246,21 @@ export function VotingPage() {
             </Button>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {filteredCampaigns.map((campaign) => {
+          {filteredCampaigns.length === 0 ? (
+            <Card className="rounded-[22px] border border-dashed border-border/80">
+              <CardContent className="px-6 py-12 text-center">
+                <Vote className="mx-auto h-9 w-9 text-muted-foreground/70" />
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  Chưa có đợt bình chọn hoặc biểu quyết nào đang mở
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Các đợt bình chọn gắn sự kiện hoặc chiến dịch trực tuyến sẽ xuất hiện tại đây khi mở cổng.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {filteredCampaigns.map((campaign) => {
               const isDone = Boolean(submittedMap[campaign.id] || secretReceipts[campaign.id]);
               const canEnter =
                 campaign.status === "OPEN" && (!campaign.requireAttendance || campaign.userCheckedIn);
@@ -455,7 +378,8 @@ export function VotingPage() {
                 </Card>
               );
             })}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -534,10 +458,12 @@ export function VotingPage() {
                   {/* Secret ballot: ONLY total voter turnout, NEVER live candidate tally */}
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm">
                     <span className="text-muted-foreground">
-                      Tổng số đại biểu đã bỏ phiếu (tắt kiểm phiếu trực tiếp)
+                      Tổng số cử tri đã bỏ phiếu (tắt kiểm phiếu trực tiếp)
                     </span>
                     <span className="tabular-mono text-base font-semibold text-foreground">
-                      {secretReceipts[activeCampaign.id] ? "119 / 150" : "118 / 150"} đại biểu
+                      {activeCampaign.expectedVoters
+                        ? `${activeCampaign.voterCount ?? 0} / ${activeCampaign.expectedVoters} cử tri`
+                        : activeCampaign.turnoutText}
                     </span>
                   </div>
 

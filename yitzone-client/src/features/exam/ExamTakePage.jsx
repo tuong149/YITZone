@@ -7,13 +7,10 @@ import {
   CheckCircle2,
   Clock,
   Flag,
-  Laptop,
   Lock,
   Maximize2,
   Save,
-  ShieldAlert,
-  Smartphone,
-  WifiOff
+  ShieldAlert
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,56 +29,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useEventStore } from "@/stores/event-store";
 
-const EXAM_QUESTIONS = [
-  {
-    id: "eq-1",
-    level: "Nhận biết",
-    stem: "Theo cơ chế Điểm danh Đa lớp, tổ hợp chữ ký số nào dùng để xác thực mã QR thẻ sinh viên ngoại tuyến?",
-    options: [
-      { key: "A", text: "Mã hóa đối xứng AES-128 lưu trong localStorage" },
-      { key: "B", text: "Chữ ký khóa công khai ECDSA P-256 kết hợp quét Barcode 1D" },
-      { key: "C", text: "Mã băm MD5 của MSSV không có salt" },
-      { key: "D", text: "OTP gửi qua SMS không cần mạng" }
-    ],
-    correct: "B"
-  },
-  {
-    id: "eq-2",
-    level: "Thông hiểu",
-    stem: "Khi CTV gửi đơn xin vắng ca trực Văn phòng trước giờ trực ≥ 2 giờ và chọn ca bù hợp lệ, hệ thống xử lý như thế nào?",
-    options: [
-      { key: "A", text: "Bắt buộc chờ BTV phê duyệt trong 24 giờ" },
-      { key: "B", text: "Chấp nhận tự động ngay, hủy ca cũ và thêm ca bù vào lịch" },
-      { key: "C", text: "Ghi nhận 1 lần vắng không phép rồi trừ sau" },
-      { key: "D", text: "Chỉ chấp nhận nếu ca bù rơi vào ngày Chủ Nhật" }
-    ],
-    correct: "B"
-  },
-  {
-    id: "eq-3",
-    level: "Vận dụng",
-    stem: "Trong trường hợp máy tính thí sinh bị hỏng pin giữa giờ thi trắc nghiệm, Cán bộ coi thi cần thực hiện thao tác nào?",
-    options: [
-      { key: "A", text: "Yêu cầu thí sinh tạo tài khoản mới để làm lại từ đầu" },
-      { key: "B", text: "Tắt toàn bộ giám sát phòng thi cho tất cả thí sinh" },
-      { key: "C", text: "Bấm 'Cấp phép chuyển sang thiết bị khác' kèm lý do lưu Audit Log để tiếp tục bài nháp" },
-      { key: "D", text: "Gửi đáp án qua email cho thí sinh tự chấm" }
-    ],
-    correct: "C"
-  },
-  {
-    id: "eq-4",
-    level: "Thông hiểu",
-    stem: "Nếu sinh viên thi trên thiết bị di động hoặc đứt kết nối Heartbeat > 15 giây, cơ chế giám sát xử lý ra sao?",
-    options: [
-      { key: "A", text: "Tự động thu bài và hủy kết quả ngay lập tức" },
-      { key: "B", text: "Chỉ ghi log hậu kiểm (LOG_ONLY / HEARTBEAT_GAP), không thu bài oan" },
-      { key: "C", text: "Khóa tài khoản YITZone trong 7 ngày" },
-      { key: "D", text: "Tự động cộng thêm 30 phút làm bài" }
-    ],
-    correct: "B"
-  }
-];
+const EXAM_QUESTIONS = [];
 
 const MAX_DESKTOP_VIOLATIONS = 3;
 const PASSING_SCORE = 75;
@@ -90,26 +38,27 @@ const EXAM_DURATION_SECONDS = 20 * 60;
 function detectInitialDeviceMode() {
   if (typeof window === "undefined") return "DESKTOP";
   const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
-  const mobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const mobileUa = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   return coarsePointer || mobileUa ? "MOBILE" : "DESKTOP";
 }
 
 export function ExamTakePage() {
   const { id } = useParams();
-  const examCode = id ?? "ex-fit-2026";
-  const userId = useAuthStore((s) => s.userId) ?? "guest";
+  const examCode = id ?? "";
+  const userId = useAuthStore((s) => s.userId) ?? "";
+  const fullName = useAuthStore((s) => s.fullName) ?? "";
   const authorities = useAuthStore((s) => s.authorities);
   const canManageExam = hasAnyPermission(authorities, PERMISSIONS.ADMIN_EXAMS_MINIGAME);
   const events = useEventStore((s) => s.events);
   const matchedEvent = events.find(
     (e) =>
-      e.examPath === `/exam/${examCode}` ||
-      `exam-${e.id.toLowerCase()}` === examCode.toLowerCase()
+      (examCode && e.examPath === `/exam/${examCode}`) ||
+      (examCode && `exam-${e.id.toLowerCase()}` === examCode.toLowerCase())
   );
-  const draftStorageKey = `yitzone-exam-draft:${userId}:${examCode}`;
+  const draftStorageKey = `yitzone-exam-draft:${userId || "anon"}:${examCode || "default"}`;
 
   const [phase, setPhase] = useState("gate");
-  const [deviceMode, setDeviceMode] = useState(() => detectInitialDeviceMode());
+  const [deviceMode] = useState(() => detectInitialDeviceMode());
   const [answers, setAnswers] = useState({});
   const [flagged, setFlagged] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -250,6 +199,7 @@ export function ExamTakePage() {
   }, [phase, deviceMode]);
 
   const handleStartExam = () => {
+    if (EXAM_QUESTIONS.length === 0) return;
     if (deadlineMsRef.current === null || deadlineMsRef.current <= Date.now()) {
       deadlineMsRef.current = Date.now() + EXAM_DURATION_SECONDS * 1000;
       setSecondsLeft(EXAM_DURATION_SECONDS);
@@ -263,34 +213,19 @@ export function ExamTakePage() {
     }
   };
 
-  const handleSimulateBlur = () => {
-    const now = new Date().toLocaleTimeString("vi-VN");
-    if (deviceMode === "MOBILE") {
-      setViolations((prev) => [
-        { at: now, type: "MOBILE_LOG_ONLY", note: "Mobile rời cửa sổ — chỉ ghi LOG_ONLY hậu kiểm." },
-        ...prev
-      ]);
-      return;
-    }
-    setViolations((prev) => [
-      { at: now, type: "TAB_BLUR", note: "Giả lập vi phạm rời tab / blur trên Desktop." },
-      ...prev
-    ]);
-  };
-
-  const handleSimulateHeartbeatGap = () => {
-    const now = new Date().toLocaleTimeString("vi-VN");
-    setViolations((prev) => [
-      { at: now, type: "HEARTBEAT_GAP", note: "Đứt Heartbeat > 15s — ghi nhật ký hậu kiểm, không thu bài oan." },
-...prev
-    ]);
-  };
-
   const correctCount = EXAM_QUESTIONS.filter((q) => answers[q.id] === q.correct).length;
-  const finalScore = Math.round((correctCount / EXAM_QUESTIONS.length) * 100);
-  const passedECert = finalScore >= PASSING_SCORE;
+  const finalScore =
+    EXAM_QUESTIONS.length > 0 ? Math.round((correctCount / EXAM_QUESTIONS.length) * 100) : 0;
+  const passedECert = EXAM_QUESTIONS.length > 0 && finalScore >= PASSING_SCORE;
 
-  const currentQ = EXAM_QUESTIONS[activeIdx] ?? EXAM_QUESTIONS[0];
+  const currentQ = EXAM_QUESTIONS[activeIdx] ?? EXAM_QUESTIONS[0] ?? null;
+  const watermarkText = [
+    userId || "SINH VIÊN",
+    fullName ? fullName.toUpperCase() : null,
+    examCode ? examCode.toUpperCase() : null
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const mins = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
   const secs = String(secondsLeft % 60).padStart(2, "0");
 
@@ -318,7 +253,7 @@ export function ExamTakePage() {
       >
         <div>
           <h1 className="font-display text-3xl font-medium leading-[1.15] tracking-tight text-foreground sm:text-4xl">
-            Phòng Thi Trắc nghiệm<span className="tabular-mono">{examCode}</span>
+            Phòng Thi Trắc nghiệm{examCode ? <> <span className="tabular-mono">{examCode}</span></> : null}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Bài thu hoạch Quy chế Đoàn - Hội &amp; Kiến thức Chuyên môn FIT · Xáo trộn câu hỏi &amp; đáp án trên server.
@@ -369,7 +304,7 @@ export function ExamTakePage() {
                 <div className="rounded-lg border border-border bg-muted/40 p-3">
                   <div className="text-xs text-muted-foreground">Số câu hỏi</div>
                   <div className="mt-0.5 tabular-mono text-lg font-semibold text-foreground">
-                    {EXAM_QUESTIONS.length} câu (4 đáp án)
+                    {EXAM_QUESTIONS.length > 0 ? `${EXAM_QUESTIONS.length} câu (4 đáp án)` : "Theo cấu hình đề"}
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/40 p-3">
@@ -380,55 +315,23 @@ export function ExamTakePage() {
                 </div>
               </div>
 
-              {import.meta.env.DEV && (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-foreground">Chọn chế độ thiết bị kiểm thử giám sát (Dev):</div>
-                  <div className="grid gap-2.5 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={() => setDeviceMode("DESKTOP")}
-                      className={cn(
-                        "flex items-center gap-3 rounded-xl border p-3.5 text-left text-sm transition-colors",
-                        deviceMode === "DESKTOP"
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-card hover:bg-muted/40"
-                      )}
-                    >
-                      <Laptop className="h-5 w-5 text-primary" />
-                      <div>
-                        <div className="font-semibold text-foreground">Máy tính (Khuyến nghị)</div>
-                        <div className="text-xs text-muted-foreground">
-                          Toàn màn hình + Thu bài khi rời tab đủ {MAX_DESKTOP_VIOLATIONS} lần
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeviceMode("MOBILE")}
-                      className={cn(
-                        "flex items-center gap-3 rounded-xl border p-3.5 text-left text-sm transition-colors",
-                        deviceMode === "MOBILE"
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-card hover:bg-muted/40"
-                      )}
-                    >
-                      <Smartphone className="h-5 w-5 text-primary" />
-                      <div>
-                        <div className="font-semibold text-foreground">Điện thoại / Máy tính bảng</div>
-                        <div className="text-xs text-muted-foreground">
-                          Ghi nhật ký hậu kiểm khi chuyển ứng dụng, không tự động thu bài
-                        </div>
-                      </div>
-                    </button>
-                  </div>
+              {EXAM_QUESTIONS.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border bg-muted/35 px-4 py-5 text-sm text-muted-foreground">
+                  Đề thi sẽ được tải trực tiếp từ máy chủ khi kỳ thi mở cổng.
                 </div>
               )}
 
               <div className="rounded-lg border border-status-warning/30 bg-status-warning/10 px-3.5 py-2.5 text-xs text-status-warning">
-                Khi bấm <strong>Bắt đầu làm bài</strong>, tài khoản của bạn sẽ tự động khóa quyền truy cập <strong>YITBot AI</strong> cho tới khi nộp bài hoàn tất.
+                Khi bấm <strong>Bắt đầu làm bài</strong>, tài khoản của bạn sẽ tự động khóa quyền truy cập <strong>YITBot AI</strong> cho tới khi nộp bài hoàn tất. Chế độ thiết bị nhận diện tự động:{" "}
+                <strong>{deviceMode === "DESKTOP" ? "Máy tính" : "Thiết bị di động"}</strong>.
               </div>
 
-              <Button type="button" onClick={handleStartExam} className="w-full sm:w-auto">
+              <Button
+                type="button"
+                onClick={handleStartExam}
+                disabled={EXAM_QUESTIONS.length === 0}
+                className="w-full sm:w-auto"
+              >
                 <Maximize2 className="h-4 w-4" />
                 Bắt đầu làm bài (Khóa 01 thiết bị)
               </Button>
@@ -458,7 +361,7 @@ export function ExamTakePage() {
         </div>
       )}
 
-      {phase === "taking" && (
+      {phase === "taking" && currentQ && (
         <div className="grid gap-5 lg:grid-cols-12">
           {/* Crisp Solid Exam Surface with subtle Watermark */}
           <Card className="relative overflow-hidden lg:col-span-8">
@@ -468,7 +371,7 @@ export function ExamTakePage() {
             >
               <div className="grid h-full w-full -rotate-12 grid-cols-2 gap-12 p-8 tabular-mono text-xs font-semibold text-foreground">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i}>22110418 · TRẦN ĐỨC THỊNH · {examCode.toUpperCase()}</div>
+                  <div key={i}>{watermarkText}</div>
                 ))}
               </div>
             </div>
@@ -632,19 +535,6 @@ export function ExamTakePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2.5">
-                {import.meta.env.DEV && (
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" size="sm" variant="outline" onClick={handleSimulateBlur}>
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      Mô phỏng rời tab
-                    </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={handleSimulateHeartbeatGap}>
-                      <WifiOff className="h-3.5 w-3.5" />
-                      Đứt Heartbeat &gt;15s
-                    </Button>
-                  </div>
-                )}
-
                 {violations.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Chưa ghi nhận cảnh báo giám sát nào.</p>
                 ) : (

@@ -18,40 +18,7 @@ import { INITIAL_ARTICLES, INITIAL_CMS_CATEGORIES } from "@/features/cms/cms-dat
  * @property {boolean} [verified]
  */
 
-export const DEFAULT_HOME_HIGHLIGHTS = [
-  {
-    id: "slot-1",
-    sourceType: "EVENT",
-    sourceId: "EVT-2026-HACK",
-    category: "Hackathon",
-    title: "UTE Hackathon 2026: Smart Campus",
-    meta: "Thứ 7, 12/12 · 08:00 · Sảnh A HCM-UTE",
-    image: "/images/card-hackathon.jpg",
-    badges: ["Cộng ĐRL", "Cộng CĐDN"],
-    to: "/events/EVT-2026-HACK"
-  },
-  {
-    id: "slot-2",
-    sourceType: "PRODUCT",
-    sourceId: "prd-hoodie",
-    category: "Cửa hàng",
-    title: "Áo khoác Hoodie FIT HCM-UTE 2026",
-    meta: "320.000đ · Vật phẩm Khoa thường trực · Pre-order Đợt 2",
-    image: "/images/card-hoodie.jpg",
-    to: "/store"
-  },
-  {
-    id: "slot-3",
-    sourceType: "CAMPAIGN",
-    sourceId: "camp-sv5t",
-    category: "SV5T",
-    title: "Lễ Tuyên dương Sinh viên 5 tốt",
-    meta: "Cấp Liên chi hội Khoa & Trường · Đợt xét 2026",
-    image: "/images/card-sv5t.jpg",
-    verified: true,
-    to: "/public/honor-roll"
-  }
-];
+export const DEFAULT_HOME_HIGHLIGHTS = [];
 
 /**
  * @typedef {Object} HeroBannerConfig
@@ -93,16 +60,18 @@ export const HERO_BANNER_PRESETS = [
 ];
 
 const HERO_STORAGE_KEY = "yitzone_hero_banner_v1";
-const HIGHLIGHTS_STORAGE_KEY = "yitzone_home_highlights_v1";
+const LEGACY_HIGHLIGHTS_STORAGE_KEY = "yitzone_home_highlights_v1";
+const HIGHLIGHTS_STORAGE_KEY = "yitzone_home_highlights_v2";
 
 function loadSavedHomeHighlights() {
   if (typeof window === "undefined") return DEFAULT_HOME_HIGHLIGHTS;
   try {
+    window.localStorage.removeItem(LEGACY_HIGHLIGHTS_STORAGE_KEY);
     const raw = window.localStorage.getItem(HIGHLIGHTS_STORAGE_KEY);
     if (!raw) return DEFAULT_HOME_HIGHLIGHTS;
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length !== 3) return DEFAULT_HOME_HIGHLIGHTS;
-    return parsed;
+    if (!Array.isArray(parsed)) return DEFAULT_HOME_HIGHLIGHTS;
+    return parsed.filter((item) => item && item.sourceId && item.title);
   } catch {
     return DEFAULT_HOME_HIGHLIGHTS;
   }
@@ -149,6 +118,8 @@ export const useCmsStore = create((set) => ({
   articles: INITIAL_ARTICLES,
   heroBanner: loadSavedHeroBanner(),
   homeHighlights: loadSavedHomeHighlights(),
+
+  setArticles: (articles) => set({ articles }),
 
   addArticle: (article) =>
     set((state) => ({
@@ -197,7 +168,7 @@ export const useCmsStore = create((set) => ({
 
   updateHomeHighlights: (items) =>
     set(() => {
-      const normalized = items.slice(0, 3);
+      const normalized = items.filter((item) => item && item.sourceId && item.title).slice(0, 3);
       persistHomeHighlights(normalized);
       return { homeHighlights: normalized };
     }),

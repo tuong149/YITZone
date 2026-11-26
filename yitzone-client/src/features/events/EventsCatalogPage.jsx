@@ -19,6 +19,7 @@ import {
   CancelRegistrationDialog,
   EventRegistrationDialog
 } from "@/features/events/EventRegistrationDialog";
+import { mergeStoredAndApiEvents, useEvents } from "@/features/events/api";
 import { canViewInternalCtvEvents } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -26,6 +27,11 @@ import { useEventStore } from "@/stores/event-store";
 
 export function EventsCatalogPage() {
   const storedEvents = useEventStore((s) => s.events);
+  const { data: apiEventsData } = useEvents();
+  const allEvents = useMemo(
+    () => mergeStoredAndApiEvents(storedEvents, apiEventsData),
+    [storedEvents, apiEventsData]
+  );
   const registrations = useEventStore((s) => s.registrations);
   const registerForEvent = useEventStore((s) => s.registerForEvent);
   const cancelRegistration = useEventStore((s) => s.cancelRegistration);
@@ -86,21 +92,22 @@ export function EventsCatalogPage() {
   const events = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return storedEvents.filter((ev) => {
+    return allEvents.filter((ev) => {
       if (ev.status !== "PUBLISHED" && ev.status !== "ONGOING") return false;
       if (!canSeeInternalCtv && ev.visibility === "INTERNAL_CTV") return false;
       if (normalizedQuery) {
-        const hay = `${ev.title} ${ev.subtitle} ${ev.location}`.toLowerCase();
+        const hay = `${ev.title} ${ev.subtitle ?? ""} ${ev.location ?? ""}`.toLowerCase();
         if (!hay.includes(normalizedQuery)) return false;
       }
+      const benefits = ev.benefits ?? [];
       if (activeFilter === "ALL") return true;
       if (activeFilter === "INTERNAL") return ev.visibility === "INTERNAL_CTV";
-      if (activeFilter === "DRL") return ev.benefits.some((b) => b.includes("ĐRL") || b === "DRL");
-      if (activeFilter === "CTXH") return ev.benefits.some((b) => b.includes("CTXH") || b === "CTXH");
-      if (activeFilter === "CDDN") return ev.benefits.some((b) => b.includes("CĐDN") || b === "CDDN");
+      if (activeFilter === "DRL") return benefits.some((b) => b.includes("ĐRL") || b === "DRL");
+      if (activeFilter === "CTXH") return benefits.some((b) => b.includes("CTXH") || b === "CTXH");
+      if (activeFilter === "CDDN") return benefits.some((b) => b.includes("CĐDN") || b === "CDDN");
       return true;
     });
-  }, [storedEvents, activeFilter, canSeeInternalCtv, query]);
+  }, [allEvents, activeFilter, canSeeInternalCtv, query]);
 
   return (
     <div className="space-y-6">
@@ -171,17 +178,21 @@ export function EventsCatalogPage() {
       {events.length === 0 ? (
         <div className="rounded-[22px] border border-dashed border-border bg-card/80 px-6 py-12 text-center">
           <p className="font-display text-lg font-medium text-foreground">
-            Không tìm thấy sự kiện phù hợp
+            {query.trim() || activeFilter !== "ALL"
+              ? "Không tìm thấy sự kiện phù hợp"
+              : "Chưa có sự kiện nào đang mở đăng ký"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Thử đổi từ khóa tìm kiếm hoặc chọn lại bộ lọc quyền lợi phía trên.
+            {query.trim() || activeFilter !== "ALL"
+              ? "Thử đổi từ khóa tìm kiếm hoặc chọn lại bộ lọc quyền lợi phía trên."
+              : "Các hội thảo học thuật, cuộc thi và hoạt động phong trào sẽ hiển thị tại đây khi mở cổng đăng ký."}
           </p>
         </div>
       ) : (
         <section className="grid gap-5 md:grid-cols-2">
           {events.map((ev) => {
             const isRegistered = Boolean(registrations[ev.id]);
-            const hasCustomForm = ev.formMode === "CUSTOM_FORM" && ev.formFields.length > 0;
+            const hasCustomForm = ev.formMode === "CUSTOM_FORM" && (ev.formFields ?? []).length > 0;
             const slotsLabel =
               ev.capacity === 0
                 ? `${ev.registeredCount} đã ĐK`
@@ -200,7 +211,7 @@ export function EventsCatalogPage() {
                         <span className="mt-0.5 text-[10px] font-semibold tracking-wide">{ev.month}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {ev.benefits.map((b) => (
+                        {(ev.benefits ?? []).map((b) => (
                           <Badge key={b} variant="secondary">
                             {b}
                           </Badge>

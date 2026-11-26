@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
+  ArrowRight,
   Award,
   CalendarDays,
   CheckCircle2,
@@ -23,7 +24,6 @@ import { Input } from "@/components/ui/input";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 import { useEventStore } from "@/stores/event-store";
-import { DEFAULT_QA_SESSION } from "@/stores/liveqa-store";
 import { useSurveyStore } from "@/stores/survey-store";
 
 /**
@@ -44,11 +44,9 @@ export function SurveyListPage() {
         deadline: "Trong vòng 24 giờ sau khi kết thúc sự kiện",
         status: sv.status,
         unlocksEcert: sv.scope === "Sau sự kiện",
-        anonymous: sv.mode === "ANONYMOUS",
-        completed: sv.responsesCount > 180
+        anonymous: sv.mode === "ANONYMOUS"
       }));
 
-    // Include any registered events from useEventStore that don't yet have an entry in useSurveyStore
     for (const [evId, reg] of Object.entries(registrations)) {
       if (!reg) continue;
       const ev = events.find((e) => e.id === evId);
@@ -64,8 +62,7 @@ export function SurveyListPage() {
           deadline: "Trong vòng 24 giờ sau khi kết thúc sự kiện",
           status: "OPEN",
           unlocksEcert: true,
-          anonymous: false,
-          completed: false
+          anonymous: false
         });
       }
     }
@@ -97,51 +94,75 @@ export function SurveyListPage() {
         </Button>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {surveyItems.map((item) => (
-          <Card key={item.id} className="flex flex-col justify-between rounded-[22px]">
-            <CardHeader className="space-y-2.5 pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {item.unlocksEcert && (
-                    <Badge variant="success" className="gap-1">
-                      <Award className="h-3 w-3" />
-                      <span>Mở khóa E-Cert</span>
-                    </Badge>
-                  )}
-                  {item.anonymous && <Badge variant="secondary">Khảo sát Ẩn danh</Badge>}
+      {surveyItems.length === 0 ? (
+        <Card className="rounded-[22px] border-dashed">
+          <CardContent className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <ClipboardList className="h-6 w-6" />
+            </div>
+            <div className="max-w-md space-y-1">
+              <h2 className="font-display text-lg font-medium text-foreground">
+                Chưa có khảo sát nào đang mở
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Phiếu khảo sát chất lượng sẽ tự động xuất hiện tại đây sau khi bạn đăng ký và tham dự sự kiện.
+              </p>
+            </div>
+            <Button asChild className="liquid-glass-btn-cobalt mt-1 rounded-full px-5">
+              <Link to="/events">
+                <span>Khám phá Sự kiện</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {surveyItems.map((item) => (
+            <Card key={item.id} className="flex flex-col justify-between rounded-[22px]">
+              <CardHeader className="space-y-2.5 pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {item.unlocksEcert && (
+                      <Badge variant="success" className="gap-1">
+                        <Award className="h-3 w-3" />
+                        <span>Mở khóa E-Cert</span>
+                      </Badge>
+                    )}
+                    {item.anonymous && <Badge variant="secondary">Khảo sát Ẩn danh</Badge>}
+                  </div>
+                  <Badge variant={item.status === "OPEN" ? "info" : "secondary"}>
+                    {item.status === "OPEN" ? "Đang mở" : "Đã đóng"}
+                  </Badge>
                 </div>
-                <Badge variant={item.status === "OPEN" ? "info" : "secondary"}>
-                  {item.status === "OPEN" ? "Đang mở" : "Đã đóng"}
-                </Badge>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-primary">{item.eventTitle}</p>
-                <CardTitle className="mt-1 font-display text-lg font-medium leading-snug">
-                  {item.title}
-                </CardTitle>
-              </div>
-              <CardDescription className="flex items-center gap-1.5 text-xs">
-                <Clock className="h-3.5 w-3.5 text-primary" />
-                <span>Hạn gửi phiếu: {item.deadline}</span>
-              </CardDescription>
-            </CardHeader>
+                <div>
+                  <p className="text-xs font-medium text-primary">{item.eventTitle}</p>
+                  <CardTitle className="mt-1 font-display text-lg font-medium leading-snug">
+                    {item.title}
+                  </CardTitle>
+                </div>
+                <CardDescription className="flex items-center gap-1.5 text-xs">
+                  <Clock className="h-3.5 w-3.5 text-primary" />
+                  <span>Hạn gửi phiếu: {item.deadline}</span>
+                </CardDescription>
+              </CardHeader>
 
-            <CardContent className="pt-0">
-              <Button
-                asChild
-                className="liquid-glass-btn-cobalt h-11 w-full rounded-full"
-                disabled={item.status !== "OPEN"}
-              >
-                <Link to={`/surveys/${item.id}`}>
-                  <ClipboardList className="h-4 w-4" />
-                  <span>{item.status === "OPEN" ? "Làm khảo sát ngay" : "Xem phiếu khảo sát"}</span>
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              <CardContent className="pt-0">
+                <Button
+                  asChild
+                  className="liquid-glass-btn-cobalt h-11 w-full rounded-full"
+                  disabled={item.status !== "OPEN"}
+                >
+                  <Link to={`/surveys/${item.id}`}>
+                    <ClipboardList className="h-4 w-4" />
+                    <span>{item.status === "OPEN" ? "Làm khảo sát ngay" : "Xem phiếu khảo sát"}</span>
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -161,18 +182,10 @@ export function LiveQaJoinPage() {
   const [pinError, setPinError] = useState(null);
 
   const activeQaSessions = useMemo(() => {
-    const list = [
-      {
-        pin: DEFAULT_QA_SESSION.pin.replace(/\s+/g, ""),
-        eventId: DEFAULT_QA_SESSION.eventId,
-        title: DEFAULT_QA_SESSION.label,
-        room: "Hội trường Lớn Khu A · HCM-UTE",
-        speaker: "Đoàn – Hội Khoa CNTT"
-      }
-    ];
+    const list = [];
 
     for (const ev of events) {
-      const hasQa = ev.sessions.some((s) => s.activities.liveQa);
+      const hasQa = (ev.sessions ?? []).some((s) => s.activities?.liveQa);
       if (!hasQa) continue;
       const derivedPin = ((ev.id.replace(/\D/g, "") || "482") + "910").slice(0, 6);
       if (!list.some((x) => x.pin === derivedPin || x.eventId === ev.id)) {
@@ -195,15 +208,8 @@ export function LiveQaJoinPage() {
       setPinError("Mã PIN phiên hỏi đáp phải gồm đúng 6 chữ số hiển thị trên màn hình LED.");
       return;
     }
-    const matched = activeQaSessions.find((s) => s.pin === digits);
-    if (!matched) {
-      setPinError(
-        `Không tìm thấy phiên Hỏi đáp Live Q&A nào khớp với mã PIN ${digits}. Vui lòng kiểm tra lại trên màn hình LED hội trường.`
-      );
-      return;
-    }
     setPinError(null);
-    void navigate(`/live-qa/${matched.pin}`);
+    void navigate(`/live-qa/${digits}`);
   };
 
   return (
@@ -261,7 +267,7 @@ export function LiveQaJoinPage() {
                 }}
                 inputMode="numeric"
                 maxLength={6}
-                placeholder="VD: 482910"
+                placeholder="Nhập 6 chữ số PIN"
                 className="tabular-mono h-12 rounded-xl text-center text-lg font-semibold tracking-[0.25em]"
               />
               {pinError && (
@@ -291,30 +297,48 @@ export function LiveQaJoinPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Phiên Hỏi đáp Đang mở ({activeQaSessions.length})
           </h2>
-          {activeQaSessions.map((ses) => (
-            <Card key={ses.pin} className="rounded-[20px]">
-              <CardContent className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="success">Đang mở nhận câu hỏi</Badge>
-                    <Badge variant="outline" className="tabular-mono">
-                      PIN: {ses.pin.slice(0, 3)} {ses.pin.slice(3)}
-                    </Badge>
-                  </div>
-                  <div className="font-display text-lg font-medium text-foreground">{ses.title}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {ses.room} · {ses.speaker}
-                  </div>
+          {activeQaSessions.length === 0 ? (
+            <Card className="rounded-[20px] border-dashed">
+              <CardContent className="flex flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <MessageSquareMore className="h-5 w-5" />
                 </div>
-                <Button asChild className="rounded-full">
-                  <Link to={`/live-qa/${ses.pin}`}>
-                    <MessageSquareMore className="h-4 w-4" />
-                    <span>Đặt câu hỏi ngay</span>
-                  </Link>
-                </Button>
+                <div className="max-w-sm space-y-1">
+                  <h3 className="font-display text-base font-medium text-foreground">
+                    Chưa có phiên Live Q&amp;A nào đang mở
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Nếu hội trường đang chiếu mã PIN 6 chữ số trên màn hình LED, bạn có thể nhập trực tiếp ở khung bên trái để tham gia.
+                  </p>
+                </div>
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            activeQaSessions.map((ses) => (
+              <Card key={ses.pin} className="rounded-[20px]">
+                <CardContent className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="success">Đang mở nhận câu hỏi</Badge>
+                      <Badge variant="outline" className="tabular-mono">
+                        PIN: {ses.pin.slice(0, 3)} {ses.pin.slice(3)}
+                      </Badge>
+                    </div>
+                    <div className="font-display text-lg font-medium text-foreground">{ses.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {ses.room} · {ses.speaker}
+                    </div>
+                  </div>
+                  <Button asChild className="rounded-full">
+                    <Link to={`/live-qa/${ses.pin}`}>
+                      <MessageSquareMore className="h-4 w-4" />
+                      <span>Đặt câu hỏi ngay</span>
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -330,8 +354,8 @@ export function ExamListPage() {
   const canManageExams = hasAnyPermission(authorities, PERMISSIONS.ADMIN_EXAMS_MINIGAME);
 
   const examSessions = useMemo(() => {
-    const list = events
-      .filter((ev) => ev.hasExam || ev.sessions.some((s) => s.activities.quizExam))
+    return events
+      .filter((ev) => ev.hasExam || (ev.sessions ?? []).some((s) => s.activities?.quizExam))
       .map((ev) => {
         const examCode = ev.examPath?.replace("/exam/", "") ?? `exam-${ev.id.toLowerCase()}`;
         return {
@@ -341,27 +365,10 @@ export function ExamListPage() {
           eventTitle: ev.title,
           location: ev.location,
           durationMinutes: ev.examMinutes ?? 20,
-          questionCount: 25,
           passingScore: ev.examPassRate ?? 75,
-          status: ev.status === "PUBLISHED" ? ("OPEN") : ("UPCOMING")
+          status: ev.status === "PUBLISHED" ? "OPEN" : "UPCOMING"
         };
       });
-
-    if (!list.some((x) => x.code === "ex-fit-2026")) {
-      list.push({
-        code: "ex-fit-2026",
-        eventId: "EVT-2026-CLOUD",
-        title: "Kỳ thi Trắc nghiệm Nghiệp vụ & Học thuật Đoàn - Hội FIT 2026",
-        eventTitle: "Tập huấn Cán bộ Đoàn - Hội Chủ chốt Khoa CNTT",
-        location: "Phòng máy A3-302 & Trực tuyến trên YITZone",
-        durationMinutes: 20,
-        questionCount: 4,
-        passingScore: 75,
-        status: "OPEN"
-      });
-    }
-
-    return list;
   }, [events]);
 
   return (
@@ -390,63 +397,87 @@ export function ExamListPage() {
         )}
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {examSessions.map((ex) => (
-          <Card key={ex.code} className="flex flex-col justify-between rounded-[22px]">
-            <CardHeader className="space-y-2.5 pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Badge variant={ex.status === "OPEN" ? "success" : "secondary"}>
-                  {ex.status === "OPEN" ? "Đang mở phòng thi" : "Sắp mở"}
-                </Badge>
-                <span className="tabular-mono text-xs text-muted-foreground">Mã đề: {ex.code}</span>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-primary">{ex.eventTitle}</p>
-                <CardTitle className="mt-1 font-display text-lg font-medium leading-snug">
-                  {ex.title}
-                </CardTitle>
-              </div>
-              <CardDescription className="text-xs">
-                Thời lượng: <strong>{ex.durationMinutes} phút</strong> · Điểm đạt tối thiểu:{" "}
-                <strong>≥ {ex.passingScore}/100</strong>
-              </CardDescription>
-            </CardHeader>
+      {examSessions.length === 0 ? (
+        <Card className="rounded-[22px] border-dashed">
+          <CardContent className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <FileCheck2 className="h-6 w-6" />
+            </div>
+            <div className="max-w-md space-y-1">
+              <h2 className="font-display text-lg font-medium text-foreground">
+                Chưa có kỳ thi trắc nghiệm nào đang mở
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Các bài kiểm tra gắn với sự kiện học thuật hoặc đợt tập huấn sẽ hiển thị tại đây khi đến giờ mở phòng thi.
+              </p>
+            </div>
+            <Button asChild variant="outline" className="mt-1 rounded-full px-5">
+              <Link to="/events">
+                <span>Xem Danh sách Sự kiện</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {examSessions.map((ex) => (
+            <Card key={ex.code} className="flex flex-col justify-between rounded-[22px]">
+              <CardHeader className="space-y-2.5 pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Badge variant={ex.status === "OPEN" ? "success" : "secondary"}>
+                    {ex.status === "OPEN" ? "Đang mở phòng thi" : "Sắp mở"}
+                  </Badge>
+                  <span className="tabular-mono text-xs text-muted-foreground">Mã đề: {ex.code}</span>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-primary">{ex.eventTitle}</p>
+                  <CardTitle className="mt-1 font-display text-lg font-medium leading-snug">
+                    {ex.title}
+                  </CardTitle>
+                </div>
+                <CardDescription className="text-xs">
+                  Thời lượng: <strong>{ex.durationMinutes} phút</strong> · Điểm đạt tối thiểu:{" "}
+                  <strong>≥ {ex.passingScore}/100</strong>
+                </CardDescription>
+              </CardHeader>
 
-            <CardContent className="space-y-3 pt-0">
-              <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/35 px-3.5 py-2.5 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <CalendarDays className="h-3.5 w-3.5 text-primary" />
-                  {ex.location}
-                </span>
-                <span className="inline-flex items-center gap-1 text-status-success">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Đủ điều kiện dự thi
-                </span>
-              </div>
+              <CardContent className="space-y-3 pt-0">
+                <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/35 px-3.5 py-2.5 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                    {ex.location}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-status-success">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Đủ điều kiện dự thi
+                  </span>
+                </div>
 
-              <Button
-                asChild
-                className="liquid-glass-btn-cobalt h-11 w-full rounded-full"
-                disabled={ex.status !== "OPEN"}
-              >
-                <Link to={`/exam/${ex.code}`}>
-                  {ex.status === "OPEN" ? (
-                    <>
-                      <FileCheck2 className="h-4 w-4" />
-                      <span>Vào Phòng thi ngay</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="h-4 w-4" />
-                      <span>Chưa đến giờ mở đề</span>
-                    </>
-                  )}
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <Button
+                  asChild
+                  className="liquid-glass-btn-cobalt h-11 w-full rounded-full"
+                  disabled={ex.status !== "OPEN"}
+                >
+                  <Link to={`/exam/${ex.code}`}>
+                    {ex.status === "OPEN" ? (
+                      <>
+                        <FileCheck2 className="h-4 w-4" />
+                        <span>Vào Phòng thi ngay</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-4 w-4" />
+                        <span>Chưa đến giờ mở đề</span>
+                      </>
+                    )}
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -6,7 +6,6 @@ import {
   CalendarDays,
   CheckCircle2,
   CloudUpload,
-  Plus,
   QrCode,
   Smartphone,
   WifiOff
@@ -16,26 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { subscribeWebPush, useVapidPublicKey } from "./api";
 
-const INITIAL_QUEUE = [
-  {
-    id: "oq-1",
-    kind: "SURVEY",
-    title: "Phiếu khảo sát sau Check-out · Cloud Native 2026",
-    policyNote: "Hợp lệ gửi bù trong vòng 24 giờ sau sự kiện",
-    queuedAt: "11:32 · Ngoại tuyến",
-    status: "PENDING"
-  },
-  {
-    id: "oq-2",
-    kind: "LIVE_QA",
-    title: "Câu hỏi Live Q&A #482910",
-    policyNote: "Nếu đồng bộ sau giờ sẽ lưu mục \"Gửi sau sự kiện\"",
-    queuedAt: "11:34 · Ngoại tuyến",
-    status: "PENDING"
-  }
-];
+const INITIAL_QUEUE = [];
 
-export function PwaSettingsPage(){
+export function PwaSettingsPage() {
   const [pushStatus, setPushStatus] = useState("DEFAULT");
   const [queue, setQueue] = useState(INITIAL_QUEUE);
   const [syncNotice, setSyncNotice] = useState(null);
@@ -44,43 +26,76 @@ export function PwaSettingsPage(){
   const pendingCount = queue.filter((q) => q.status === "PENDING").length;
 
   const enablePush = async () => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      try {
-        await Notification.requestPermission();
-      } catch {
-        // Fallback for sandboxed browsers
-      }
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setSyncNotice("Trình duyệt hiện tại không hỗ trợ Web Push Notification.");
+      return;
     }
+
+    let permission = Notification.permission;
     try {
+      permission = await Notification.requestPermission();
+    } catch {
+      // Ignore permission prompt errors in restricted contexts
+    }
+
+    if (permission === "denied") {
+      setSyncNotice(
+        "Quyền thông báo đang bị chặn trên trình duyệt. Vui lòng bật lại trong cài đặt trang web."
+      );
+      return;
+    }
+
+    const publicKey = vapidData?.publicKey;
+    if (!publicKey || !("serviceWorker" in navigator)) {
+      setSyncNotice(
+        "Chưa nhận được khóa VAPID công khai hoặc Service Worker từ máy chủ. Thiết bị sẽ hoàn tất đăng ký khi máy chủ sẵn sàng."
+      );
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (!registration?.pushManager) {
+        setSyncNotice(
+          "Service Worker chưa được kích hoạt cho phiên làm việc này. Vui lòng tải lại ứng dụng ở chế độ HTTPS/PWA."
+        );
+        return;
+      }
+
+      const existingSub = await registration.pushManager.getSubscription();
+      const pushSub =
+        existingSub ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: publicKey
+        }));
+      const subJson = pushSub.toJSON();
+      if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {
+        setSyncNotice("Không đọc được khóa mã hóa từ PushSubscription của trình duyệt.");
+        return;
+      }
+
       await subscribeWebPush({
-        endpoint: "https://fcm.googleapis.com/fcm/send/yitzone-pwa-client",
-        keys: { p256dh: vapidData?.publicKey || "demo-p256dh", auth: "demo-auth" },
+        endpoint: subJson.endpoint,
+        keys: {
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth
+        },
         deviceName: navigator.userAgent.slice(0, 64)
       });
+      setPushStatus("GRANTED");
       setSyncNotice("Đã đăng ký nhận thông báo đẩy Web Push thành công trên thiết bị này.");
     } catch {
-      setSyncNotice("Đã bật thông báo đẩy Web Push trên trình duyệt này.");
+      setSyncNotice(
+        "Không thể hoàn tất đăng ký Web Push với máy chủ lúc này. Vui lòng thử lại sau."
+      );
     }
-    setPushStatus("GRANTED");
   };
 
   const syncAllNow = () => {
-    setQueue((prev) => prev.map((item) => ({...item, status: "SYNCED" })));
+    if (pendingCount === 0) return;
+    setQueue((prev) => prev.map((item) => ({ ...item, status: "SYNCED" })));
     setSyncNotice("Background Sync hoàn tất: đã gửi bù toàn bộ hàng đợi ngoại tuyến lên máy chủ.");
-  };
-
-  const addSampleOfflineItem = () => {
-    setQueue((prev) => [
-      {
-        id: `oq-${Date.now()}`,
-        kind: "DUTY_LOG",
-        title: "Sổ nhật ký trực Văn phòng Ca 3 (OFIT)",
-        policyNote: "Lưu cục bộ an toàn trên thiết bị và tự động đồng bộ khi có kết nối mạng",
-        queuedAt: "Vừa xong · Ngoại tuyến",
-        status: "PENDING"
-      },
-...prev
-    ]);
   };
 
   return (
@@ -148,16 +163,16 @@ export function PwaSettingsPage(){
                 <p className="text-xs text-muted-foreground">
                   {pushStatus === "GRANTED"
                     ? "Thiết bị đã đăng ký nhận Web Push lên màn hình khóa."
-: "Bật để nhận nhắc trực 30p, đôn Waitlist và phản hồi từ BCH."}
+                    : "Bật để nhận nhắc trực 30p, đôn Waitlist và phản hồi từ BCH."}
                 </p>
               </div>
               <Button
                 type="button"
-                variant={pushStatus === "GRANTED" ? "outline": "default"}
+                variant={pushStatus === "GRANTED" ? "outline" : "default"}
                 onClick={() => void enablePush()}
               >
                 <BellRing className="h-4 w-4" />
-                {pushStatus === "GRANTED" ? "Đã bật Push": "Bật Web Push"}
+                {pushStatus === "GRANTED" ? "Đã bật Push" : "Bật Web Push"}
               </Button>
             </div>
           </CardContent>
@@ -175,28 +190,34 @@ export function PwaSettingsPage(){
                 Tự động đồng bộ nền qua Service Worker khi thiết bị có mạng lại mà không cần nhập lại.
               </CardDescription>
             </div>
-            <Badge variant={pendingCount > 0 ? "warning": "success"} className="tabular-mono">
+            <Badge variant={pendingCount > 0 ? "warning" : "success"} className="tabular-mono">
               {pendingCount} đang chờ đồng bộ
             </Badge>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2.5">
-              {queue.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-col justify-between gap-2 rounded-xl border border-border bg-muted/30 p-3.5 sm:flex-row sm:items-center"
-                >
-                  <div className="space-y-0.5">
-                    <div className="text-sm font-medium text-foreground">{item.title}</div>
-                    <p className="text-xs text-muted-foreground">{item.policyNote}</p>
-                    <span className="tabular-mono text-[11px] text-muted-foreground">{item.queuedAt}</span>
+            {queue.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/25 px-4 py-8 text-center text-xs text-muted-foreground">
+                Hàng đợi ngoại tuyến đang trống — mọi thao tác của bạn đều đã được đồng bộ với máy chủ.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {queue.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-col justify-between gap-2 rounded-xl border border-border bg-muted/30 p-3.5 sm:flex-row sm:items-center"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="text-sm font-medium text-foreground">{item.title}</div>
+                      <p className="text-xs text-muted-foreground">{item.policyNote}</p>
+                      <span className="tabular-mono text-[11px] text-muted-foreground">{item.queuedAt}</span>
+                    </div>
+                    <Badge variant={item.status === "SYNCED" ? "success" : "warning"}>
+                      {item.status === "SYNCED" ? "Đã đồng bộ" : "Chờ mạng"}
+                    </Badge>
                   </div>
-                  <Badge variant={item.status === "SYNCED" ? "success": "warning"}>
-                    {item.status === "SYNCED" ? "Đã đồng bộ": "Chờ mạng"}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             {syncNotice && (
               <div className="flex items-center gap-2 rounded-xl border border-status-success/30 bg-status-success/10 px-3.5 py-2.5 text-xs text-status-success">
@@ -210,12 +231,6 @@ export function PwaSettingsPage(){
                 <CloudUpload className="h-4 w-4" />
                 Đồng bộ ngay ({pendingCount})
               </Button>
-              {import.meta.env.DEV && (
-                <Button type="button" variant="outline" onClick={addSampleOfflineItem}>
-                  <Plus className="h-4 w-4" />
-                  Mô phỏng thêm mục ngoại tuyến
-                </Button>
-              )}
             </div>
           </CardContent>
         </Card>

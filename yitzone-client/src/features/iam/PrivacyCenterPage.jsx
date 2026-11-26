@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
+  AlertCircle,
   CheckCircle2,
   Download,
   FileJson,
@@ -14,53 +15,74 @@ import { AuditActionDialog } from "@/components/ui/audit-action-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { loadOnboardingState } from "@/features/iam/data/onboarding-storage";
+import { extractApiErrorMessage } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import { requestPersonalDataExport } from "./api";
 
-const INITIAL_CONSENTS = [
-  {
-    id: "cs-1",
-    type: "Xử lý Dữ liệu Cá nhân Cơ bản",
-    policyVersion: "v2.2.1 · Luật 91/2025/QH15",
-    consentedAt: "2026-09-05 08:12",
-    status: "ACTIVE",
-    note: "Phục vụ định danh MSSV, điểm danh sự kiện và cấp E-Certificate."
-  },
-  {
-    id: "cs-2",
-    type: "Đối chiếu Ảnh thẻ Sinh viên tại Quầy Soát vé",
-    policyVersion: "v2.2.1 · NĐ 356/2025",
-    consentedAt: "2026-09-10 14:20",
-    status: "ACTIVE",
-    note: "Chỉ hiển thị cho Lễ tân được phân quyền soát vé khi kiểm tra thẻ sinh viên."
-  },
-  {
-    id: "cs-3",
-    type: "Tương tác Trợ lý Ảo YITBot & Gợi ý CV (Khử định danh)",
-    policyVersion: "v2.2.1 · NĐ 330/2026",
-    consentedAt: "2026-10-01 19:05",
-    status: "ACTIVE",
-    note: "Payload gửi LLM luôn qua lớp khử định danh PII Redactor."
-  }
-];
+const INITIAL_CONSENTS = [];
 
 export function PrivacyCenterPage() {
   const location = useLocation();
   const isAuthenticated = useAuthStore((s) => Boolean(s.accessToken));
-  const [consents] = useState(INITIAL_CONSENTS);
+  const userId = useAuthStore((s) => s.userId);
+
+  const consents = useMemo(() => {
+    if (!isAuthenticated || !userId) return INITIAL_CONSENTS;
+    const saved = loadOnboardingState(userId);
+    if (!saved?.consents) return INITIAL_CONSENTS;
+    const at = saved.completedAt || saved.updatedAt;
+    const formattedAt = at ? new Date(at).toLocaleString("vi-VN") : "Đã xác nhận";
+    const items = [];
+    if (saved.consents.pdplBasic) {
+      items.push({
+        id: "cs-pdpl",
+        type: "Xử lý Dữ liệu Cá nhân Cơ bản",
+        policyVersion: "Luật 91/2025/QH15",
+        consentedAt: formattedAt,
+        note: "Phục vụ định danh MSSV, điểm danh sự kiện và cấp E-Certificate."
+      });
+    }
+    if (saved.consents.photoCheckin) {
+      items.push({
+        id: "cs-photo",
+        type: "Đối chiếu Ảnh thẻ Sinh viên tại Quầy Soát vé",
+        policyVersion: "NĐ 356/2025",
+        consentedAt: formattedAt,
+        note: "Chỉ hiển thị cho Lễ tân được phân quyền soát vé khi kiểm tra thẻ sinh viên."
+      });
+    }
+    if (saved.consents.yitbotDeidentified) {
+      items.push({
+        id: "cs-yitbot",
+        type: "Tương tác Trợ lý Ảo YITBot & Gợi ý CV (Khử định danh)",
+        policyVersion: "NĐ 330/2026",
+        consentedAt: formattedAt,
+        note: "Payload gửi LLM luôn qua lớp khử định danh PII Redactor."
+      });
+    }
+    return items;
+  }, [isAuthenticated, userId]);
+
   const [exportNotice, setExportNotice] = useState(null);
+  const [exportError, setExportError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletionSubmitted, setDeletionSubmitted] = useState(null);
 
   const handleExport = async (format) => {
+    setExportNotice(null);
+    setExportError(null);
     try {
       const res = await requestPersonalDataExport();
       setExportNotice(
-        `Đã khởi tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format} cho tài khoản ${res.userId}.`
+        `Đã khởi tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format} cho tài khoản ${res.userId ?? userId ?? ""}.`
       );
-    } catch {
-      setExportNotice(
-        `Đã tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format}. Bạn có thể tải về từ mục thông báo.`
+    } catch (err) {
+      setExportError(
+        extractApiErrorMessage(
+          err,
+          "Không thể khởi tạo yêu cầu xuất dữ liệu cá nhân từ máy chủ. Vui lòng thử lại sau."
+        )
       );
     }
   };
@@ -93,21 +115,29 @@ export function PrivacyCenterPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {consents.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-col justify-between gap-2 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center"
-              >
-                <div className="space-y-1">
-                  <div className="font-medium text-foreground">{item.type}</div>
-                  <p className="text-xs text-muted-foreground">{item.note}</p>
-                  <div className="tabular-mono text-[11px] text-muted-foreground">
-                    {item.policyVersion} · Xác nhận lúc {item.consentedAt}
-                  </div>
-                </div>
-                <Badge variant="success">Đang hiệu lực</Badge>
+            {consents.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                {isAuthenticated
+                  ? "Chưa có bản ghi đồng ý xử lý dữ liệu nào được ghi nhận cho phiên hiện tại."
+                  : "Đăng nhập để xem lịch sử đồng ý xử lý dữ liệu cá nhân của tài khoản bạn."}
               </div>
-            ))}
+            ) : (
+              consents.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col justify-between gap-2 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center"
+                >
+                  <div className="space-y-1">
+                    <div className="font-medium text-foreground">{item.type}</div>
+                    <p className="text-xs text-muted-foreground">{item.note}</p>
+                    <div className="tabular-mono text-[11px] text-muted-foreground">
+                      {item.policyVersion} · Xác nhận lúc {item.consentedAt}
+                    </div>
+                  </div>
+                  <Badge variant="success">Đang hiệu lực</Badge>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
 
@@ -146,11 +176,11 @@ export function PrivacyCenterPage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" onClick={() => handleExport("JSON")}>
+                    <Button variant="outline" onClick={() => void handleExport("JSON")}>
                       <FileJson className="h-4 w-4" />
                       Xuất JSON
                     </Button>
-                    <Button variant="outline" onClick={() => handleExport("PDF")}>
+                    <Button variant="outline" onClick={() => void handleExport("PDF")}>
                       <FileText className="h-4 w-4" />
                       Xuất PDF
                     </Button>
@@ -159,6 +189,15 @@ export function PrivacyCenterPage() {
                     <div className="flex items-start gap-2 rounded-lg border border-status-success/30 bg-status-success/10 p-3 text-xs text-status-success">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                       <span>{exportNotice}</span>
+                    </div>
+                  )}
+                  {exportError && (
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2 rounded-lg border border-status-danger/30 bg-status-danger/10 p-3 text-xs text-status-danger"
+                    >
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{exportError}</span>
                     </div>
                   )}
                 </CardContent>

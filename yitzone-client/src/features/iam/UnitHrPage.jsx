@@ -18,52 +18,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthStore } from "@/stores/auth-store";
 
-const INITIAL_MEMBERS = [
-  {
-    id: "ctv-1",
-    studentCode: "22110345",
-    fullName: "Nguyễn Minh Khoa",
-    team: "Tổ Trực Văn phòng",
-    status: "ACTIVE",
-    unreturnedAssets: []
-  },
-  {
-    id: "ctv-2",
-    studentCode: "23110219",
-    fullName: "Lê Quốc Bảo",
-    team: "Tổ Kiểm kê Tài sản",
-    status: "ACTIVE",
-    unreturnedAssets: ["Loa kéo Sony #VP-04", "2 Micro không dây #VP-11"]
-  },
-  {
-    id: "ctv-3",
-    studentCode: "23133088",
-    fullName: "Nguyễn Thị Hồng Nhung",
-    team: "Tổ Trực Văn phòng",
-    status: "ON_LEAVE",
-    unreturnedAssets: []
-  }
-];
+const INITIAL_MEMBERS = [];
+const INITIAL_PROPOSALS = [];
 
-const INITIAL_PROPOSALS = [
-  {
-    id: "pr-1",
-    proposer: "Tổ phó Tổ Trực VP",
-    action: "Đề xuất tiếp nhận CTV mới",
-    target: "Trần Đức Minh (24110092)",
-    status: "PENDING"
-  },
-  {
-    id: "pr-2",
-    proposer: "Phó Ban OFIT",
-    action: "Đề xuất điều chuyển sang Tổ Kiểm kê",
-    target: "Nguyễn Minh Khoa (22110345)",
-    status: "PENDING"
-  }
-];
-
-export function UnitHrPage(){
-  const activeScopeId = useAuthStore((s) => s.activeScopeId);
+export function UnitHrPage() {
+  const activeScopeId = useAuthStore((s) => s.activeScopeId) || "FACULTY";
   const [members, setMembers] = useState(INITIAL_MEMBERS);
   const [proposals, setProposals] = useState(INITIAL_PROPOSALS);
   const [statusModalMember, setStatusModalMember] = useState(null);
@@ -72,16 +31,20 @@ export function UnitHrPage(){
   const [notice, setNotice] = useState(null);
 
   const hasAssetBlocker = Boolean(
-    statusModalMember && nextStatus === "LEFT" && statusModalMember.unreturnedAssets.length > 0
+    statusModalMember &&
+      nextStatus === "LEFT" &&
+      (statusModalMember.unreturnedAssets?.length ?? 0) > 0
   );
 
   const confirmStatusChange = () => {
     if (!statusModalMember || hasAssetBlocker) return;
     setMembers((prev) =>
-      prev.map((m) => (m.id === statusModalMember.id ? {...m, status: nextStatus }: m))
+      prev.map((m) => (m.id === statusModalMember.id ? { ...m, status: nextStatus } : m))
     );
     setNotice(
-      `Đã chuyển ${statusModalMember.fullName} sang trạng thái ${nextStatus === "LEFT" ? "Đã rời": "Tạm nghỉ"}, tự động thu hồi quyền đơn vị (≤ 5s), rút ca trực tương lai và gửi cảnh báo ca trống tới Ban Văn phòng.`
+      `Đã chuyển ${statusModalMember.fullName} sang trạng thái ${
+        nextStatus === "LEFT" ? "Đã rời" : "Tạm nghỉ"
+      }, tự động thu hồi quyền đơn vị (≤ 5s), rút ca trực tương lai và gửi cảnh báo ca trống tới Ban Văn phòng.`
     );
     setStatusModalMember(null);
   };
@@ -94,9 +57,9 @@ export function UnitHrPage(){
       key: "assets",
       header: "Tài sản VP đang mượn",
       render: (m) =>
-        m.unreturnedAssets.length > 0 ? (
+        (m.unreturnedAssets?.length ?? 0) > 0 ? (
           <Badge variant="danger">{m.unreturnedAssets.length} thiết bị chưa trả</Badge>
-        ): (
+        ) : (
           <Badge variant="success">Không có nợ tài sản</Badge>
         )
     },
@@ -104,8 +67,16 @@ export function UnitHrPage(){
       key: "status",
       header: "Vòng đời CTV",
       render: (m) => (
-        <Badge variant={m.status === "ACTIVE" ? "success": m.status === "ON_LEAVE" ? "warning": "secondary"}>
-          {m.status === "ACTIVE" ? "Đang hoạt động": m.status === "ON_LEAVE" ? "Tạm nghỉ": "Đã rời"}
+        <Badge
+          variant={
+            m.status === "ACTIVE" ? "success" : m.status === "ON_LEAVE" ? "warning" : "secondary"
+          }
+        >
+          {m.status === "ACTIVE"
+            ? "Đang hoạt động"
+            : m.status === "ON_LEAVE"
+              ? "Tạm nghỉ"
+              : "Đã rời"}
         </Badge>
       )
     },
@@ -140,11 +111,13 @@ export function UnitHrPage(){
       render: (p) =>
         p.status === "APPROVED" ? (
           <Badge variant="success">Đã phê duyệt</Badge>
-        ): (
+        ) : (
           <Button
             size="sm"
             onClick={() =>
-              setProposals((prev) => prev.map((x) => (x.id === p.id ? {...x, status: "APPROVED" }: x)))
+              setProposals((prev) =>
+                prev.map((x) => (x.id === p.id ? { ...x, status: "APPROVED" } : x))
+              )
             }
           >
             Phê duyệt
@@ -205,7 +178,7 @@ export function UnitHrPage(){
                 <Label htmlFor="unit-announce">Nội dung triệu tập / thông báo nội bộ</Label>
                 <Textarea
                   id="unit-announce"
-                  placeholder="VD: Họp Ban Văn phòng chuẩn bị kiểm kê tài sản cuối tháng lúc 17h30 tại A1-403..."
+                  placeholder="Nhập nội dung triệu tập họp hoặc thông báo nội bộ đơn vị..."
                   value={announcementText}
                   onChange={(e) => setAnnouncementText(e.target.value)}
                 />
@@ -226,7 +199,6 @@ export function UnitHrPage(){
         </TabsContent>
       </Tabs>
 
-      {/* CTV Lifecycle Transition Dialog with 409 OfficeAsset Blocker */}
       <Dialog
         open={Boolean(statusModalMember)}
         onOpenChange={(open) => {
@@ -269,14 +241,14 @@ export function UnitHrPage(){
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     <span>Bị chặn 409 Conflict (Edge 34): CTV còn giữ tài sản Văn phòng chưa trả</span>
                   </div>
-                  <ul className="list-disc pl-5 space-y-0.5">
-                    {statusModalMember.unreturnedAssets.map((a) => (
+                  <ul className="list-disc space-y-0.5 pl-5">
+                    {(statusModalMember.unreturnedAssets ?? []).map((a) => (
                       <li key={a}>{a}</li>
                     ))}
                   </ul>
                   <p>Bắt buộc xác nhận trả đồ hoặc bàn giao người chịu trách nhiệm với Ban OFIT trước khi chuyển sang Đã rời.</p>
                 </div>
-              ): (
+              ) : (
                 <div className="flex items-center gap-2 rounded-lg border border-status-success/30 bg-status-success/10 p-3 text-xs text-status-success">
                   <PackageCheck className="h-4 w-4 shrink-0" />
                   <span>Không có tài sản VP đang giữ — đủ điều kiện hoàn tất bàn giao.</span>
@@ -290,7 +262,7 @@ export function UnitHrPage(){
               Đóng
             </Button>
             <Button
-              variant={nextStatus === "LEFT" ? "destructive": "default"}
+              variant={nextStatus === "LEFT" ? "destructive" : "default"}
               disabled={hasAssetBlocker}
               onClick={confirmStatusChange}
             >

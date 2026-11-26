@@ -24,21 +24,21 @@ const PERSONAL_WORKSPACES = [
     to: "/certificates",
     title: "Chứng nhận & Hoạt động",
     description: "Lịch sử tham gia sự kiện, nhãn quyền lợi ĐRL / CTXH / CĐDN và tải E-Certificate.",
-    meta: "3 chứng nhận đã cấp",
+    meta: "Tra cứu & tải PDF xác thực",
     icon: Award
   },
   {
     to: "/store/orders",
     title: "Đơn hàng của tôi",
     description: "Theo dõi đơn vật phẩm Khoa, mã QR nhận hàng tại bàn trực và hóa đơn gây quỹ.",
-    meta: "1 đơn chờ nhận",
+    meta: "Theo dõi trạng thái đơn hàng",
     icon: Receipt
   },
   {
     to: "/portfolio",
     title: "E-Portfolio & Xuất CV",
     description: "Quản lý hồ sơ năng lực số, dự án cá nhân và xuất CV có mã QR xác thực.",
-    meta: "Chế độ Riêng tư",
+    meta: "Hồ sơ năng lực & QR kiểm chứng",
     icon: Briefcase
   },
   {
@@ -64,7 +64,7 @@ export function ProfileOverviewSection({
     ? "Cựu SV / Khách mời"
     : academic?.facultyName
       ? `${formatFacultyDisplayName(academic.facultyName)} · Mã ngành ${academic.majorCode}${academic.fitFaculty ? " (CĐDN)" : ""}`
-      : "Khoa CNTT · Mã ngành 110 (CĐDN)";
+      : "Chưa xác nhận Khoa – Ngành";
 
   const checklist = [
     {
@@ -127,6 +127,7 @@ export function ProfileOverviewSection({
   ];
 
   const completedCount = checklist.filter((item) => item.done).length;
+  const portfolioHref = userId ? `/p/${encodeURIComponent(userId)}` : "/portfolio";
 
   return (
     <div className="space-y-6">
@@ -140,19 +141,18 @@ export function ProfileOverviewSection({
           </p>
         </div>
         <Button asChild variant="outline" size="sm" className="shrink-0 self-start rounded-full sm:self-center">
-          <Link to={`/p/${userId}`}>
+          <Link to={portfolioHref}>
             <span>Xem E-Portfolio công khai</span>
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         </Button>
       </section>
 
-      {/* Crisp Identity Summary Strip */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base">Thông tin định danh chính thức</CardTitle>
-            <Badge variant={academic && !academic.fitFaculty ? "secondary" : "verified"}>
+            <Badge variant={academic?.fitFaculty ? "verified" : "secondary"}>
               {facultyBadgeText}
             </Badge>
           </div>
@@ -164,22 +164,22 @@ export function ProfileOverviewSection({
           <dl className="grid gap-x-6 gap-y-3 border-t border-border pt-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Họ và tên</dt>
-              <dd className="mt-0.5 font-medium text-foreground">{fullName}</dd>
+              <dd className="mt-0.5 font-medium text-foreground">{fullName || "—"}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Mã số sinh viên</dt>
-              <dd className="mt-0.5 tabular-mono font-semibold text-foreground">{userId}</dd>
+              <dd className="mt-0.5 tabular-mono font-semibold text-foreground">{userId || "—"}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Email trường</dt>
-              <dd className="mt-0.5 truncate text-foreground" title={email}>
-                {email}
+              <dd className="mt-0.5 truncate text-foreground" title={email || undefined}>
+                {email || "—"}
               </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Trạng thái &amp; Vai trò</dt>
               <dd className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                <Badge variant="success">Đang theo học</Badge>
+                <Badge variant="success">Đang hoạt động</Badge>
                 {roleCount > 0 && (
                   <Badge variant="secondary" className="tabular-mono">
                     {roleCount} vai trò
@@ -191,7 +191,6 @@ export function ProfileOverviewSection({
         </CardContent>
       </Card>
 
-      {/* Account Readiness Checklist */}
       <Card className="rounded-[22px]">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -250,7 +249,6 @@ export function ProfileOverviewSection({
         </CardContent>
       </Card>
 
-      {/* Personal Workspaces Quick Access */}
       <Card className="overflow-hidden rounded-[22px]">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Không gian cá nhân liên kết</CardTitle>
@@ -275,7 +273,7 @@ export function ProfileOverviewSection({
                       <Icon className="h-4 w-4" />
                     </span>
                     <div className="space-y-1">
-                      <div className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                      <div className="text-sm font-medium text-foreground transition-colors group-hover:text-primary">
                         {space.title}
                       </div>
                       <p className="text-xs leading-relaxed text-muted-foreground">

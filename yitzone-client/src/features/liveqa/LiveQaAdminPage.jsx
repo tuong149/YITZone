@@ -63,10 +63,10 @@ export function LiveQaAdminPage({ embeddedEventId } = {}) {
   const setTerms = useLiveQaStore((s) => s.setTerms);
 
   const sessionOptions = useMemo(() => {
-    const derived = [DEFAULT_QA_SESSION];
+    const derived = DEFAULT_QA_SESSION.id ? [DEFAULT_QA_SESSION] : [];
     for (const evt of storedEvents) {
-      for (const ses of evt.sessions) {
-        if (!ses.activities.liveQa) continue;
+      for (const ses of evt.sessions ?? []) {
+        if (!ses.activities?.liveQa) continue;
         const id = `qa-${evt.id}-${ses.id}`;
         if (derived.some((s) => s.id === id)) continue;
         derived.push({
@@ -95,11 +95,19 @@ export function LiveQaAdminPage({ embeddedEventId } = {}) {
   const [deleteWordTarget, setDeleteWordTarget] = useState(null);
 
   const activeSession =
-    sessionOptions.find((s) => s.id === selectedSessionId) ?? DEFAULT_QA_SESSION;
+    sessionOptions.find((s) => s.id === selectedSessionId) ??
+    sessionOptions[0] ??
+    DEFAULT_QA_SESSION;
+  const activePinDigits = (activeSession?.pin ?? "").replace(/\D/g, "");
+  const formattedActivePin =
+    activePinDigits.length >= 6
+      ? `${activePinDigits.slice(0, 3)} ${activePinDigits.slice(3, 6)}`
+      : "Chưa cấp PIN";
 
   const sessionQuestions = useMemo(
-    () => questions.filter((q) => q.sessionId === activeSession.id),
-    [questions, activeSession.id]
+    () =>
+      activeSession?.id ? questions.filter((q) => q.sessionId === activeSession.id) : questions,
+    [questions, activeSession?.id]
   );
 
   // 3-Column Moderation Queues (B3: Chờ duyệt -> Đã duyệt -> Đang chiếu / Đã giải đáp)
@@ -433,10 +441,18 @@ export function LiveQaAdminPage({ embeddedEventId } = {}) {
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link to={`/live-qa/${activeSession.pin}`}>Tường Khán giả</Link>
+              <Link to={activePinDigits ? `/live-qa/${activePinDigits}` : "/live-qa"}>
+                Tường Khán giả
+              </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link to={`/stage/qa?sessionId=${encodeURIComponent(activeSession.id)}`}>
+              <Link
+                to={
+                  activeSession?.id
+                    ? `/stage/qa?sessionId=${encodeURIComponent(activeSession.id)}`
+                    : "/stage/qa"
+                }
+              >
                 <MonitorPlay className="h-4 w-4" />
                 <span>Chiếu LED 16:9</span>
               </Link>
@@ -446,9 +462,10 @@ export function LiveQaAdminPage({ embeddedEventId } = {}) {
               size="sm"
               variant="outline"
               className="rounded-full"
+              disabled={!activeSession?.id}
               onClick={() =>
                 setNotice(
-                  `Đã xuất tổng kết Live Q&A (${activeSession.label}) kèm trạng thái giải đáp và lượt ủng hộ.`
+                  `Đã xuất tổng kết Live Q&A (${activeSession.label || "Phiên hiện tại"}) kèm trạng thái giải đáp và lượt ủng hộ.`
                 )
               }
             >
@@ -466,28 +483,40 @@ export function LiveQaAdminPage({ embeddedEventId } = {}) {
             <Radio className="h-3.5 w-3.5 text-brand-cyan" />
             Phiên Q&amp;A:
           </span>
-          <Select value={activeSession.id} onValueChange={setSelectedSessionId}>
-            <SelectTrigger className="h-9 max-w-md rounded-xl text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sessionOptions.map((opt) => (
-                <SelectItem key={opt.id} value={opt.id}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {sessionOptions.length > 0 ? (
+            <Select value={activeSession.id} onValueChange={setSelectedSessionId}>
+              <SelectTrigger className="h-9 max-w-md rounded-xl text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sessionOptions.map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id}>
+                    {opt.label || "Phiên Live Q&A"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              Chưa có phiên Live Q&amp;A nào được tạo trong sự kiện
+            </span>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">Mã PIN phòng:</span>
           <Badge variant="outline" className="tabular-mono font-semibold text-foreground">
-            {activeSession.pin.slice(0, 3)} {activeSession.pin.slice(3)}
+            {formattedActivePin}
           </Badge>
           {embeddedEventId && (
             <Button asChild variant="outline" size="sm" className="h-7 rounded-full text-xs">
-              <Link to={`/stage/qa?sessionId=${encodeURIComponent(activeSession.id)}`}>
+              <Link
+                to={
+                  activeSession?.id
+                    ? `/stage/qa?sessionId=${encodeURIComponent(activeSession.id)}`
+                    : "/stage/qa"
+                }
+              >
                 <MonitorPlay className="h-3.5 w-3.5" />
                 <span>Mở LED Q&amp;A</span>
               </Link>
@@ -656,8 +685,13 @@ export function LiveQaAdminPage({ embeddedEventId } = {}) {
                 </Button>
               </form>
 
-              <div className="space-y-2">
-                {terms.map((t) => (
+              {terms.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/25 px-4 py-8 text-center text-xs text-muted-foreground">
+                  Chưa có từ khóa nào trong từ điển lọc từ ngữ nhạy cảm.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {terms.map((t) => (
                   <div
                     key={t.id}
                     className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-4 py-2.5"
@@ -695,8 +729,9 @@ export function LiveQaAdminPage({ embeddedEventId } = {}) {
                       </Button>
                     </div>
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
