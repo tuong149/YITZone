@@ -67,6 +67,13 @@ public class RefreshTokenService {
     }
 
     public RotatedSession rotateRefreshToken(String rawRefreshToken, long currentUserRefreshTokenVersion) {
+        return rotateRefreshToken(rawRefreshToken, uid -> currentUserRefreshTokenVersion);
+    }
+
+    public RotatedSession rotateRefreshToken(
+            String rawRefreshToken,
+            java.util.function.Function<String, Long> currentVersionResolver
+    ) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, HttpStatus.UNAUTHORIZED,
                     "Refresh token không hợp lệ hoặc đã hết hạn");
@@ -82,14 +89,16 @@ public class RefreshTokenService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, HttpStatus.UNAUTHORIZED,
                     "Phiên đăng nhập đã hết hạn do không hoạt động");
         }
-        long minVersion = Math.max(currentUserRefreshTokenVersion, getMinRefreshTokenVersion(existing.userId()));
+        Long resolvedVersion = currentVersionResolver == null ? 1L : currentVersionResolver.apply(existing.userId());
+        long dbVersion = resolvedVersion == null ? 1L : resolvedVersion;
+        long minVersion = Math.max(dbVersion, getMinRefreshTokenVersion(existing.userId()));
         if (existing.refreshTokenVersion() < minVersion) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, HttpStatus.UNAUTHORIZED,
                     "Phiên đăng nhập đã bị thu hồi do thay đổi mật khẩu hoặc bảo mật");
         }
         IssuedRefreshToken next = issueRefreshToken(
                 existing.userId(),
-                currentUserRefreshTokenVersion,
+                minVersion,
                 existing.privilegedAdmin()
         );
         return new RotatedSession(existing.userId(), existing.privilegedAdmin(), next);

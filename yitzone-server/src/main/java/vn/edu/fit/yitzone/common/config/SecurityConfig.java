@@ -1,6 +1,7 @@
 package vn.edu.fit.yitzone.common.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,8 +15,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -28,6 +27,7 @@ import vn.edu.fit.yitzone.common.api.ErrorCode;
 import vn.edu.fit.yitzone.common.security.ActiveScopeFilter;
 import vn.edu.fit.yitzone.common.security.JwtAuthenticationFilter;
 import vn.edu.fit.yitzone.common.security.ScopedPermissionEvaluator;
+import vn.edu.fit.yitzone.iam.service.GoogleOidcAuthSuccessHandler;
 
 import java.util.List;
 
@@ -43,12 +43,13 @@ public class SecurityConfig {
             ActiveScopeFilter activeScopeFilter,
             CorsConfigurationSource corsConfigurationSource,
             AuthenticationEntryPoint authenticationEntryPoint,
-            AccessDeniedHandler accessDeniedHandler
+            AccessDeniedHandler accessDeniedHandler,
+            @Autowired(required = false) GoogleOidcAuthSuccessHandler googleOidcAuthSuccessHandler
     ) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
@@ -60,6 +61,8 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
+                                "/oauth2/**",
+                                "/login/oauth2/**",
                                 "/api/v1/iam/auth/**",
                                 "/api/v1/store/webhooks/vietqr",
                                 "/ws/**"
@@ -79,6 +82,10 @@ public class SecurityConfig {
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(activeScopeFilter, JwtAuthenticationFilter.class);
+
+        if (googleOidcAuthSuccessHandler != null) {
+            http.oauth2Login(oauth2 -> oauth2.successHandler(googleOidcAuthSuccessHandler));
+        }
 
         return http.build();
     }
@@ -124,11 +131,6 @@ public class SecurityConfig {
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12);
-    }
-
-    @Bean
     public MethodSecurityExpressionHandler methodSecurityExpressionHandler(ScopedPermissionEvaluator evaluator) {
         DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
         handler.setPermissionEvaluator(evaluator);
@@ -137,7 +139,7 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
-            @Value("${yitzone.security.cors-allowed-origins}") List<String> allowedOrigins
+            @Value("${yitzone.security.cors-allowed-origins:http://localhost:5173,http://localhost}") List<String> allowedOrigins
     ) {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(allowedOrigins);

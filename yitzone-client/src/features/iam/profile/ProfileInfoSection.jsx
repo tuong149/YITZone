@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertCircle,
@@ -15,7 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  linkPersonalEmail,
+  updateMyProfile,
+  verifyPersonalEmailOtp
+} from "@/features/iam/api";
 import { formatFacultyDisplayName } from "@/features/iam/data/faculty-major-catalog";
+import { extractApiErrorMessage } from "@/lib/api-client";
 
 const INITIAL_UNION_PROFILE = {
   className: "",
@@ -30,26 +36,49 @@ export function ProfileInfoSection({
   userId,
   fullName,
   email,
+  meProfile,
   accountHealth,
   onUpdateAccountHealth,
   onboardingState
 }) {
   const initialUnion = {
     ...INITIAL_UNION_PROFILE,
-    ...(onboardingState?.unionProfile?.className ? { className: onboardingState.unionProfile.className } : {}),
-    ...(onboardingState?.unionProfile?.unionBranch ? { unionBranch: onboardingState.unionProfile.unionBranch } : {}),
+    ...(meProfile?.className ? { className: meProfile.className } : onboardingState?.unionProfile?.className ? { className: onboardingState.unionProfile.className } : {}),
+    ...(meProfile?.unionMemberProfile?.youthUnionBranch ? { unionBranch: meProfile.unionMemberProfile.youthUnionBranch } : onboardingState?.unionProfile?.unionBranch ? { unionBranch: onboardingState.unionProfile.unionBranch } : {}),
+    ...(meProfile?.unionMemberProfile?.youthUnionJoinDate ? { unionJoinDate: meProfile.unionMemberProfile.youthUnionJoinDate } : {}),
+    ...(meProfile?.unionMemberProfile?.studentAssociationJoinDate ? { assocJoinDate: meProfile.unionMemberProfile.studentAssociationJoinDate } : {}),
     ...(onboardingState?.unionProfile?.phone ? { phone: onboardingState.unionProfile.phone } : {})
   };
   const [savedProfile, setSavedProfile] = useState(initialUnion);
   const [form, setForm] = useState(initialUnion);
   const [formError, setFormError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const [personalEmail, setPersonalEmail] = useState(accountHealth.backupEmail);
   const [emailError, setEmailError] = useState(null);
   const [otpSent, setOtpSent] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
   const [otpValue, setOtpValue] = useState("");
   const [otpError, setOtpError] = useState(null);
+
+  useEffect(() => {
+    if (!meProfile) return;
+    const synced = {
+      ...INITIAL_UNION_PROFILE,
+      className: meProfile.className ?? "",
+      unionBranch: meProfile.unionMemberProfile?.youthUnionBranch ?? "",
+      unionJoinDate: meProfile.unionMemberProfile?.youthUnionJoinDate ?? "",
+      assocJoinDate: meProfile.unionMemberProfile?.studentAssociationJoinDate ?? "",
+      phone: onboardingState?.unionProfile?.phone ?? "",
+      contactAddress: ""
+    };
+    setSavedProfile(synced);
+    setForm(synced);
+    if (meProfile.personalEmail) {
+      setPersonalEmail(meProfile.personalEmail);
+    }
+  }, [meProfile, onboardingState]);
 
   const isDirty = JSON.stringify(form) !== JSON.stringify(savedProfile);
 
@@ -59,7 +88,7 @@ export function ProfileInfoSection({
     setSaveSuccess(false);
   };
 
-  const handleSaveUnionProfile = (e) => {
+  const handleSaveUnionProfile = async (e) => {
     e.preventDefault();
     if (!form.className.trim() || !form.unionBranch.trim()) {
       setFormError("Vui lòng nhập đầy đủ Lớp sinh viên và Chi đoàn / Chi hội.");
@@ -69,9 +98,23 @@ export function ProfileInfoSection({
       setFormError("Số điện thoại liên hệ phải gồm đúng 10 chữ số bắt đầu bằng số 0.");
       return;
     }
-    setSavedProfile(form);
+    setSavingProfile(true);
     setFormError(null);
-    setSaveSuccess(true);
+    try {
+      await updateMyProfile({
+        className: form.className.trim(),
+        youthUnionBranch: form.unionBranch.trim(),
+        studentAssociationBranch: form.unionBranch.trim(),
+        youthUnionJoinDate: form.unionJoinDate || null,
+        studentAssociationJoinDate: form.assocJoinDate || null
+      });
+      setSavedProfile(form);
+      setSaveSuccess(true);
+    } catch (err) {
+      setFormError(extractApiErrorMessage(err, "Không thể lưu hồ sơ Đoàn – Hội lên máy chủ."));
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleReset = () => {
@@ -80,7 +123,7 @@ export function ProfileInfoSection({
     setSaveSuccess(false);
   };
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     const trimmed = personalEmail.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       setEmailError("Địa chỉ email không hợp lệ. Vui lòng nhập đúng định dạng (VD: tenban@gmail.com).");
@@ -92,22 +135,35 @@ export function ProfileInfoSection({
     }
     setEmailError(null);
     setOtpError(null);
-    setOtpSent(true);
+    setOtpSending(true);
+    try {
+      await linkPersonalEmail(trimmed);
+      setOtpSent(true);
+    } catch (err) {
+      setEmailError(extractApiErrorMessage(err, "Không thể gửi mã OTP tới email cá nhân."));
+    } finally {
+      setOtpSending(false);
+    }
   };
 
-  const handleVerifyOtp = (e) => {
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
     if (!/^[0-9]{6}$/.test(otpValue.trim())) {
       setOtpError("Mã OTP phải gồm đúng 6 chữ số được gửi về hộp thư cá nhân.");
       return;
     }
     setOtpError(null);
-    setOtpSent(false);
-    setOtpValue("");
-    onUpdateAccountHealth({
-      backupEmail: personalEmail.trim(),
-      backupEmailVerified: true
-    });
+    try {
+      const res = await verifyPersonalEmailOtp(otpValue.trim());
+      setOtpSent(false);
+      setOtpValue("");
+      onUpdateAccountHealth({
+        backupEmail: res.personalEmail || personalEmail.trim(),
+        backupEmailVerified: true
+      });
+    } catch (err) {
+      setOtpError(extractApiErrorMessage(err, "Mã OTP không chính xác hoặc đã hết hạn."));
+    }
   };
 
   const academic = onboardingState?.academicIdentity;
@@ -126,7 +182,7 @@ export function ProfileInfoSection({
 
   const lockedFields = [
     { label: "Họ và tên chính thức", value: fullName || "—" },
-    { label: "Mã số sinh viên (MSSV)", value: userId || "—", mono: true },
+    { label: "Mã số sinh viên (MSSV)", value: meProfile?.studentCode?.trim() || "—", mono: true },
     { label: "Email trường (SSO)", value: email || "—" },
     { label: "Khoa & Ngành đào tạo", value: facultyMajorLabel },
     { label: "Phân loại quyền lợi CĐDN", value: cddnBenefitLabel },

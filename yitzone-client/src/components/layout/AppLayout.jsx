@@ -441,7 +441,9 @@ export function AppLayout() {
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
                         {initials}
                       </span>
-                      <span className="hidden xl:inline tabular-mono">{userId}</span>
+                      <span className="hidden max-w-[160px] truncate xl:inline">
+                        {fullName || email || "Tài khoản"}
+                      </span>
                       <ChevronDown className="h-3.5 w-3.5 opacity-70 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                     </button>
                   </DropdownMenuTrigger>
@@ -450,10 +452,11 @@ export function AppLayout() {
                       <div className="truncate text-sm font-semibold text-foreground">
                         {fullName || "Tài khoản sinh viên"}
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                        <span className="tabular-mono font-medium text-foreground/80">{userId}</span>
-                        {email ? ` · ${email}` : ""}
-                      </div>
+                      {email && (
+                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {email}
+                        </div>
+                      )}
                     </div>
                     <DropdownMenuSeparator />
                     {canAccessAdmin && (
@@ -553,7 +556,7 @@ export function AppLayout() {
         >
           <span className="liquid-glass-pill yit-hover-surface inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-foreground hover:border-primary/45">
             <Sparkles className="h-4 w-4 text-brand-cyan" />
-            <span>Hỏi YITBot AI</span>
+            <span>Hỏi YITBot</span>
           </span>
         </Link>
       )}
@@ -719,7 +722,7 @@ export function AppLayout() {
                   className="flex min-h-[44px] items-center gap-3 rounded-2xl bg-primary/10 px-3.5 py-2.5 text-sm font-semibold text-primary"
                 >
                   <Sparkles className="h-4 w-4 shrink-0" />
-                  <span>Hỏi YITBot AI</span>
+                  <span>Hỏi YITBot</span>
                 </Link>
                 {userId ? (
                   <button

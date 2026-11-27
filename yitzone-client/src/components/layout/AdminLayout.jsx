@@ -13,6 +13,7 @@ import {
   Gamepad2,
   Inbox,
   LayoutDashboard,
+  LogOut,
   Menu,
   MonitorPlay,
   Music,
@@ -21,6 +22,7 @@ import {
   ScrollText,
   Search,
   ShoppingBag,
+  UserCog,
   Users,
   X
 } from "lucide-react";
@@ -28,6 +30,7 @@ import { BrandLockup } from "@/components/ui/brand-lockup";
 import { Button } from "@/components/ui/button";
 import { ContextSwitcher } from "@/components/ui/context-switcher";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { logoutSession } from "@/features/iam/api";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore } from "@/stores/theme-store";
@@ -44,6 +47,13 @@ const ADMIN_GROUPS = [
   {
     label: "IAM & RBAC",
     items: [
+      {
+        to: "/admin/iam/accounts",
+        label: "Quản lý Tài khoản",
+        icon: UserCog,
+        keywords: "tai khoan account user khoa mat khau",
+        requiredAuthorities: PERMISSIONS.ADMIN_IAM_RBAC
+      },
       {
         to: "/admin/iam/roster",
         label: "Roster & Khoa–Ngành",
@@ -231,7 +241,19 @@ export function AdminLayout() {
   const authorities = useAuthStore((s) => s.authorities);
   const activeScopeId = useAuthStore((s) => s.activeScopeId);
   const roleScopes = useAuthStore((s) => s.roleScopes);
+  const clearSession = useAuthStore((s) => s.clearSession);
   const setSurface = useThemeStore((s) => s.setSurface);
+
+  const handleLogout = async () => {
+    setMobileDrawerOpen(false);
+    try {
+      await logoutSession();
+    } catch {
+      // Proceed with local logout even if server is unreachable
+    }
+    clearSession({ reason: "logout" });
+    void navigate("/login", { replace: true });
+  };
 
   const activeScopeLabel = useMemo(() => {
     const matched = roleScopes.find((s) => s.scopeId === activeScopeId);
@@ -416,6 +438,22 @@ export function AdminLayout() {
             </div>
           ))}
         </nav>
+
+        <div className={cn("border-t border-border/60 py-3", collapsed ? "px-2" : "px-3")}>
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            title={collapsed ? "Đăng xuất" : undefined}
+            aria-label="Đăng xuất"
+            className={cn(
+              "flex items-center rounded-full text-sm font-medium text-status-danger transition-colors hover:bg-status-danger/10",
+              collapsed ? "mx-auto h-10 w-10 justify-center p-0" : "w-full gap-2.5 px-3 py-2"
+            )}
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!collapsed && <span className="truncate">Đăng xuất</span>}
+          </button>
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col p-3 lg:pl-1">
@@ -617,6 +655,17 @@ export function AdminLayout() {
                 </div>
               ))}
             </nav>
+
+            <div className="border-t border-border/60 px-3 py-3">
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                className="flex min-h-[44px] w-full items-center gap-2.5 rounded-2xl px-3 py-2 text-sm font-medium text-status-danger transition-colors hover:bg-status-danger/10"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
           </aside>
         </div>
       )}

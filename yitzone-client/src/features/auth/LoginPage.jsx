@@ -4,6 +4,7 @@ import {
   AlertCircle,
   CheckCircle2,
   KeyRound,
+  Loader2,
   Lock,
   Mail,
   ShieldCheck,
@@ -377,10 +378,10 @@ export function LoginPage() {
           <div className="relative z-10 space-y-2.5 sm:space-y-4 lg:space-y-5">
             <BrandLockup logoClassName="h-7 w-7 sm:h-8 sm:w-8" wordmarkClassName="h-[18px] sm:h-[22px]" />
             <h1 className="font-display text-xl font-medium leading-tight tracking-tight text-foreground sm:text-3xl lg:text-4xl dark:text-white">
-              Xác thực Hợp nhất Đoàn – Hội &amp; Học thuật FIT
+              Đăng nhập YITZone
             </h1>
             <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm dark:text-blue-100/85">
-              Đăng nhập bằng Google Workspace trường, Email + Mật khẩu hoặc Email cá nhân dự phòng dành cho Cựu sinh viên.
+              Dùng Google Workspace trường, email sinh viên hoặc email cá nhân đã liên kết.
             </p>
           </div>
 
@@ -520,19 +521,25 @@ export function LoginPage() {
                 )}
 
                 <Button type="submit" className="h-12 w-full rounded-xl text-sm sm:h-11" disabled={loading}>
-                  <KeyRound className="h-4 w-4" />
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <KeyRound className="h-4 w-4" />
+                  )}
                   <span>
                     {loading
-                      ? "Đang xác thực & thiết lập phiên bảo mật..."
+                      ? mfaStep
+                        ? "Đang kiểm tra mã..."
+                        : "Đang đăng nhập..."
                       : mfaStep
-                        ? "Xác minh mã 2 lớp & Đăng nhập"
-                        : "Đăng nhập Hệ thống"}
+                        ? "Xác nhận mã 2 lớp"
+                        : "Đăng nhập"}
                   </span>
                 </Button>
               </form>
 
               <div className="flex flex-col gap-1.5 border-t border-border pt-3 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
-                <span>Phiên đăng nhập tự động bảo vệ khi đóng trình duyệt.</span>
+                <span>Phiên được bảo vệ tự động.</span>
                 <Link to="/privacy" className="font-semibold text-primary hover:underline">
                   Chính sách Quyền riêng tư
                 </Link>
@@ -618,8 +625,12 @@ export function LoginPage() {
                   )}
 
                   <Button type="submit" className="h-12 w-full rounded-xl sm:h-11" disabled={regSubmitting}>
-                    <UserPlus className="h-4 w-4" />
-                    <span>{regSubmitting ? "Đang gửi mã xác thực..." : "Gửi mã OTP 6 số kích hoạt tài khoản"}</span>
+                    {regSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <UserPlus className="h-4 w-4" />
+                    )}
+                    <span>{regSubmitting ? "Đang gửi mã..." : "Tiếp tục"}</span>
                   </Button>
                 </form>
               ) : (
@@ -664,8 +675,12 @@ export function LoginPage() {
                       Quay lại
                     </Button>
                     <Button type="submit" className="h-11 flex-1 rounded-xl" disabled={regSubmitting}>
-                      <ShieldCheck className="h-4 w-4" />
-                      <span>{regSubmitting ? "Đang xác minh..." : "Xác nhận & Hoàn tất đăng ký"}</span>
+                      {regSubmitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="h-4 w-4" />
+                      )}
+                      <span>{regSubmitting ? "Đang kiểm tra..." : "Hoàn tất đăng ký"}</span>
                     </Button>
                   </div>
                 </form>
@@ -697,8 +712,12 @@ export function LoginPage() {
                   )}
 
                   <Button type="submit" className="h-12 w-full rounded-xl sm:h-11" disabled={resetSubmitting}>
-                    <Lock className="h-4 w-4" />
-                    <span>{resetSubmitting ? "Đang gửi yêu cầu..." : "Gửi mã đặt lại mật khẩu"}</span>
+                    {resetSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Lock className="h-4 w-4" />
+                    )}
+                    <span>{resetSubmitting ? "Đang gửi mã..." : "Gửi mã xác nhận"}</span>
                   </Button>
 
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -777,8 +796,12 @@ export function LoginPage() {
                       Đổi email khác
                     </Button>
                     <Button type="submit" className="h-11 flex-1 rounded-xl" disabled={resetSubmitting}>
-                      <ShieldCheck className="h-4 w-4" />
-                      <span>{resetSubmitting ? "Đang cập nhật..." : "Xác nhận đổi mật khẩu"}</span>
+                      {resetSubmitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="h-4 w-4" />
+                      )}
+                      <span>{resetSubmitting ? "Đang lưu..." : "Đổi mật khẩu"}</span>
                     </Button>
                   </div>
                 </form>

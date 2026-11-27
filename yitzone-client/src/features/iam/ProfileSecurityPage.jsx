@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import {
   Award,
@@ -15,6 +15,7 @@ import {
   Users
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
+import { useMe } from "@/features/iam/api";
 import { loadOnboardingState } from "@/features/iam/data/onboarding-storage";
 import { cn } from "@/lib/utils";
 import { ProfileAppSettingsSection } from "./profile/ProfileAppSettingsSection";
@@ -91,6 +92,19 @@ export function ProfileSecurityPage() {
     pushEnabled: Boolean(onboardingState?.pushEnabled)
   }));
 
+  const { data: meProfile } = useMe(Boolean(userId));
+
+  useEffect(() => {
+    if (!meProfile) return;
+    setAccountHealth((prev) => ({
+      ...prev,
+      backupEmail: meProfile.personalEmail || prev.backupEmail,
+      backupEmailVerified: Boolean(meProfile.personalEmailVerified),
+      hasPassword: typeof meProfile.hasPassword === "boolean" ? meProfile.hasPassword : prev.hasPassword,
+      mfaEnabled: typeof meProfile.mfaEnabled === "boolean" ? meProfile.mfaEnabled : prev.mfaEnabled
+    }));
+  }, [meProfile]);
+
   if (section && !VALID_SECTIONS.has(section)) {
     return <Navigate to="/profile" replace />;
   }
@@ -100,7 +114,8 @@ export function ProfileSecurityPage() {
   };
 
   const { cleanName, roleNote } = parseDisplayName(rawFullName);
-  const initials = getInitials(cleanName, userId);
+  const studentCode = meProfile?.studentCode?.trim() || "";
+  const initials = getInitials(cleanName, studentCode || userId);
   const portfolioHref = userId ? `/p/${encodeURIComponent(userId)}` : "/portfolio";
 
   return (
@@ -117,8 +132,8 @@ export function ProfileSecurityPage() {
                   <div className="truncate text-sm font-semibold text-foreground" title={cleanName}>
                     {cleanName}
                   </div>
-                  {userId && (
-                    <div className="tabular-mono text-xs text-muted-foreground">{userId}</div>
+                  {studentCode && (
+                    <div className="tabular-mono text-xs text-muted-foreground">{studentCode}</div>
                   )}
                 </div>
               </div>
@@ -137,7 +152,7 @@ export function ProfileSecurityPage() {
                   to={portfolioHref}
                   className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
                 >
-                  <span>{userId ? `Hồ sơ công khai (/p/${userId})` : "Mở E-Portfolio"}</span>
+                  <span>{userId ? "Hồ sơ công khai" : "Mở E-Portfolio"}</span>
                   <ExternalLink className="h-3 w-3" />
                 </Link>
               </div>
@@ -201,12 +216,14 @@ export function ProfileSecurityPage() {
                 </div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-foreground">{cleanName}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {userId && (
-                      <span className="tabular-mono font-medium text-foreground/80">{userId}</span>
-                    )}
-                    {roleNote ? `${userId ? " · " : ""}${roleNote}` : ""}
-                  </div>
+                  {(studentCode || roleNote) && (
+                    <div className="truncate text-xs text-muted-foreground">
+                      {studentCode && (
+                        <span className="tabular-mono font-medium text-foreground/80">{studentCode}</span>
+                      )}
+                      {roleNote ? `${studentCode ? " · " : ""}${roleNote}` : ""}
+                    </div>
+                  )}
                 </div>
               </div>
               <Link
@@ -250,6 +267,7 @@ export function ProfileSecurityPage() {
           {activeKey === "overview" && (
             <ProfileOverviewSection
               userId={userId}
+              studentCode={studentCode}
               fullName={cleanName}
               email={email}
               accountHealth={accountHealth}
@@ -271,6 +289,7 @@ export function ProfileSecurityPage() {
               userId={userId}
               fullName={cleanName}
               email={email}
+              meProfile={meProfile}
               accountHealth={accountHealth}
               onUpdateAccountHealth={updateAccountHealth}
               onboardingState={onboardingState}
@@ -288,6 +307,13 @@ export function ProfileSecurityPage() {
             <ProfileRolesSection
               roleScopes={roleScopes}
               authorities={authorities}
+              termHistory={(meProfile?.termHistory ?? []).map((item, idx) => ({
+                id: `${item.unitName ?? "unit"}-${idx}`,
+                role: item.positionTitle || "Cán bộ",
+                unit: item.unitName || "Khoa CNTT",
+                period: `${item.termYear || ""}${item.startAt ? ` · ${new Date(item.startAt).toLocaleDateString("vi-VN")}` : ""}${item.endAt ? ` – ${new Date(item.endAt).toLocaleDateString("vi-VN")}` : " – Nay"}`,
+                status: item.endAt ? "Đã hoàn thành" : "Đang tại nhiệm"
+              }))}
             />
           )}
           {activeKey === "privacy" && <ProfilePrivacySection userId={userId} />}

@@ -1,0 +1,29 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/yitzone_test?replicaSet=rs0
+      auto-index-creation: true
+    redis:
+      host: localhost
+      port: 6379
+  mail:
+    host: localhost
+    port: 1025
+
+yitzone:
+  security:
+    jwt-secret: test-jwt-secret-key-at-least-64-characters-long-for-hmac-sha-256-yitzone
+    access-token-ttl-seconds: 900
+    refresh-token-ttl-seconds: 604800
+    frontend-base-url: http://localhost:5173
+    refresh-cookie-secure: false
+    school-email-domains: student.hcmute.edu.vn,hcmute.edu.vn
+  payment:
+    webhook-secret: test-payment-webhook-secret-hmac-sha256
+  clamav:
+    enabled: false
+  bootstrap:
+    dev-admin:
+      btv-email: yit@hcmute.edu.vn
+      sysadmin-email: sysadmin@fit.hcmute.edu.vn
+      password: YitZone@Admin2026!

@@ -308,9 +308,9 @@ export function StudentCheckinPage() {
           </div>
 
           {canOperateStaffScanner && (
-            <Button asChild variant="outline" className="h-10 w-full rounded-full sm:w-auto">
+            <Button asChild variant="glass" className="w-full sm:w-auto">
               <Link to="/staff/scanner">
-                <ScanLine className="h-4 w-4 text-primary" />
+                <ScanLine className="h-4 w-4 shrink-0" />
                 <span>Chuyển sang Máy Soát vé BTC</span>
               </Link>
             </Button>

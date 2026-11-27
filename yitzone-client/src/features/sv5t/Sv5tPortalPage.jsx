@@ -176,9 +176,9 @@ export function Sv5tPortalPage() {
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-            <Button asChild variant="outline" className="rounded-full">
+            <Button asChild variant="glass">
               <Link to="/public/honor-roll">
-                <Trophy className="h-4 w-4 text-brand-navy dark:text-brand-cyan" />
+                <Trophy className="h-4 w-4 shrink-0" />
                 <span>Bảng vàng Vinh danh</span>
               </Link>
             </Button>
@@ -230,20 +230,20 @@ export function Sv5tPortalPage() {
         <div className="flex shrink-0 flex-wrap items-center gap-2.5">
           <Button
             type="button"
-            variant={goalRegistered ? "outline" : "default"}
+            variant={goalRegistered ? "glass" : "default"}
             className="rounded-full"
             onClick={() => setGoalRegistered((v) => !v)}
           >
-            <Flag className="h-4 w-4" />
+            <Flag className="h-4 w-4 shrink-0" />
             <span>
               {goalRegistered
                 ? `Đã đăng ký mục tiêu ${activeCycle.academicYear ?? ""}`.trim()
                 : "Đăng ký mục tiêu SV5T"}
             </span>
           </Button>
-          <Button asChild variant="outline" className="rounded-full">
+          <Button asChild variant="glass">
             <Link to="/public/honor-roll">
-              <Trophy className="h-4 w-4 text-brand-navy dark:text-brand-cyan" />
+              <Trophy className="h-4 w-4 shrink-0" />
               <span>Bảng vàng Vinh danh</span>
             </Link>
           </Button>

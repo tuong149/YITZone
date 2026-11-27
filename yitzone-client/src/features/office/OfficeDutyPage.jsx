@@ -146,7 +146,7 @@ export function OfficeDutyPage() {
           <Badge variant="calOffice" className="rounded-full px-3 py-1">
             Đã đăng ký: {myRegisteredCount} ca
           </Badge>
-          <Button asChild variant="outline" size="sm" className="rounded-full">
+          <Button asChild variant="glass">
             <Link to="/calendar">Xem trên Lịch hoạt động</Link>
           </Button>
         </div>

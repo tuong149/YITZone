@@ -12,6 +12,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import vn.edu.fit.yitzone.iam.service.EffectivePermissionService;
 import vn.edu.fit.yitzone.iam.service.RbacCacheInvalidationService;
 
 import java.nio.charset.StandardCharsets;
@@ -40,12 +41,13 @@ public class RedisConfig {
     @Bean
     public MessageListener rbacInvalidationListener(
             ObjectMapper objectMapper,
-            @Autowired(required = false) RbacCacheInvalidationService rbacCacheInvalidationService
+            @Autowired(required = false) RbacCacheInvalidationService rbacCacheInvalidationService,
+            @Autowired(required = false) EffectivePermissionService effectivePermissionService
     ) {
         return (message, pattern) -> {
             String payload = new String(message.getBody(), StandardCharsets.UTF_8);
             log.info("Received RBAC cache invalidation event on channel {}: {}", RBAC_INVALIDATE_CHANNEL, payload);
-            if (rbacCacheInvalidationService == null) {
+            if (rbacCacheInvalidationService == null && effectivePermissionService == null) {
                 return;
             }
             try {
@@ -53,7 +55,12 @@ public class RedisConfig {
                 String userId = node.path("userId").asText(null);
                 long newVersion = node.path("newPermissionVersion").asLong(0L);
                 if (userId != null && newVersion > 0L) {
-                    rbacCacheInvalidationService.applyRemoteInvalidation(userId, newVersion);
+                    if (rbacCacheInvalidationService != null) {
+                        rbacCacheInvalidationService.applyRemoteInvalidation(userId, newVersion);
+                    }
+                    if (effectivePermissionService != null) {
+                        effectivePermissionService.evictLocalCache(userId);
+                    }
                 }
             } catch (Exception ex) {
                 log.warn("Failed to parse RBAC invalidation payload: {}", payload, ex);

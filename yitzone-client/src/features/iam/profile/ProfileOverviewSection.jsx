@@ -52,6 +52,7 @@ const PERSONAL_WORKSPACES = [
 
 export function ProfileOverviewSection({
   userId,
+  studentCode,
   fullName,
   email,
   accountHealth,
@@ -140,10 +141,10 @@ export function ProfileOverviewSection({
             Quản lý định danh sinh viên, mức độ bảo mật và truy cập nhanh các không gian cá nhân của bạn.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm" className="shrink-0 self-start rounded-full sm:self-center">
+        <Button asChild variant="glass" className="shrink-0 self-start sm:self-center">
           <Link to={portfolioHref}>
             <span>Xem E-Portfolio công khai</span>
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLink className="h-4 w-4 shrink-0" />
           </Link>
         </Button>
       </section>
@@ -168,7 +169,7 @@ export function ProfileOverviewSection({
             </div>
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Mã số sinh viên</dt>
-              <dd className="mt-0.5 tabular-mono font-semibold text-foreground">{userId || "—"}</dd>
+              <dd className="mt-0.5 tabular-mono font-semibold text-foreground">{studentCode || "—"}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-muted-foreground">Email trường</dt>

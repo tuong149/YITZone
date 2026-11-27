@@ -86,9 +86,9 @@ export function SurveyListPage() {
           </p>
         </div>
 
-        <Button asChild variant="outline" size="sm" className="rounded-full">
+        <Button asChild variant="glass">
           <Link to="/me/certificates">
-            <Award className="h-4 w-4 text-primary" />
+            <Award className="h-4 w-4 shrink-0" />
             <span>Xem Ví E-Certificate</span>
           </Link>
         </Button>
@@ -229,16 +229,16 @@ export function LiveQaJoinPage() {
         </div>
 
         {canModerate && (
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm" className="rounded-full">
+          <div className="flex flex-wrap gap-2.5">
+            <Button asChild variant="glass">
               <Link to="/admin/live-qa">
-                <ShieldCheck className="h-4 w-4" />
+                <ShieldCheck className="h-4 w-4 shrink-0" />
                 <span>Bàn Kiểm duyệt</span>
               </Link>
             </Button>
-            <Button asChild variant="outline" size="sm" className="rounded-full">
+            <Button asChild variant="glass">
               <Link to="/stage/live-qa">
-                <MonitorPlay className="h-4 w-4" />
+                <MonitorPlay className="h-4 w-4 shrink-0" />
                 <span>Màn chiếu LED</span>
               </Link>
             </Button>
@@ -388,9 +388,9 @@ export function ExamListPage() {
         </div>
 
         {canManageExams && (
-          <Button asChild variant="outline" size="sm" className="rounded-full">
+          <Button asChild variant="glass">
             <Link to="/admin/exams">
-              <Sparkles className="h-4 w-4 text-primary" />
+              <Sparkles className="h-4 w-4 shrink-0" />
               <span>Quản trị Ngân hàng Đề &amp; Coi thi</span>
             </Link>
           </Button>

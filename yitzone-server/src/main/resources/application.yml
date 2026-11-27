@@ -5,6 +5,12 @@ server:
 spring:
   application:
     name: yitzone-server
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  config:
+    import:
+      - optional:file:../.env[.properties]
+      - optional:file:.env[.properties]
   threads:
     virtual:
       enabled: true
@@ -13,7 +19,7 @@ spring:
       fail-on-unknown-properties: true
   data:
     mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/yitzone?replicaSet=rs0}
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/yitzone?replicaSet=rs0&directConnection=true}
       auto-index-creation: true
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
@@ -23,6 +29,17 @@ spring:
     multipart:
       max-file-size: 25MB
       max-request-size: 30MB
+  mail:
+    host: ${SPRING_MAIL_HOST:localhost}
+    port: ${SPRING_MAIL_PORT:1025}
+    username: ${SPRING_MAIL_USERNAME:no-reply@yitzone.fit.edu.vn}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_AUTH:false}
+          starttls:
+            enable: ${SPRING_MAIL_STARTTLS:false}
   security:
     oauth2:
       client:
@@ -52,9 +69,16 @@ yitzone:
     jwt-secret: ${YITZONE_JWT_SECRET}
     access-token-ttl-seconds: 900
     refresh-token-ttl-seconds: 604800
-    cors-allowed-origins:
-      - http://localhost:5173
-      - http://localhost
+    frontend-base-url: ${YITZONE_FRONTEND_BASE_URL:http://localhost:5173}
+    refresh-cookie-secure: ${YITZONE_REFRESH_COOKIE_SECURE:false}
+    enforce-admin-mfa: ${YITZONE_ENFORCE_ADMIN_MFA:false}
+    school-email-domains: ${YITZONE_SCHOOL_EMAIL_DOMAINS:student.hcmute.edu.vn,hcmute.edu.vn}
+    cors-allowed-origins: ${YITZONE_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost}
+  bootstrap:
+    dev-admin:
+      btv-email: ${YITZONE_DEV_BTV_EMAIL:yit@hcmute.edu.vn}
+      sysadmin-email: ${YITZONE_DEV_SYSADMIN_EMAIL:sysadmin@fit.hcmute.edu.vn}
+      password: ${YITZONE_DEV_ADMIN_PASSWORD:YitZone@Admin2026!}
   storage:
     endpoint: ${YITZONE_STORAGE_ENDPOINT:http://localhost:9000}
     access-key: ${YITZONE_STORAGE_ACCESS_KEY:yitzone_dev_key}

@@ -82,7 +82,7 @@ export function PortfolioEditorPage() {
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">
             <div className="w-48">
               <Select value={privacy} onValueChange={(v) => setPrivacy(v)}>
-                <SelectTrigger aria-label="Quyền riêng tư E-Portfolio" className="h-9 rounded-full">
+                <SelectTrigger aria-label="Quyền riêng tư E-Portfolio" className="h-10 rounded-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -93,20 +93,19 @@ export function PortfolioEditorPage() {
               </Select>
             </div>
             {userId && (
-              <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Button asChild variant="glass">
                 <Link to={`/p/${encodeURIComponent(userId)}`}>
-                  <ExternalLink className="h-4 w-4" />
+                  <ExternalLink className="h-4 w-4 shrink-0" />
                   <span>Xem trang /p/{userId}</span>
                 </Link>
               </Button>
             )}
             <Button
               type="button"
-              size="sm"
               className="liquid-glass-btn-cobalt rounded-full px-5"
               onClick={() => setPdfOpen(true)}
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-4 w-4 shrink-0" />
               <span>Xuất CV PDF</span>
             </Button>
           </div>

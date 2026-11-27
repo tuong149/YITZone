@@ -14,6 +14,7 @@ import {
   Users
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   CancelRegistrationDialog,
@@ -122,21 +123,19 @@ export function EventsCatalogPage() {
             </p>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Link
-              to="/calendar"
-              className="liquid-glass-pill inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-foreground transition-transform hover:-translate-y-0.5"
-            >
-              <CalendarDays className="h-4 w-4 text-primary" />
-              <span>Xem Lịch hoạt động</span>
-            </Link>
-            <Link
-              to="/scanner"
-              className="liquid-glass-btn-cobalt inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold"
-            >
-              <QrCode className="h-4 w-4" />
-              <span>Mở Vé QR</span>
-            </Link>
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+            <Button asChild variant="glass">
+              <Link to="/calendar">
+                <CalendarDays className="h-4 w-4 shrink-0" />
+                <span>Xem Lịch hoạt động</span>
+              </Link>
+            </Button>
+            <Button asChild className="liquid-glass-btn-cobalt rounded-full">
+              <Link to="/scanner">
+                <QrCode className="h-4 w-4 shrink-0" />
+                <span>Mở Vé QR</span>
+              </Link>
+            </Button>
           </div>
         </div>
       </section>

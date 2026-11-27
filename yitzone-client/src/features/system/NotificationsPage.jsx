@@ -39,13 +39,11 @@ export function NotificationsPage() {
             {unreadCount} chưa đọc
           </Badge>
           <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full"
+            variant="glass"
             onClick={markAllAsRead}
             disabled={unreadCount === 0}
           >
-            <CheckCheck className="h-4 w-4" />
+            <CheckCheck className="h-4 w-4 shrink-0" />
             <span>Đánh dấu tất cả đã đọc</span>
           </Button>
         </div>

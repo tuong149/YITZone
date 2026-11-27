@@ -202,9 +202,9 @@ export function NewsPage() {
               </Button>
             )}
             {canOpenEditorial && (
-              <Button asChild variant="outline" className="rounded-full">
+              <Button asChild variant="glass">
                 <Link to="/admin/cms">
-                  <BookOpen className="h-4 w-4" />
+                  <BookOpen className="h-4 w-4 shrink-0" />
                   <span>Tòa soạn EMFIT</span>
                 </Link>
               </Button>

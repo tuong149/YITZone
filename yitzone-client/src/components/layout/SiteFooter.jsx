@@ -15,7 +15,7 @@ const EXPLORE_LINKS = [
 
 const UTILITY_LINKS = [
   { to: "/oj", label: "Online Judge" },
-  { to: "/yitbot", label: "Trợ lý YITBot AI" },
+  { to: "/yitbot", label: "Trợ lý YITBot" },
   { to: "/minigame", label: "Minigame" },
   { to: "/voting", label: "Bình chọn & Bầu cử" },
   {

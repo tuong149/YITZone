@@ -86,12 +86,73 @@ export function extractApiErrorMessage(error, fallback) {
 }
 
 let lastExpiryToastAt = 0;
+let activeRefreshPromise = null;
+
+const AUTH_SKIP_REFRESH_PATHS = [
+  "/iam/auth/login",
+  "/iam/auth/register",
+  "/iam/auth/verify-email-otp",
+  "/iam/auth/resend-otp",
+  "/iam/auth/refresh",
+  "/iam/auth/logout",
+  "/iam/auth/password/forgot",
+  "/iam/auth/password/reset",
+  "/iam/auth/mfa/verify"
+];
+
+function shouldAttemptSilentRefresh(config) {
+  if (!config || config._retry) return false;
+  const url = typeof config.url === "string" ? config.url : "";
+  return !AUTH_SKIP_REFRESH_PATHS.some((path) => url.includes(path));
+}
+
+async function performSilentRefresh() {
+  if (!activeRefreshPromise) {
+    activeRefreshPromise = axios
+      .post("/api/v1/iam/auth/refresh", null, { withCredentials: true, timeout: 10000 })
+      .then((res) => {
+        const payload = res.data?.data;
+        if (!res.data?.success || !payload?.accessToken) {
+          throw new Error("REFRESH_FAILED");
+        }
+        const current = useAuthStore.getState();
+        current.setSession({
+          userId: payload.userId ?? current.userId,
+          email: payload.email ?? current.email,
+          fullName: payload.fullName ?? current.fullName,
+          accessToken: payload.accessToken,
+          authorities: Array.isArray(payload.authorities) ? payload.authorities : current.authorities,
+          roleScopes: Array.isArray(payload.roleScopes) ? payload.roleScopes : current.roleScopes,
+          authProvider: payload.authProvider ?? current.authProvider
+        });
+        return payload.accessToken;
+      })
+      .finally(() => {
+        activeRefreshPromise = null;
+      });
+  }
+  return activeRefreshPromise;
+}
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const originalConfig = error.config;
       const wasAuthenticated = Boolean(useAuthStore.getState().accessToken);
+
+      if (wasAuthenticated && shouldAttemptSilentRefresh(originalConfig)) {
+        try {
+          originalConfig._retry = true;
+          const freshAccessToken = await performSilentRefresh();
+          originalConfig.headers = originalConfig.headers ?? {};
+          originalConfig.headers.Authorization = `Bearer ${freshAccessToken}`;
+          return apiClient(originalConfig);
+        } catch {
+          // Fall through to graceful session expiry handling below
+        }
+      }
+
       useAuthStore.getState().clearSession({ reason: "expired" });
 
       if (wasAuthenticated && typeof window !== "undefined") {

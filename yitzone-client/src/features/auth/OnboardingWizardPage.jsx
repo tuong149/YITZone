@@ -37,6 +37,7 @@ import {
 } from "@/features/iam/data/faculty-major-catalog";
 import { recordPrivacyConsent } from "@/features/iam/api";
 import { loadOnboardingState, saveOnboardingState } from "@/features/iam/data/onboarding-storage";
+import { ALL_ADMIN_AUTHORITIES, hasAnyPermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { getOrCreateDeviceKeyPair } from "@/lib/webcrypto";
 import { AUTH_REDIRECT_STORAGE_KEY, useAuthStore } from "@/stores/auth-store";
@@ -84,8 +85,10 @@ export function OnboardingWizardPage() {
   const email = useAuthStore((s) => s.email) ?? "";
   const rawFullName = useAuthStore((s) => s.fullName) ?? "";
   const roleScopes = useAuthStore((s) => s.roleScopes);
+  const authorities = useAuthStore((s) => s.authorities);
   const authProvider = useAuthStore((s) => s.authProvider);
   const fullName = parseCleanName(rawFullName);
+  const canAccessAdmin = hasAnyPermission(authorities, ALL_ADMIN_AUTHORITIES);
 
   const routeState = location.state ?? {};
   const isGoogleSignIn = routeState.source === "google" || authProvider === "google";
@@ -365,8 +368,14 @@ export function OnboardingWizardPage() {
         // Ignore storage errors
       }
     }
-    const fallbackPath = roleScopes.length > 0 ? "/admin" : "/";
-    void navigate(redirectTarget ?? fallbackPath, { replace: true });
+    const fallbackPath = canAccessAdmin ? "/admin" : "/";
+    const safeTarget =
+      redirectTarget &&
+      redirectTarget !== "/403" &&
+      (canAccessAdmin || (!redirectTarget.startsWith("/admin") && !redirectTarget.startsWith("/staff")))
+        ? redirectTarget
+        : fallbackPath;
+    void navigate(safeTarget, { replace: true });
   };
 
   const persistOnboarding = ({ skipped = false }) => {

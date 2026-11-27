@@ -3,17 +3,29 @@ package vn.edu.fit.yitzone.iam.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import vn.edu.fit.yitzone.iam.domain.ExecutivePositionCatalog;
+import vn.edu.fit.yitzone.iam.domain.ExecutivePositionTitle;
 import vn.edu.fit.yitzone.iam.domain.OrgUnit;
 import vn.edu.fit.yitzone.iam.domain.PermissionModule;
 import vn.edu.fit.yitzone.iam.domain.Role;
 import vn.edu.fit.yitzone.iam.domain.RoleCode;
+import vn.edu.fit.yitzone.iam.domain.User;
+import vn.edu.fit.yitzone.iam.domain.UserAuthIdentity;
+import vn.edu.fit.yitzone.iam.repository.ExecutivePositionCatalogRepository;
 import vn.edu.fit.yitzone.iam.repository.OrgUnitRepository;
 import vn.edu.fit.yitzone.iam.repository.PermissionModuleRepository;
 import vn.edu.fit.yitzone.iam.repository.RoleRepository;
+import vn.edu.fit.yitzone.iam.repository.UserAuthIdentityRepository;
+import vn.edu.fit.yitzone.iam.repository.UserRepository;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -29,15 +41,49 @@ public class IamBootstrapSeeder implements ApplicationRunner {
     private final OrgUnitRepository orgUnitRepository;
     private final RoleRepository roleRepository;
     private final PermissionModuleRepository permissionModuleRepository;
+    private final ExecutivePositionCatalogRepository positionCatalogRepository;
+    private final UserRepository userRepository;
+    private final UserAuthIdentityRepository authIdentityRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final Environment environment;
+    private final String devBtvEmail;
+    private final String devSysAdminEmail;
+    private final String devAdminPassword;
 
+    public IamBootstrapSeeder(
+            OrgUnitRepository orgUnitRepository,
+            RoleRepository roleRepository,
+            PermissionModuleRepository permissionModuleRepository
+    ) {
+        this(orgUnitRepository, roleRepository, permissionModuleRepository, null, null, null, null, null,
+                "yit@hcmute.edu.vn", "sysadmin@fit.hcmute.edu.vn", "YitZone@Admin2026!");
+    }
+
+    @Autowired
     public IamBootstrapSeeder(
             @Autowired(required = false) OrgUnitRepository orgUnitRepository,
             @Autowired(required = false) RoleRepository roleRepository,
-            @Autowired(required = false) PermissionModuleRepository permissionModuleRepository
+            @Autowired(required = false) PermissionModuleRepository permissionModuleRepository,
+            @Autowired(required = false) ExecutivePositionCatalogRepository positionCatalogRepository,
+            @Autowired(required = false) UserRepository userRepository,
+            @Autowired(required = false) UserAuthIdentityRepository authIdentityRepository,
+            @Autowired(required = false) PasswordEncoder passwordEncoder,
+            @Autowired(required = false) Environment environment,
+            @Value("${yitzone.bootstrap.dev-admin.btv-email:yit@hcmute.edu.vn}") String devBtvEmail,
+            @Value("${yitzone.bootstrap.dev-admin.sysadmin-email:sysadmin@fit.hcmute.edu.vn}") String devSysAdminEmail,
+            @Value("${yitzone.bootstrap.dev-admin.password:YitZone@Admin2026!}") String devAdminPassword
     ) {
         this.orgUnitRepository = orgUnitRepository;
         this.roleRepository = roleRepository;
         this.permissionModuleRepository = permissionModuleRepository;
+        this.positionCatalogRepository = positionCatalogRepository;
+        this.userRepository = userRepository;
+        this.authIdentityRepository = authIdentityRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.environment = environment;
+        this.devBtvEmail = devBtvEmail;
+        this.devSysAdminEmail = devSysAdminEmail;
+        this.devAdminPassword = devAdminPassword;
     }
 
     @Override
@@ -47,6 +93,7 @@ public class IamBootstrapSeeder implements ApplicationRunner {
         }
         try {
             seedAll();
+            seedDevBootstrapAdmins();
         } catch (Exception ex) {
             log.warn("IAM bootstrap seeding skipped (database unavailable): {}", ex.getMessage());
         }
@@ -56,6 +103,34 @@ public class IamBootstrapSeeder implements ApplicationRunner {
         seedOrgUnits();
         seedPermissionModules();
         seedRoles();
+        seedExecutivePositionCatalog();
+    }
+
+    private void seedExecutivePositionCatalog() {
+        if (positionCatalogRepository == null) {
+            return;
+        }
+        Instant now = Instant.now();
+        int inserted = 0;
+        for (ExecutivePositionTitle title : ExecutivePositionTitle.values()) {
+            if (positionCatalogRepository.findByCode(title.name()).isEmpty()) {
+                positionCatalogRepository.save(new ExecutivePositionCatalog(
+                        title.name(),
+                        title.getDisplayName(),
+                        title.getOrgUnitCode(),
+                        title.getRoleCode(),
+                        title.getMaxQuota(),
+                        true,
+                        true,
+                        now,
+                        "SYSTEM_SEED"
+                ));
+                inserted++;
+            }
+        }
+        if (inserted > 0) {
+            log.info("Seeded {} standard Executive Position Titles", inserted);
+        }
     }
 
     public List<OrgUnit> buildStandardOrgUnits() {
@@ -177,10 +252,10 @@ public class IamBootstrapSeeder implements ApplicationRunner {
                         List.of("qachat:inbox_view", "qachat:claim", "qachat:reply", "qachat:student_summary"), false),
                 module("MOD_AUDIT_VIEWER", "Kiểm toán Nhật ký Hệ thống (Audit Log)",
                         "Xem Nhật ký Kiểm tra Hệ thống dạng chỉ đọc (không gồm quyền giải ẩn danh Live Q&A)",
-                        List.of("audit:view"), false),
+                        List.of("audit:view"), true),
                 module("MOD_LIVEQA_UNMASK", "Tra cứu Danh tính Câu hỏi Ẩn danh Live Q&A",
                         "Tra cứu tài khoản gửi câu hỏi ẩn danh khi có quấy rối (ghi Audit Log; không cấp cho SystemAdmin)",
-                        List.of("liveqa:unmask"), false)
+                        List.of("liveqa:unmask"), true)
         );
     }
 
@@ -262,6 +337,82 @@ public class IamBootstrapSeeder implements ApplicationRunner {
         if (inserted > 0) {
             log.info("Seeded {} standard Roles", inserted);
         }
+    }
+
+    public void seedDevBootstrapAdmins() {
+        if (environment == null || !environment.acceptsProfiles(Profiles.of("dev"))) {
+            return;
+        }
+        if (userRepository == null || authIdentityRepository == null || passwordEncoder == null) {
+            return;
+        }
+        seedDevAdminAccount(
+                devBtvEmail,
+                "Ban Thường vụ Khoa CNTT (Dev)",
+                RoleCode.STANDING_COMMITTEE,
+                ExecutivePositionTitle.YOUTH_UNION_SECRETARY,
+                "BCH_DOAN",
+                "FACULTY",
+                "FACULTY"
+        );
+        seedDevAdminAccount(
+                devSysAdminEmail,
+                "Quản trị viên Hệ thống (Dev)",
+                RoleCode.SYSTEM_ADMIN,
+                null,
+                "FIT",
+                "FACULTY",
+                "FACULTY"
+        );
+    }
+
+    private void seedDevAdminAccount(
+            String email,
+            String fullName,
+            RoleCode roleCode,
+            ExecutivePositionTitle positionTitle,
+            String unitId,
+            String scopeType,
+            String scopeId
+    ) {
+        if (email == null || email.isBlank() || devAdminPassword == null || devAdminPassword.isBlank()) {
+            return;
+        }
+        String normalized = email.trim().toLowerCase();
+        if (userRepository.findByEmail(normalized).isPresent()) {
+            return;
+        }
+        Instant now = Instant.now();
+        User user = new User();
+        user.setEmail(normalized);
+        user.setFullName(fullName);
+        user.setUserType(User.UserType.STAFF_LECTURER);
+        user.setLifecycleStatus(User.LifecycleStatus.ACTIVE_STUDY);
+        user.setMemberStatus(User.MemberStatus.ACTIVE);
+        user.setPermissionVersion(1L);
+        user.setRoleScopes(List.of(new User.RoleScope(
+                roleCode,
+                positionTitle,
+                unitId,
+                scopeType,
+                scopeId,
+                "2026-2027",
+                now,
+                null,
+                null
+        )));
+        User saved = userRepository.save(user);
+
+        UserAuthIdentity identity = new UserAuthIdentity();
+        identity.setUserId(saved.getId());
+        identity.setEmail(normalized);
+        identity.setPasswordHash(passwordEncoder.encode(devAdminPassword));
+        identity.setEmailVerified(true);
+        identity.setEmailVerifiedAt(now);
+        identity.setMfaTotpEnabled(false);
+        identity.setPasswordUpdatedAt(now);
+        authIdentityRepository.save(identity);
+        log.info("Seeded dev bootstrap admin account '{}' ({})", normalized, roleCode);
     }
 
     private OrgUnit orgUnit(

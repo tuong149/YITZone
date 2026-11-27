@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 
   clamav:
-    image: clamav/clamav:1.4.2
+    image: clamav/clamav:stable
     container_name: yitzone-clamav
     ports:
       - "3310:3310"
@@ -44,15 +44,25 @@ services:
     restart: unless-stopped
 
   silo:
-    image: pgsty/silo:v0.2.0
+    image: pgsty/silo:latest
     container_name: yitzone-silo
+    command: ["server", "/data", "--console-address", ":9001"]
     ports:
       - "9000:9000"
+      - "9001:9001"
     environment:
-      SILO_ACCESS_KEY: ${SILO_ACCESS_KEY:-yitzone_dev_key}
-      SILO_SECRET_KEY: ${SILO_SECRET_KEY:-yitzone_dev_secret}
+      MINIO_ROOT_USER: ${YITZONE_STORAGE_ACCESS_KEY:-yitzone_dev_key}
+      MINIO_ROOT_PASSWORD: ${YITZONE_STORAGE_SECRET_KEY:-yitzone_dev_secret}
     volumes:
       - silo_data:/data
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.22.3
+    container_name: yitzone-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
     restart: unless-stopped
 
   yitzone-server:
@@ -65,6 +75,8 @@ services:
       SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/yitzone?replicaSet=rs0
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-mailpit}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-1025}
       YITZONE_STORAGE_ENDPOINT: http://silo:9000
       YITZONE_STORAGE_ACCESS_KEY: ${YITZONE_STORAGE_ACCESS_KEY:-yitzone_dev_key}
       YITZONE_STORAGE_SECRET_KEY: ${YITZONE_STORAGE_SECRET_KEY:-yitzone_dev_secret}
@@ -72,7 +84,12 @@ services:
       YITZONE_CLAMAV_HOST: clamav
       YITZONE_CLAMAV_PORT: 3310
       YITZONE_JWT_SECRET: ${YITZONE_JWT_SECRET:?YITZONE_JWT_SECRET is required}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-https://accounts.google.com}
       YITZONE_PAYMENT_WEBHOOK_SECRET: ${YITZONE_PAYMENT_WEBHOOK_SECRET:?YITZONE_PAYMENT_WEBHOOK_SECRET is required}
+      YITZONE_FRONTEND_BASE_URL: ${YITZONE_FRONTEND_BASE_URL:-http://localhost}
+      YITZONE_DEV_ADMIN_PASSWORD: ${YITZONE_DEV_ADMIN_PASSWORD:-YitZone@Admin2026!}
       JAVA_TOOL_OPTIONS: "-Xms512m -Xmx1536m"
     depends_on:
       mongodb:

@@ -279,7 +279,8 @@ Toàn bộ component tương tác xây dựng trên **Radix UI / Shadcn/UI** + T
 ### Buttons
 - **Shape:** Bo góc `10px` (`rounded-md`), chiều cao chuẩn `40px` (`36px` cho bảng quản trị mật độ cao, `48px` cho CTA chính trên Mobile/Kiosk).
 - **Primary:** Nền `YIT Cobalt`, chữ trắng, hover chuyển `YIT Cobalt Hover`; focus ring `2px` offset `2px` màu `YIT Cobalt`.
-- **Secondary / Outline:** Nền `Surface Muted` hoặc nền trong suốt + viền `1px` sắc nét; dùng cho thao tác phụ (*Lưu bản nháp, Xuất Excel, Bộ lọc*).
+- **Secondary / Outline:** Nền `Surface Muted` hoặc nền trong suốt + viền `1px` sắc nét; dùng cho thao tác phụ (*Lưu bản nháp, Xuất Excel, Bộ lọc*) trên nền nội dung đặc.
+- **Glass (`variant="glass"`):** Vật liệu `.liquid-glass-pill` bo `rounded-full`, chiều cao chuẩn `40px` (`h-10`), chữ `text-sm font-semibold`; **bắt buộc dùng thống nhất cho mọi nút hành động phụ nằm trong khung tiêu đề `.liquid-glass` toàn hệ thống** để đồng bộ quang học với bề mặt kính mờ.
 - **Destructive:** Nền `UTE Crimson`, chữ trắng; bắt buộc đi kèm hộp thoại xác nhận nhập lý do đối với các thao tác ghi `Audit Log` (thu hồi E-Cert, thu hồi quyền, từ chối hậu kiểm).
 - **Ghost:** Không viền, nền hiện khi hover; dùng cho icon action trong hàng bảng và thanh công cụ.
 

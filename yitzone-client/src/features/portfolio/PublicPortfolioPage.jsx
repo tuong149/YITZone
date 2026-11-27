@@ -104,11 +104,10 @@ export function PublicPortfolioPage() {
             </p>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
             <Button
               type="button"
-              size="sm"
-              variant={viewMode === "PUBLIC" ? "default" : "outline"}
+              variant={viewMode === "PUBLIC" ? "default" : "glass"}
               className="rounded-full"
               onClick={() => setViewMode("PUBLIC")}
             >
@@ -116,15 +115,14 @@ export function PublicPortfolioPage() {
             </Button>
             <Button
               type="button"
-              size="sm"
-              variant={viewMode === "CV_QR_VERIFY" ? "default" : "outline"}
+              variant={viewMode === "CV_QR_VERIFY" ? "default" : "glass"}
               className="rounded-full"
               onClick={() => setViewMode("CV_QR_VERIFY")}
             >
-              <QrCode className="h-3.5 w-3.5" />
-              Kiểm chứng QR từ CV (Riêng tư)
+              <QrCode className="h-4 w-4 shrink-0" />
+              <span>Kiểm chứng QR từ CV (Riêng tư)</span>
             </Button>
-            <Button asChild size="sm" variant="outline" className="rounded-full">
+            <Button asChild variant="glass">
               <Link to="/portfolio">Biên tập Hồ sơ</Link>
             </Button>
           </div>

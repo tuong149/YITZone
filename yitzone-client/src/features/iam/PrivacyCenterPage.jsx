@@ -18,7 +18,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { loadOnboardingState } from "@/features/iam/data/onboarding-storage";
 import { extractApiErrorMessage } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
-import { requestPersonalDataExport } from "./api";
+import {
+  createPrivacyRequest,
+  downloadPersonalDataExport,
+  useMyConsents,
+  useMyPrivacyRequests
+} from "./api";
 
 const INITIAL_CONSENTS = [];
 
@@ -27,8 +32,27 @@ export function PrivacyCenterPage() {
   const isAuthenticated = useAuthStore((s) => Boolean(s.accessToken));
   const userId = useAuthStore((s) => s.userId);
 
+  const { data: apiConsents } = useMyConsents(isAuthenticated);
+  const { data: myRequests = [], refetch: refetchRequests } = useMyPrivacyRequests(isAuthenticated);
+
   const consents = useMemo(() => {
     if (!isAuthenticated || !userId) return INITIAL_CONSENTS;
+    if (Array.isArray(apiConsents) && apiConsents.length > 0) {
+      return apiConsents.map((c) => ({
+        id: c.id ?? `${c.consentType}-${c.policyVersion}`,
+        type:
+          c.consentType === "INITIAL_PRIVACY"
+            ? "Xử lý Dữ liệu Cá nhân Cơ bản"
+            : c.consentType === "PORTRAIT_TICKET"
+              ? "Đối chiếu Ảnh thẻ Sinh viên tại Quầy Soát vé"
+              : c.consentType === "AI_USAGE"
+                ? "Tương tác Trợ lý Ảo YITBot (Khử định danh)"
+                : c.consentType,
+        policyVersion: c.policyVersion || "v2026.1",
+        consentedAt: c.grantedAt ? new Date(c.grantedAt).toLocaleString("vi-VN") : "Đã xác nhận",
+        note: c.granted ? "Đang hiệu lực theo Luật BVDLCN 91/2025/QH15." : "Đã rút lại đồng ý."
+      }));
+    }
     const saved = loadOnboardingState(userId);
     if (!saved?.consents) return INITIAL_CONSENTS;
     const at = saved.completedAt || saved.updatedAt;
@@ -73,9 +97,18 @@ export function PrivacyCenterPage() {
     setExportNotice(null);
     setExportError(null);
     try {
-      const res = await requestPersonalDataExport();
+      const blob = await downloadPersonalDataExport(format);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `yitzone-personal-data-${userId || "me"}.${format.toLowerCase()}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      void refetchRequests();
       setExportNotice(
-        `Đã khởi tạo gói xuất bản sao dữ liệu cá nhân định dạng ${format} cho tài khoản ${res.userId ?? userId ?? ""}.`
+        `Đã tải xuống bản sao dữ liệu cá nhân định dạng ${format} và ghi nhận vào lịch sử yêu cầu.`
       );
     } catch (err) {
       setExportError(
@@ -242,7 +275,18 @@ export function PrivacyCenterPage() {
         targetSummary="Yêu cầu DataPrivacyRequest · Tài khoản hiện tại"
         actionCode="PRIVACY_DELETION_REQUEST"
         confirmLabel="Xác nhận gửi yêu cầu"
-        onConfirm={(reason) => setDeletionSubmitted(reason)}
+        onConfirm={async (reason) => {
+          try {
+            await createPrivacyRequest({
+              requestType: "ERASURE_ANONYMIZE",
+              reason
+            });
+            void refetchRequests();
+            setDeletionSubmitted(reason);
+          } catch (err) {
+            setExportError(extractApiErrorMessage(err, "Không thể gửi yêu cầu ẩn danh hóa tài khoản."));
+          }
+        }}
       />
     </div>
   );

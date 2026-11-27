@@ -6,7 +6,6 @@ import {
   Clock,
   Code2,
   Search,
-  Sparkles,
   Terminal,
   Trophy
 } from "lucide-react";
@@ -17,6 +16,8 @@ import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
+import { useAuthStore } from "@/stores/auth-store";
 import { useOjProblems } from "./api";
 
 const PROBLEMS = [];
@@ -24,6 +25,9 @@ const PROBLEMS = [];
 const CONTESTS = [];
 
 export function OjHomePage() {
+  const isAuthenticated = useAuthStore((s) => Boolean(s.accessToken));
+  const authorities = useAuthStore((s) => s.authorities);
+  const canManageOj = isAuthenticated && hasAnyPermission(authorities, PERMISSIONS.ADMIN_OJ);
   const { data: apiProblems } = useOjProblems();
   const problems = apiProblems ?? PROBLEMS;
   const [query, setQuery] = useState("");
@@ -134,17 +138,16 @@ export function OjHomePage() {
               Chấm bài tự động trên cụm Sandbox cô lập hỗ trợ C, C++, Python và Java; thi đấu theo luật ICPC/IOI và đồng bộ thành tích lên E-Portfolio.
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-            <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link to="/yitbot">
-                <Sparkles className="h-4 w-4 text-brand-cyan" />
-                <span>Hỏi gợi ý YITBot</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link to="/admin/oj">Quản trị OJ</Link>
-            </Button>
-          </div>
+          {canManageOj && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+              <Button asChild variant="glass">
+                <Link to="/admin/oj">
+                  <Terminal className="h-4 w-4 shrink-0" />
+                  <span>Quản trị OJ</span>
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 

@@ -19,7 +19,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { setupTotpMfa, verifyTotpMfa } from "@/features/iam/api";
+import {
+  changePassword,
+  disableTotpMfa,
+  setupPassword,
+  setupTotpMfa,
+  verifyTotpMfa
+} from "@/features/iam/api";
 import { extractApiErrorMessage } from "@/lib/api-client";
 
 const INITIAL_SESSIONS = [];
@@ -56,7 +62,9 @@ export function ProfileSecuritySection({
   ];
   const allRulesPass = rules.every((r) => r.ok);
 
-  const handlePasswordSubmit = (e) => {
+  const [pwSubmitting, setPwSubmitting] = useState(false);
+
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     setPwError(null);
     setPwSuccess(null);
@@ -74,14 +82,28 @@ export function ProfileSecuritySection({
       return;
     }
 
-    onUpdateAccountHealth({ hasPassword: true });
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setSessions((prev) => prev.filter((s) => s.current));
-    setPwSuccess(
-      "Đã cập nhật mật khẩu thành công, thu hồi toàn bộ Refresh Token của các phiên khác và gửi email cảnh báo bảo mật."
-    );
+    setPwSubmitting(true);
+    try {
+      if (accountHealth.hasPassword) {
+        await changePassword(currentPassword, newPassword);
+      } else {
+        await setupPassword(newPassword);
+      }
+      onUpdateAccountHealth({ hasPassword: true });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setSessions((prev) => prev.filter((s) => s.current));
+      setPwSuccess(
+        "Đã cập nhật mật khẩu thành công, thu hồi toàn bộ Refresh Token của các phiên khác và gửi email cảnh báo bảo mật."
+      );
+    } catch (err) {
+      setPwError(
+        extractApiErrorMessage(err, "Không thể cập nhật mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.")
+      );
+    } finally {
+      setPwSubmitting(false);
+    }
   };
 
   const handleStartMfaSetup = async () => {
@@ -318,8 +340,8 @@ export function ProfileSecuritySection({
               </div>
             )}
 
-            <Button type="submit">
-              Cập nhật mật khẩu &amp; Thu hồi phiên cũ
+            <Button type="submit" disabled={pwSubmitting}>
+              {pwSubmitting ? "Đang cập nhật mật khẩu..." : "Cập nhật mật khẩu & Thu hồi phiên cũ"}
             </Button>
           </form>
         </CardContent>
@@ -356,7 +378,14 @@ export function ProfileSecuritySection({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => onUpdateAccountHealth({ mfaEnabled: false })}
+                onClick={async () => {
+                  try {
+                    await disableTotpMfa();
+                    onUpdateAccountHealth({ mfaEnabled: false });
+                  } catch (err) {
+                    setMfaSetupError(extractApiErrorMessage(err, "Không thể tắt xác thực 2 lớp lúc này."));
+                  }
+                }}
               >
                 Tắt MFA
               </Button>

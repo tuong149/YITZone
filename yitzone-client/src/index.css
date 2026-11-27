@@ -463,7 +463,7 @@
   }
 
   /* Edge-safe hover lift: hit-box stays stationary, inner surface carries motion */
-  .yit-hover-hit {
+  :where(.yit-hover-hit) {
     position: relative;
   }
 

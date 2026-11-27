@@ -142,6 +142,9 @@ export const useAuthStore = create((set, get) => ({
     const previousUserId = get().userId;
     if (typeof window !== "undefined") {
       window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      if (reason === "logout") {
+        window.sessionStorage.removeItem(AUTH_REDIRECT_STORAGE_KEY);
+      }
     }
     clearAuthenticatedApiCaches();
     // Only wipe drafts, cart, and user-scoped local registrations on explicit logout.

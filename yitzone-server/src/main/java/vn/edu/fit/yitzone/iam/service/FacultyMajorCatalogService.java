@@ -77,9 +77,13 @@ public class FacultyMajorCatalogService implements ApplicationRunner {
     }
 
     public List<FacultyMajorCatalog> listAll(String facultyName, Boolean fitOnly) {
+        return listAll(facultyName, fitOnly, false);
+    }
+
+    public List<FacultyMajorCatalog> listAll(String facultyName, Boolean fitOnly, boolean includeInactive) {
         List<FacultyMajorCatalog> source = loadAllEntries();
         return source.stream()
-                .filter(FacultyMajorCatalog::isActive)
+                .filter(e -> includeInactive || e.isActive())
                 .filter(e -> fitOnly == null || !fitOnly || e.isFitFaculty())
                 .filter(e -> facultyName == null || facultyName.isBlank()
                         || e.getFacultyName().equalsIgnoreCase(facultyName.trim()))
@@ -121,6 +125,86 @@ public class FacultyMajorCatalogService implements ApplicationRunner {
         return resolveFromStudentCode(studentCode)
                 .map(entry -> entry.isActive() && entry.isFitFaculty())
                 .orElse(false);
+    }
+
+    public FacultyMajorCatalog createOrUpdateMajor(String majorCode, String majorName, String facultyName, String actor) {
+        return createOrUpdateMajor(majorCode, majorName, facultyName, null, true, actor);
+    }
+
+    public FacultyMajorCatalog createOrUpdateMajor(
+            String majorCode,
+            String majorName,
+            String facultyName,
+            Boolean fitFacultyOverride,
+            Boolean activeOverride,
+            String actor
+    ) {
+        String code = majorCode == null ? "" : majorCode.trim();
+        String name = majorName == null ? "" : majorName.trim();
+        String faculty = facultyName == null ? "" : facultyName.trim();
+        if (!MAJOR_CODE_PATTERN.matcher(code).matches() || name.isEmpty() || faculty.isEmpty()) {
+            throw new BusinessException(
+                    ErrorCode.BAD_REQUEST,
+                    HttpStatus.BAD_REQUEST,
+                    "Mã ngành phải gồm đúng 3 chữ số và không được để trống tên Ngành hoặc tên Khoa"
+            );
+        }
+        boolean defaultFit = FIT_FACULTY_NAME.equalsIgnoreCase(faculty)
+                || ("Khoa " + FIT_FACULTY_NAME).equalsIgnoreCase(faculty);
+        boolean isFit = fitFacultyOverride != null ? fitFacultyOverride : defaultFit;
+        boolean isActive = activeOverride != null ? activeOverride : true;
+        FacultyMajorCatalog entry = new FacultyMajorCatalog(
+                code,
+                name,
+                faculty,
+                isFit,
+                isActive,
+                Instant.now(),
+                actor
+        );
+        if (repository != null) {
+            Optional<FacultyMajorCatalog> existing = repository.findByMajorCode(code);
+            existing.ifPresent(found -> entry.setId(found.getId()));
+            repository.save(entry);
+        }
+        cacheByMajorCode.put(code, entry);
+        return entry;
+    }
+
+    public FacultyMajorCatalog updateMajor(
+            String majorCode,
+            String majorName,
+            String facultyName,
+            Boolean fitFaculty,
+            Boolean active,
+            String actor
+    ) {
+        String code = majorCode == null ? "" : majorCode.trim();
+        FacultyMajorCatalog existing = findByMajorCode(code)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.NOT_FOUND,
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy mã ngành: " + code
+                ));
+        if (majorName != null && !majorName.isBlank()) {
+            existing.setMajorName(majorName.trim());
+        }
+        if (facultyName != null && !facultyName.isBlank()) {
+            existing.setFacultyName(facultyName.trim());
+        }
+        if (fitFaculty != null) {
+            existing.setFitFaculty(fitFaculty);
+        }
+        if (active != null) {
+            existing.setActive(active);
+        }
+        existing.setUpdatedAt(Instant.now());
+        existing.setUpdatedBy(actor);
+        if (repository != null) {
+            repository.save(existing);
+        }
+        cacheByMajorCode.put(code, existing);
+        return existing;
     }
 
     /**

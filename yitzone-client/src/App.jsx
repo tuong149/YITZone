@@ -62,6 +62,7 @@ const ExamTakePage = lazy(() => import("@/features/exam/ExamTakePage").then((m) 
 const ExamListPage = lazy(() => import("@/features/FirstEntryPages").then((m) => ({ default: m.ExamListPage })));
 const LiveQaJoinPage = lazy(() => import("@/features/FirstEntryPages").then((m) => ({ default: m.LiveQaJoinPage })));
 const SurveyListPage = lazy(() => import("@/features/FirstEntryPages").then((m) => ({ default: m.SurveyListPage })));
+const AccountAdminPage = lazy(() => import("@/features/iam/AccountAdminPage").then((m) => ({ default: m.AccountAdminPage })));
 const OrgRbacAdminPage = lazy(() => import("@/features/iam/OrgRbacAdminPage").then((m) => ({ default: m.OrgRbacAdminPage })));
 const PrivacyCenterPage = lazy(() => import("@/features/iam/PrivacyCenterPage").then((m) => ({ default: m.PrivacyCenterPage })));
 const ProfileSecurityPage = lazy(() => import("@/features/iam/ProfileSecurityPage").then((m) => ({ default: m.ProfileSecurityPage })));
@@ -355,6 +356,7 @@ export function App() {
                     <Route path="/admin/iam/roster" element={<RosterMajorAdminPage />} />
                   </Route>
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_IAM_RBAC} />}>
+                    <Route path="/admin/iam/accounts" element={<AccountAdminPage />} />
                     <Route path="/admin/iam/rbac" element={<OrgRbacAdminPage />} />
                   </Route>
                   <Route element={<ProtectedRoute requireAuth={true} requiredAuthorities={PERMISSIONS.ADMIN_IAM_UNIT_HR} />}>

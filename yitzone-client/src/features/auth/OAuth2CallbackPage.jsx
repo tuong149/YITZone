@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isOnboardingCompleted } from "@/features/iam/data/onboarding-storage";
 import { apiClient, extractApiErrorMessage } from "@/lib/api-client";
+import { ALL_ADMIN_AUTHORITIES, hasAnyPermission } from "@/lib/permissions";
 import { getOrCreateDeviceKeyPair } from "@/lib/webcrypto";
 import { AUTH_REDIRECT_STORAGE_KEY, useAuthStore } from "@/stores/auth-store";
 
@@ -11,16 +12,24 @@ export function OAuth2CallbackPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const setSession = useAuthStore((s) => s.setSession);
+  const authorities = useAuthStore((s) => s.authorities);
   const [verifying, setVerifying] = useState(true);
   const [resolvedUserId, setResolvedUserId] = useState(null);
   const [statusText, setStatusText] = useState(
-    "Đang xác minh phiên Google Workspace và đồng bộ hồ sơ sinh viên từ máy chủ..."
+    "Đang kiểm tra tài khoản Google Workspace..."
   );
   const [authError, setAuthError] = useState(null);
 
+  const canAccessAdmin = hasAnyPermission(authorities, ALL_ADMIN_AUTHORITIES);
   const savedRedirect =
     typeof window !== "undefined" ? window.sessionStorage.getItem(AUTH_REDIRECT_STORAGE_KEY) : null;
-  const successTarget = savedRedirect && savedRedirect !== "/login" ? savedRedirect : "/";
+  const successTarget =
+    savedRedirect &&
+    savedRedirect !== "/login" &&
+    savedRedirect !== "/403" &&
+    (canAccessAdmin || (!savedRedirect.startsWith("/admin") && !savedRedirect.startsWith("/staff")))
+      ? savedRedirect
+      : "/";
   const needsOnboarding =
     !verifying && !authError && Boolean(resolvedUserId) && !isOnboardingCompleted(resolvedUserId);
 
@@ -84,7 +93,7 @@ export function OAuth2CallbackPage() {
 
         if (!active) return;
         setResolvedUserId(userId);
-        setStatusText("Đã xác thực tài khoản Google Workspace và thiết lập phiên bảo mật thành công.");
+        setStatusText("Đăng nhập Google Workspace thành công.");
       } catch (err) {
         if (!active) return;
         setAuthError(
@@ -126,10 +135,10 @@ export function OAuth2CallbackPage() {
         </div>
         <h1 className="font-display text-2xl font-medium text-foreground">
           {authError
-            ? "Không thể hoàn tất đăng nhập Google"
+            ? "Không thể đăng nhập bằng Google"
             : verifying
-              ? "Đang xác thực Google Workspace..."
-              : "Liên kết Google Workspace hoàn tất"}
+              ? "Đang đăng nhập..."
+              : "Đăng nhập thành công"}
         </h1>
         <p role={authError ? "alert" : "status"} className="text-sm text-muted-foreground">
           {authError ?? statusText}
@@ -170,14 +179,14 @@ export function OAuth2CallbackPage() {
           }}
         >
           {authError
-            ? "Quay lại trang Đăng nhập"
+            ? "Quay lại trang đăng nhập"
             : verifying
-              ? "Đang đồng bộ phiên..."
+              ? "Đang đăng nhập..."
               : needsOnboarding
-                ? "Hoàn tất thiết lập tài khoản (1 phút)"
+                ? "Thiết lập tài khoản"
                 : successTarget === "/"
-                  ? "Vào Trang chủ YITZone"
-                  : "Tiếp tục trang trước đó"}
+                  ? "Vào Trang chủ"
+                  : "Tiếp tục"}
         </Button>
       </div>
     </div>

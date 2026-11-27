@@ -375,9 +375,9 @@ export function MinigamePlayerPage() {
 
           {canControlStage && (
             <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-              <Button asChild variant="outline" size="sm" className="h-10 rounded-full sm:h-9">
+              <Button asChild variant="glass">
                 <Link to="/stage/minigame">
-                  <MonitorPlay className="h-4 w-4" />
+                  <MonitorPlay className="h-4 w-4 shrink-0" />
                   <span>LED Sân khấu</span>
                 </Link>
               </Button>

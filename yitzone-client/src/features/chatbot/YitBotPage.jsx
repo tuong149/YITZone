@@ -236,12 +236,10 @@ export function YitBotPage() {
             </Badge>
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-full"
+              variant="glass"
               onClick={() => setEscalateOpen(true)}
             >
-              <MessageSquareShare className="h-4 w-4 text-primary" />
+              <MessageSquareShare className="h-4 w-4 shrink-0" />
               <span>Nhắn trực tiếp BCH</span>
             </Button>
           </div>

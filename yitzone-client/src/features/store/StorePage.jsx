@@ -231,23 +231,22 @@ export function StorePage() {
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-            <Button asChild variant="outline" size="sm" className="h-10 rounded-full sm:h-9">
+            <Button asChild variant="glass">
               <Link to="/store/orders">
-                <Receipt className="h-4 w-4" />
+                <Receipt className="h-4 w-4 shrink-0" />
                 <span>Đơn hàng của tôi</span>
               </Link>
             </Button>
 
-            <Link
-              to="/store/cart"
-              className="liquid-glass-btn-cobalt inline-flex h-10 items-center gap-2 rounded-full px-4 text-xs font-semibold transition-transform active:scale-[0.98] sm:h-9"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              <span>
-                Giỏ hàng (<span className="tabular-mono">{totalCount}</span>)
-                {totalCount > 0 ? ` · ${formatVnd(totalAmount)}` : ""}
-              </span>
-            </Link>
+            <Button asChild className="liquid-glass-btn-cobalt rounded-full">
+              <Link to="/store/cart">
+                <ShoppingCart className="h-4 w-4 shrink-0" />
+                <span>
+                  Giỏ hàng (<span className="tabular-mono">{totalCount}</span>)
+                  {totalCount > 0 ? ` · ${formatVnd(totalAmount)}` : ""}
+                </span>
+              </Link>
+            </Button>
           </div>
         </div>
       </section>

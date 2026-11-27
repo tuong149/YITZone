@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, GitCompareArrows, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle, AlertTriangle, CalendarClock, CheckCircle2, GitCompareArrows, UserPlus } from "lucide-react";
 import { AuditActionDialog } from "@/components/ui/audit-action-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,18 +8,79 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-const INITIAL_BATCH_MEMBERS = [];
+import { extractApiErrorMessage } from "@/lib/api-client";
+import {
+  appointPersonnelSingle,
+  createRestructuringBatch,
+  dismissPersonnelSingle,
+  fetchUnitMembers,
+  previewRestructuringDiff,
+  publishRestructuringBatch,
+  transferPersonnelSingle
+} from "./api";
 
 export function RestructuringPage() {
   const [selectedUnits, setSelectedUnits] = useState(["EMFIT"]);
-  const [batchMembers, setBatchMembers] = useState(INITIAL_BATCH_MEMBERS);
+  const [batchTitle, setBatchTitle] = useState("Kiện toàn Bộ máy Q1/2027");
+  const [batchMembers, setBatchMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [previewWarnings, setPreviewWarnings] = useState([]);
   const [effectiveMode, setEffectiveMode] = useState("IMMEDIATE");
   const [effectiveDate, setEffectiveDate] = useState("");
+
   const [singleMssv, setSingleMssv] = useState("");
   const [singleAction, setSingleAction] = useState("APPOINT");
-  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [singleUnitId, setSingleUnitId] = useState("EMFIT");
+  const [singleToUnitId, setSingleToUnitId] = useState("OFIT");
+  const [singleRoleCode, setSingleRoleCode] = useState("COMMITTEE_HEAD");
+
+  const [dialogMode, setDialogMode] = useState(null); // "batch" | "single" | null
   const [resultBanner, setResultBanner] = useState(null);
+  const [errorBanner, setErrorBanner] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadMembers = async () => {
+      if (selectedUnits.length === 0) {
+        setBatchMembers([]);
+        return;
+      }
+      setLoadingMembers(true);
+      try {
+        const lists = await Promise.all(
+          selectedUnits.map((u) => fetchUnitMembers(u).catch(() => []))
+        );
+        if (!active) return;
+        const merged = new Map();
+        for (const list of lists) {
+          for (const m of list) {
+            if (!merged.has(m.id)) {
+              merged.set(m.id, {
+                id: m.id,
+                studentCode: m.studentCode || m.email,
+                fullName: m.fullName,
+                unitId: m.unitId,
+                currentRoleCode: m.roleCode || "COLLABORATOR",
+                currentRole: `${m.roleCode || "COLLABORATOR"} (${m.unitId})`,
+                decision: "KEEP",
+                proposedRole: "Giữ nguyên chức vụ",
+                warning: (m.unreturnedAssets?.length ?? 0) > 0
+                  ? `Còn ${m.unreturnedAssets.length} tài sản VP chưa trả: ${m.unreturnedAssets.join(", ")}`
+                  : null
+              });
+            }
+          }
+        }
+        setBatchMembers(Array.from(merged.values()));
+      } finally {
+        if (active) setLoadingMembers(false);
+      }
+    };
+    void loadMembers();
+    return () => {
+      active = false;
+    };
+  }, [selectedUnits]);
 
   const toggleUnit = (code) => {
     setSelectedUnits((prev) =>
@@ -40,13 +101,93 @@ export function RestructuringPage() {
                   ? "Giữ nguyên chức vụ"
                   : decision === "DISMISS"
                     ? "Thôi giữ chức (đóng endAt → lưu termHistory)"
-                    : "Thăng chức / Điều chuyển nguyên tử"
+                    : "Đổi / Thăng chức nguyên tử"
             }
       )
     );
   };
 
-  const warnings = batchMembers.filter((m) => m.decision === "DISMISS" && m.warning);
+  const localWarnings = batchMembers.filter((m) => m.decision === "DISMISS" && m.warning);
+
+  const handleConfirmPublish = async (reason) => {
+    setErrorBanner(null);
+    setResultBanner(null);
+    try {
+      if (dialogMode === "single") {
+        if (singleAction === "APPOINT") {
+          await appointPersonnelSingle({
+            targetIdentifier: singleMssv.trim(),
+            unitId: singleUnitId,
+            roleCode: singleRoleCode,
+            termYear: "2026-2027",
+            reason
+          });
+        } else if (singleAction === "DISMISS") {
+          await dismissPersonnelSingle({
+            targetIdentifier: singleMssv.trim(),
+            unitId: singleUnitId,
+            reason
+          });
+        } else {
+          await transferPersonnelSingle({
+            targetIdentifier: singleMssv.trim(),
+            fromUnitId: singleUnitId,
+            toUnitId: singleToUnitId,
+            newRoleCode: singleRoleCode,
+            termYear: "2026-2027",
+            reason
+          });
+        }
+        setResultBanner(
+          `Đã thực thi kiện toàn lẻ (${singleAction}) cho ${singleMssv.trim()}, cập nhật termHistory & thu hồi cache quyền ≤ 5s.`
+        );
+        setSingleMssv("");
+        return;
+      }
+
+      const changes = batchMembers.map((m) => ({
+        userId: m.id,
+        action:
+          m.decision === "DISMISS"
+            ? "RESIGN_OR_DISMISS"
+            : m.decision === "PROMOTE"
+              ? "CHANGE_ROLE"
+              : "KEEP",
+        previousRoleCode: m.currentRoleCode,
+        previousPositionTitle: null,
+        previousUnitId: m.unitId,
+        newRoleCode: m.decision === "PROMOTE" ? "TEAM_LEADER" : null,
+        newPositionTitle: null,
+        newUnitId: m.decision === "PROMOTE" ? m.unitId : null,
+        note: reason
+      }));
+
+      const effectiveAtIso =
+        effectiveMode === "SCHEDULED" && effectiveDate ? new Date(effectiveDate).toISOString() : null;
+
+      const batch = await createRestructuringBatch({
+        title: batchTitle.trim() || `Kiện toàn ${selectedUnits.join(", ")}`,
+        termYear: "2026-2027",
+        targetUnitIds: selectedUnits,
+        changes,
+        effectiveAt: effectiveAtIso
+      });
+
+      const preview = await previewRestructuringDiff(batch.id);
+      setPreviewWarnings(preview.handoverWarnings ?? []);
+
+      const published = await publishRestructuringBatch(batch.id, {
+        effectiveAt: effectiveAtIso,
+        reason
+      });
+
+      setResultBanner(
+        `Đã ban hành Đợt kiện toàn "${published.title}" (Trạng thái: ${published.status}). Các đơn vị không được chọn hoàn toàn không bị ảnh hưởng.`
+      );
+    } catch (err) {
+      setErrorBanner(extractApiErrorMessage(err, "Không thể thực thi kiện toàn nhân sự. Vui lòng kiểm tra thẩm quyền và quy chế định biên."));
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -66,6 +207,13 @@ export function RestructuringPage() {
         </div>
       )}
 
+      {errorBanner && (
+        <div role="alert" className="flex items-center gap-2 rounded-xl border border-status-danger/30 bg-status-danger/10 px-4 py-3 text-xs font-medium text-status-danger">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{errorBanner}</span>
+        </div>
+      )}
+
       <Tabs defaultValue="batch">
         <TabsList>
           <TabsTrigger value="batch">Đợt Kiện toàn Theo Đơn vị (Restructuring Batch)</TabsTrigger>
@@ -80,21 +228,32 @@ export function RestructuringPage() {
                 Các Ban/Tổ không được chọn sẽ giữ nguyên trạng thái ổn định. Riêng BCH Đoàn (BCH_DOAN) chỉ BTV Đoàn bổ nhiệm; BCH Liên Chi hội (BCH_HOI) chỉ Thường trực LCH bổ nhiệm; LCH Trưởng bắt buộc kiêm 1 trong 2 Phó Bí thư Đoàn.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {["EMFIT", "OFIT", "ARTIT", "SV5T", "BCH_DOAN", "BCH_HOI"].map((code) => {
-                const active = selectedUnits.includes(code);
-                return (
-                  <Button
-                    key={code}
-                    type="button"
-                    size="sm"
-                    variant={active ? "default" : "outline"}
-                    onClick={() => toggleUnit(code)}
-                  >
-                    {code} {active ? "✓" : ""}
-                  </Button>
-                );
-              })}
+            <CardContent className="space-y-3">
+              <div className="max-w-md space-y-1.5">
+                <Label htmlFor="batch-title">Tên đợt kiện toàn</Label>
+                <Input
+                  id="batch-title"
+                  value={batchTitle}
+                  onChange={(e) => setBatchTitle(e.target.value)}
+                  placeholder="VD: Kiện toàn Ban EMFIT Q1/2027"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {["EMFIT", "OFIT", "ARTIT", "SV5T", "BCH_DOAN", "BCH_HOI"].map((code) => {
+                  const active = selectedUnits.includes(code);
+                  return (
+                    <Button
+                      key={code}
+                      type="button"
+                      size="sm"
+                      variant={active ? "default" : "outline"}
+                      onClick={() => toggleUnit(code)}
+                    >
+                      {code} {active ? "✓" : ""}
+                    </Button>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
 
@@ -109,9 +268,13 @@ export function RestructuringPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {batchMembers.length === 0 ? (
+              {loadingMembers ? (
                 <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
-                  Chưa có nhân sự nào trong danh sách dự thảo kiện toàn của đơn vị đã chọn.
+                  Đang tải danh sách nhân sự của các đơn vị đã chọn...
+                </div>
+              ) : batchMembers.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                  Chưa có nhân sự đang tại nhiệm nào trong các đơn vị đã chọn.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -170,15 +333,20 @@ export function RestructuringPage() {
                 </div>
               )}
 
-              {warnings.length > 0 && (
+              {(localWarnings.length > 0 || previewWarnings.length > 0) && (
                 <div className="space-y-1.5 rounded-xl border border-status-warning/40 bg-status-warning/10 p-4 text-xs text-status-warning">
                   <div className="flex items-center gap-1.5 font-semibold">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Cảnh báo Bàn giao trước khi Ban hành ({warnings.length})</span>
+                    <span>Cảnh báo Bàn giao trước khi Ban hành ({localWarnings.length + previewWarnings.length})</span>
                   </div>
-                  {warnings.map((w) => (
+                  {localWarnings.map((w) => (
                     <p key={w.id}>
                       <strong>{w.fullName}:</strong> {w.warning}
+                    </p>
+                  ))}
+                  {previewWarnings.map((w, idx) => (
+                    <p key={`srv-${idx}`}>
+                      <strong>[{w.warningType}]:</strong> {w.details}
                     </p>
                   ))}
                 </div>
@@ -217,7 +385,7 @@ export function RestructuringPage() {
                 <Button
                   type="button"
                   disabled={selectedUnits.length === 0 || batchMembers.length === 0}
-                  onClick={() => setPublishDialogOpen(true)}
+                  onClick={() => setDialogMode("batch")}
                 >
                   <CalendarClock className="h-4 w-4" />
                   Ban hành Đợt Kiện toàn
@@ -240,12 +408,12 @@ export function RestructuringPage() {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
               <div className="space-y-1.5">
-                <Label htmlFor="single-mssv">MSSV Nhân sự</Label>
+                <Label htmlFor="single-mssv">MSSV hoặc Email Nhân sự</Label>
                 <Input
                   id="single-mssv"
                   value={singleMssv}
                   onChange={(e) => setSingleMssv(e.target.value)}
-                  placeholder="Nhập MSSV 8 chữ số..."
+                  placeholder="Nhập MSSV 8 chữ số hoặc email..."
                   className="tabular-mono"
                 />
               </div>
@@ -262,12 +430,59 @@ export function RestructuringPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="single-unit">Đơn vị {singleAction === "TRANSFER" ? "nguồn" : "áp dụng"}</Label>
+                <Select value={singleUnitId} onValueChange={setSingleUnitId}>
+                  <SelectTrigger id="single-unit" className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["EMFIT", "OFIT", "ARTIT", "SV5T", "EMFIT_TT", "EMFIT_VH", "EMFIT_TU", "BCH_DOAN", "BCH_HOI"].map((u) => (
+                      <SelectItem key={u} value={u}>{u}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {singleAction === "TRANSFER" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="single-to-unit">Đơn vị đích</Label>
+                  <Select value={singleToUnitId} onValueChange={setSingleToUnitId}>
+                    <SelectTrigger id="single-to-unit" className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["EMFIT", "OFIT", "ARTIT", "SV5T", "EMFIT_TT", "EMFIT_VH", "EMFIT_TU", "BCH_DOAN", "BCH_HOI"].map((u) => (
+                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {singleAction !== "DISMISS" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="single-role">Vai trò bổ nhiệm</Label>
+                  <Select value={singleRoleCode} onValueChange={setSingleRoleCode}>
+                    <SelectTrigger id="single-role" className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="COLLABORATOR">Cộng tác viên (CTV)</SelectItem>
+                      <SelectItem value="DEPUTY_TEAM_LEADER">Tổ phó</SelectItem>
+                      <SelectItem value="TEAM_LEADER">Tổ trưởng</SelectItem>
+                      <SelectItem value="VICE_COMMITTEE_HEAD">Phó Ban</SelectItem>
+                      <SelectItem value="COMMITTEE_HEAD">Trưởng Ban</SelectItem>
+                      <SelectItem value="EXECUTIVE_COMMITTEE">Ủy viên BCH</SelectItem>
+                      <SelectItem value="STANDING_COMMITTEE">Ban Thường vụ (BTV)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-end">
                 <Button
                   type="button"
                   className="w-full"
                   disabled={!singleMssv.trim()}
-                  onClick={() => setPublishDialogOpen(true)}
+                  onClick={() => setDialogMode("single")}
                 >
                   Thực thi &amp; Ghi Audit Log
                 </Button>
@@ -278,13 +493,15 @@ export function RestructuringPage() {
       </Tabs>
 
       <AuditActionDialog
-        open={publishDialogOpen}
-        onOpenChange={setPublishDialogOpen}
+        open={Boolean(dialogMode)}
+        onOpenChange={(open) => {
+          if (!open) setDialogMode(null);
+        }}
         title="Ban hành Quyết định Kiện toàn Nhân sự"
         description="Hệ thống sẽ cập nhật startAt/endAt, lưu termHistory, thu hồi cache quyền cũ trong ≤ 5 giây và ghi đầy đủ vào Audit Log."
         targetSummary={
-          singleMssv.trim()
-            ? `Nhân sự ${singleMssv.trim()} · Thao tác ${singleAction}`
+          dialogMode === "single"
+            ? `Nhân sự ${singleMssv.trim()} · Thao tác ${singleAction} (${singleUnitId})`
             : `Đơn vị: ${selectedUnits.join(", ")} · Chế độ: ${
                 effectiveMode === "IMMEDIATE" ? "Hiệu lực ngay" : `Hẹn giờ (${effectiveDate || "chưa chọn"})`
               }`
@@ -292,15 +509,7 @@ export function RestructuringPage() {
         actionCode="IAM_RESTRUCTURING_PUBLISH"
         destructive={false}
         confirmLabel="Xác nhận Ban hành"
-        onConfirm={(reason) =>
-          setResultBanner(
-            `Đã ban hành kiện toàn (${
-              effectiveMode === "IMMEDIATE"
-                ? "áp dụng ngay & thu hồi cache quyền ≤ 5s"
-                : `lên lịch ${effectiveDate || "theo kế hoạch"}`
-            }). Lý do Audit: ${reason}`
-          )
-        }
+        onConfirm={handleConfirmPublish}
       />
     </div>
   );

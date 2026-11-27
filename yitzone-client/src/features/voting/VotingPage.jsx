@@ -202,16 +202,16 @@ export function VotingPage() {
         </div>
 
         {canControlStage && (
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm" className="h-10 rounded-full sm:h-9">
+          <div className="flex shrink-0 flex-wrap gap-2.5">
+            <Button asChild variant="glass">
               <Link to="/kiosk/voting">
-                <QrCode className="h-4 w-4" />
+                <QrCode className="h-4 w-4 shrink-0" />
                 <span>Quầy Kiosk 60s</span>
               </Link>
             </Button>
-            <Button asChild variant="outline" size="sm" className="h-10 rounded-full sm:h-9">
+            <Button asChild variant="glass">
               <Link to="/stage/voting">
-                <MonitorPlay className="h-4 w-4" />
+                <MonitorPlay className="h-4 w-4 shrink-0" />
                 <span>LED Đua Top</span>
               </Link>
             </Button>
