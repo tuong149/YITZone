@@ -33,7 +33,7 @@ export function PrivacyCenterPage() {
   const userId = useAuthStore((s) => s.userId);
 
   const { data: apiConsents } = useMyConsents(isAuthenticated);
-  const { data: myRequests = [], refetch: refetchRequests } = useMyPrivacyRequests(isAuthenticated);
+  const { refetch: refetchRequests } = useMyPrivacyRequests(isAuthenticated);
 
   const consents = useMemo(() => {
     if (!isAuthenticated || !userId) return INITIAL_CONSENTS;
@@ -86,7 +86,7 @@ export function PrivacyCenterPage() {
       });
     }
     return items;
-  }, [isAuthenticated, userId]);
+  }, [isAuthenticated, userId, apiConsents]);
 
   const [exportNotice, setExportNotice] = useState(null);
   const [exportError, setExportError] = useState(null);

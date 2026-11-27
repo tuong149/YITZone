@@ -286,7 +286,6 @@ export function ProfileSecurityPage() {
           )}
           {activeKey === "info" && (
             <ProfileInfoSection
-              userId={userId}
               fullName={cleanName}
               email={email}
               meProfile={meProfile}

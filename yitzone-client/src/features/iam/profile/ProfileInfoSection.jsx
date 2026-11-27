@@ -33,7 +33,6 @@ const INITIAL_UNION_PROFILE = {
 };
 
 export function ProfileInfoSection({
-  userId,
   fullName,
   email,
   meProfile,
@@ -343,9 +342,9 @@ export function ProfileInfoSection({
                 <RotateCcw className="h-4 w-4" />
                 <span>Hoàn tác</span>
               </Button>
-              <Button type="submit" disabled={!isDirty}>
+              <Button type="submit" disabled={!isDirty || savingProfile}>
                 <Save className="h-4 w-4" />
-                <span>Lưu thay đổi</span>
+                <span>{savingProfile ? "Đang lưu..." : "Lưu thay đổi"}</span>
               </Button>
             </div>
           </form>
@@ -387,8 +386,8 @@ export function ProfileInfoSection({
               />
             </div>
             {!accountHealth.backupEmailVerified && (
-              <Button type="button" variant="outline" onClick={handleSendOtp}>
-                Gửi mã OTP xác thực
+              <Button type="button" variant="outline" onClick={handleSendOtp} disabled={otpSending}>
+                {otpSending ? "Đang gửi..." : "Gửi mã OTP xác thực"}
               </Button>
             )}
           </div>

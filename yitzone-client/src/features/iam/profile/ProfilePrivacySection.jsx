@@ -78,7 +78,7 @@ export function ProfilePrivacySection({ userId: propUserId }) {
       });
     }
     return items;
-  }, [effectiveUserId]);
+  }, [effectiveUserId, apiConsents]);
 
   const [exportNotice, setExportNotice] = useState(null);
   const [exportError, setExportError] = useState(null);
