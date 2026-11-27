@@ -4,11 +4,12 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 20 Business Permission Module packages (UC-IAM-09, UC-IAM-10, LLD 2.2).
+ * Business Permission Module packages — 20 standard modules + future custom modules (UC-IAM-09, UC-IAM-10, LLD 2.2).
  */
 @Document(collection = "PERMISSION_MODULES")
 public class PermissionModule {
@@ -23,6 +24,10 @@ public class PermissionModule {
     private List<String> includedPermissions = new ArrayList<>();
     private boolean nonDelegable = false;
     private boolean systemDefault = true;
+    private boolean active = true;
+    private Instant createdAt;
+    private Instant updatedAt;
+    private String updatedBy;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -38,4 +43,12 @@ public class PermissionModule {
     public void setNonDelegable(boolean nonDelegable) { this.nonDelegable = nonDelegable; }
     public boolean isSystemDefault() { return systemDefault; }
     public void setSystemDefault(boolean systemDefault) { this.systemDefault = systemDefault; }
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public String getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 }

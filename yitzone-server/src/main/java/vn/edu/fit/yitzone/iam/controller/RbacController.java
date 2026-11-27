@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.fit.yitzone.common.api.ApiResponse;
+import vn.edu.fit.yitzone.iam.domain.AtomicPermissionCatalog;
 import vn.edu.fit.yitzone.iam.domain.ExecutivePositionCatalog;
 import vn.edu.fit.yitzone.iam.domain.OrgUnit;
 import vn.edu.fit.yitzone.iam.domain.PermissionModule;
@@ -72,42 +73,58 @@ public class RbacController {
         ));
     }
 
+    @GetMapping("/permissions")
+    @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasRole('SYSTEM_ADMIN') or hasPermission('rbac', 'manage')")
+    public ApiResponse<List<AtomicPermissionCatalog.PermissionDefinition>> listAtomicPermissions() {
+        return ApiResponse.ok(permissionModuleService.listAtomicPermissions());
+    }
+
     @GetMapping("/modules")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasRole('SYSTEM_ADMIN') or hasPermission('rbac', 'manage') or hasPermission('rbac', 'grant_delegable')")
-    public ApiResponse<List<PermissionModule>> listPermissionModules() {
-        return ApiResponse.ok(permissionModuleService.listAll());
+    public ApiResponse<List<PermissionModule>> listPermissionModules(
+            @RequestParam(defaultValue = "true") boolean includeInactive
+    ) {
+        return ApiResponse.ok(permissionModuleService.listAll(includeInactive));
     }
 
     @PostMapping("/modules")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasRole('SYSTEM_ADMIN') or hasPermission('rbac', 'manage')")
-    public ApiResponse<PermissionModule> createOrUpdateModule(@Valid @RequestBody SavePermissionModuleRequest req) {
-        PermissionModule module = new PermissionModule();
-        module.setModuleCode(req.moduleCode().trim().toUpperCase());
-        module.setName(req.name().trim());
-        module.setDescription(req.description());
-        module.setIncludedPermissions(req.includedPermissions() == null ? List.of() : List.copyOf(req.includedPermissions()));
-        module.setNonDelegable(req.nonDelegable());
-        return ApiResponse.ok(permissionModuleService.saveModule(module));
+    public ApiResponse<PermissionModule> createModule(
+            @Valid @RequestBody SavePermissionModuleRequest req,
+            Authentication auth
+    ) {
+        return ApiResponse.ok(permissionModuleService.createModule(
+                new PermissionModuleService.CreateModuleCommand(
+                        req.moduleCode(),
+                        req.name(),
+                        req.description(),
+                        req.includedPermissions(),
+                        req.nonDelegable(),
+                        req.reason()
+                ),
+                auth
+        ));
     }
 
     @PutMapping("/modules/{moduleCode}")
     @PreAuthorize("hasRole('STANDING_COMMITTEE') or hasRole('SYSTEM_ADMIN') or hasPermission('rbac', 'manage')")
     public ApiResponse<PermissionModule> updateModule(
             @PathVariable String moduleCode,
-            @Valid @RequestBody SavePermissionModuleRequest req
+            @Valid @RequestBody UpdatePermissionModuleRequest req,
+            Authentication auth
     ) {
-        PermissionModule module = permissionModuleService.listAll().stream()
-                .filter(m -> moduleCode.equalsIgnoreCase(m.getModuleCode()))
-                .findFirst()
-                .orElseGet(PermissionModule::new);
-        module.setModuleCode(moduleCode.trim().toUpperCase());
-        module.setName(req.name().trim());
-        module.setDescription(req.description());
-        if (req.includedPermissions() != null) {
-            module.setIncludedPermissions(List.copyOf(req.includedPermissions()));
-        }
-        module.setNonDelegable(req.nonDelegable());
-        return ApiResponse.ok(permissionModuleService.saveModule(module));
+        return ApiResponse.ok(permissionModuleService.updateModule(
+                moduleCode,
+                new PermissionModuleService.UpdateModuleCommand(
+                        req.name(),
+                        req.description(),
+                        req.includedPermissions(),
+                        req.nonDelegable(),
+                        req.active(),
+                        req.reason()
+                ),
+                auth
+        ));
     }
 
     @GetMapping("/position-titles")
@@ -233,7 +250,18 @@ public class RbacController {
             @NotBlank String name,
             String description,
             List<String> includedPermissions,
-            boolean nonDelegable
+            boolean nonDelegable,
+            String reason
+    ) {
+    }
+
+    public record UpdatePermissionModuleRequest(
+            String name,
+            String description,
+            List<String> includedPermissions,
+            Boolean nonDelegable,
+            Boolean active,
+            String reason
     ) {
     }
 

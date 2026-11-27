@@ -308,11 +308,27 @@ Toàn bộ component tương tác xây dựng trên **Radix UI / Shadcn/UI** + T
 - **QR / 1D Barcode Scanner Frame:** Khung camera toàn màn hình bo góc `20px`, thanh quét màu `Orbital Cyan`, phản hồi tức thì `≤ 0.3s` bằng dải trạng thái lớn ở đáy (Xanh lá = Hợp lệ + ảnh thẻ đối chiếu; Đỏ = Trùng lặp / Sai định dạng; Vàng = Walk-in chờ hậu kiểm). Riêng màn hình Lễ tân có chỉ báo trạng thái **Súng quét HID sẵn sàng** và **Chế độ Ngoại tuyến BTC**.
 - **Verified Badge (`[Đã xác thực bởi Đoàn - Hội Khoa CNTT]`):** Nền `FIT Academic Navy`, chữ trắng, biểu tượng khiên kiểm chứng; dùng trên E-Certificate, E-Portfolio, và huy hiệu `[Ban Chấp hành Đoàn - Hội Khoa CNTT]` trong `Q&A Messenger`.
 
+### Toastify & Pop-up Thông báo Hệ thống (Signature Component)
+Mọi yêu cầu tạo **toastify** hoặc **pop-up thông báo** trong YITZone bắt buộc dùng chung một ngôn ngữ thị giác, chuyển động và API duy nhất (tuyệt đối không cài thêm thư viện toast ngoài hay tự dựng hộp thông báo lệch chuẩn):
+- **Phân tách đúng 2 primitive dùng chung:**
+  1. **`AppToaster` (`pushAppToast` từ `@/stores/toast-store`, hiển thị bởi `@/components/ui/app-toaster.jsx`):** Dùng cho phản hồi tác vụ tức thì (đăng nhập Google Workspace / Email+Mật khẩu / OTP / MFA, đăng xuất, hết phiên, chuyển phạm vi đơn vị trên `ContextSwitcher`, lưu hồ sơ, đổi/đặt lại mật khẩu, bật/tắt MFA, tải bản sao dữ liệu, gửi yêu cầu quyền riêng tư hoặc hoàn tất thao tác quản trị).
+  2. **`NotificationPopup` (`pushLiveNotification` từ `@/stores/notification-store`, hiển thị bởi `@/components/ui/notification-popup.jsx`):** Dùng cho thông báo nghiệp vụ thời gian thực cần lưu vào Hộp thư Thông báo (`/notifications`) và đi kèm nút hành động *"Xem chi tiết"* / *"Đánh dấu đã đọc"*.
+- **Hình thái & Vị trí chuẩn:**
+  - Neo góc trên bên phải (`fixed right-3 top-[68px] sm:right-6`, chiều rộng `w-[min(92vw,390px)]`, `z-[60]` cho `AppToaster` và `z-[55]` cho `NotificationPopup`).
+  - Bề mặt `.liquid-glass-card` bo góc `22px` (`rounded-[22px]`), đổ bóng `shadow-floating`, viền mỏng theo biến thể trạng thái (`success`, `info`, `warning`, `danger`).
+  - Bố cục bên trong gồm: biểu tượng tròn `h-10 w-10` có nền nhạt theo màu trạng thái + icon Lucide `h-5 w-5`, tiêu đề `font-display text-sm font-semibold`, mô tả `text-xs leading-relaxed text-muted-foreground`, và nút đóng tròn `h-7 w-7` có focus ring WAI-ARIA. Không đặt kicker/eyebrow phía trên tiêu đề toast.
+- **Animation & Thanh thời gian đếm ngược bắt buộc (`index.css`):**
+  - Xuất hiện bằng `.yit-toast-motion` (`240ms`, `var(--motion-ease-out)` trượt nhẹ từ phải); biến mất bằng `.yit-toast-exit` (`160ms`, nhanh hơn lúc vào) trước khi gỡ khỏi store.
+  - Cạnh đáy luôn có **thanh đếm ngược `h-1`** dùng `.yit-toast-countdown` (`transform: scaleX(1 → 0)`, `linear`, `origin-left`, GPU-composited) đồng bộ chính xác với `durationMs` (`3500–5000ms` cho toast, `7000ms` cho `NotificationPopup`).
+  - Khi rê chuột vào thẻ (`onMouseEnter` / `onMouseLeave`), bắt buộc **tạm dừng đồng thời** cả bộ đếm thời gian JS lẫn `animationPlayState: "paused"` của thanh đếm ngược, rồi chạy tiếp khi rời chuột; hết giờ tự chạy `.yit-toast-exit` và biến mất.
+  - Tự động chuyển sang fade opacity (`yit-overlay-in` / `yit-overlay-out`) khi bật `prefers-reduced-motion: reduce`.
+
 ---
 
 ## Do's and Don'ts
 
 ### Do:
+- **Do** sử dụng thống nhất `pushAppToast` (`AppToaster`) cho phản hồi thao tác tức thì và `pushLiveNotification` (`NotificationPopup`) cho thông báo nghiệp vụ theo đúng chuẩn `.liquid-glass-card` + thanh đếm ngược `.yit-toast-countdown` tại góc trên bên phải.
 - **Do** ẩn thanh cuộn mặc định (`.no-scrollbar`) trên Sidebar nổi Liquid Glass (vẫn giữ cuộn mượt bằng con lăn chuột/trackpad) để không làm đứt viền bo góc đồng tâm.
 - **Do** đồng bộ cùng một bán kính `rounded-xl` cho toàn bộ điều khiển biểu mẫu đứng cùng hàng (`Input`, `Textarea`, `SelectTrigger`, `Button`), chỉ dùng `rounded-full` cho thanh điều hướng, `TabsList`/`TabsTrigger`, bộ lọc độc lập và nút CTA nổi.
 - **Do** tách thanh Navbar nổi thành các đảo Liquid Glass độc lập (`[Logo + Tabs]` | `[Context Switcher]` | `[Chế độ Sáng/Tối]` | `[Quét QR + Đăng nhập]`), cố định bằng `fixed` + `scrollbar-gutter: stable` và `DropdownMenu modal={false}` để thanh điều hướng không bao giờ bị rung ngang khi chuyển trang hoặc mở menu.

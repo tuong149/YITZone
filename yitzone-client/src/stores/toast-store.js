@@ -13,21 +13,14 @@ import { create } from "zustand";
 
 let toastSeq = 0;
 
-export const useToastStore = create((set, get) => ({
+export const useToastStore = create((set) => ({
   toasts: [],
-  pushToast: ({ title, description, variant, durationMs = 5000 }) => {
+  pushToast: ({ title, description, variant = "info", durationMs = 5000 }) => {
     toastSeq += 1;
     const id = `toast-${Date.now()}-${toastSeq}`;
     set((state) => ({
       toasts: [...state.toasts.slice(-3), { id, title, description, variant, durationMs }]
     }));
-    if (typeof window !== "undefined" && durationMs > 0) {
-      window.setTimeout(() => {
-        if (get().toasts.some((t) => t.id === id)) {
-          get().dismissToast(id);
-        }
-      }, durationMs);
-    }
     return id;
   },
   dismissToast: (id) => {

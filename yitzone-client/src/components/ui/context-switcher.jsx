@@ -36,6 +36,7 @@ import {
 import { queryClient } from "@/lib/query-client";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore } from "@/stores/theme-store";
+import { pushAppToast } from "@/stores/toast-store";
 import { cn } from "@/lib/utils";
 
 const SURFACE_META = {
@@ -121,6 +122,14 @@ export function ContextSwitcher({
   const applyScopeSwitch = (nextScopeId) => {
     setActiveScopeId(nextScopeId);
     void queryClient.invalidateQueries();
+    const nextLabel =
+      availableScopes.find((s) => s.scopeId === nextScopeId)?.label ?? nextScopeId;
+    pushAppToast({
+      variant: "info",
+      title: "Đã chuyển phạm vi làm việc",
+      description: `Đang thao tác dưới ngữ cảnh: ${nextLabel}.`,
+      durationMs: 3500
+    });
   };
 
   const handleSelectScope = (nextScopeId) => {

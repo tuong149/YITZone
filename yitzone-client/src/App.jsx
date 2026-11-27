@@ -3,9 +3,11 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
+  ArrowRight,
   Award,
   Banknote,
   CalendarCheck2,
+  CheckCircle2,
   Clock,
   Inbox,
   MonitorPlay,
@@ -22,7 +24,6 @@ import { AppToaster } from "@/components/ui/app-toaster";
 import { NotificationPopup } from "@/components/ui/notification-popup";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EventsPage } from "@/features/events/EventsPage";
 import { ForbiddenPage } from "@/features/system/ForbiddenPage";
 import { NotFoundPage } from "@/features/system/NotFoundPage";
@@ -121,6 +122,124 @@ function RouteLoadingFallback() {
   );
 }
 
+const TIME_BOUND_QUEUES = [
+  {
+    key: "attendance-review",
+    to: "/admin/attendance",
+    title: "Hậu kiểm Điểm danh 48 giờ",
+    description: "Rà soát các lượt điểm danh gắn cờ cảnh báo trước khi khóa sổ cấp E-Certificate.",
+    badgeLabel: "Cửa sổ 48h",
+    badgeVariant: "outline",
+    badgeIcon: Clock,
+    icon: QrCode,
+    count: 0,
+    unit: "ca",
+    actionLabel: "Mở Hậu kiểm 48h"
+  },
+  {
+    key: "student-inbox-sla",
+    to: "/admin/inbox",
+    title: "Hộp thư Sinh viên & SLA",
+    description: "Theo dõi và phản hồi các hội thoại Q&A Messenger từ sinh viên đúng cam kết 24 giờ.",
+    badgeLabel: "SLA 24h",
+    badgeVariant: "outline",
+    badgeIcon: AlertTriangle,
+    icon: Inbox,
+    count: 0,
+    unit: "hội thoại",
+    actionLabel: "Mở Hộp thư SLA 24h"
+  },
+  {
+    key: "cod-handover",
+    to: "/admin/store",
+    title: "Phiếu Tiền mặt COD Chờ Bàn giao",
+    description: "Đối soát tiền mặt thu hộ tại bàn trực và xác nhận bàn giao cho Thủ quỹ cuối ca.",
+    badgeLabel: "Cuối ca trực",
+    badgeVariant: "outline",
+    badgeIcon: ShieldAlert,
+    icon: Banknote,
+    count: 0,
+    unit: "phiếu",
+    actionLabel: "Đối soát & Bàn giao COD"
+  }
+];
+
+const APPROVAL_QUEUES = [
+  {
+    key: "event-approval",
+    to: "/admin/events",
+    title: "Sự kiện Chờ Duyệt Xuất bản",
+    description: "Thẩm định kế hoạch sự kiện và nhãn quyền lợi Cộng ĐRL, CTXH, CĐDN trước khi mở cổng đăng ký.",
+    badgeLabel: "Phê duyệt BTV",
+    badgeVariant: "info",
+    badgeIcon: null,
+    icon: CalendarCheck2,
+    count: 0,
+    unit: "sự kiện",
+    actionLabel: "Thẩm định & Xuất bản"
+  },
+  {
+    key: "sv5t-review",
+    to: "/admin/sv5t",
+    title: "Hồ sơ SV5T & Đơn Phúc khảo",
+    description: "Rà soát minh chứng 5 tiêu chí và giải quyết đơn phúc khảo trong cửa sổ công bố kết quả.",
+    badgeLabel: "Đợt xét cấp Khoa",
+    badgeVariant: "secondary",
+    badgeIcon: null,
+    icon: Award,
+    count: 0,
+    unit: "hồ sơ",
+    actionLabel: "Mở Hội đồng SV5T"
+  }
+];
+
+function OperationalQueueRow({ item }) {
+  const Icon = item.icon;
+  const BadgeIcon = item.badgeIcon;
+  const hasPending = item.count > 0;
+
+  return (
+    <li>
+      <Link
+        to={item.to}
+        className="group flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-muted/45 focus-visible:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex min-w-0 items-start gap-3.5">
+          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-muted/50 text-foreground/80 transition-colors group-hover:border-primary/30 group-hover:bg-primary/10 group-hover:text-primary">
+            <Icon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground transition-colors group-hover:text-primary">
+                {item.title}
+              </span>
+              <Badge variant={item.badgeVariant} className="gap-1">
+                {BadgeIcon && <BadgeIcon className="h-3 w-3" />}
+                <span>{item.badgeLabel}</span>
+              </Badge>
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-4 pl-[54px] sm:flex-col sm:items-end sm:justify-center sm:gap-1 sm:pl-0">
+          <span
+            className={`tabular-mono text-base font-semibold ${
+              hasPending ? "text-primary" : "text-foreground"
+            }`}
+          >
+            {item.count} {item.unit}
+          </span>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+            <span>{item.actionLabel}</span>
+            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+          </span>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
 /**
  * Actionable Operational Dashboard for /admin (fixes A5)
  */
@@ -131,6 +250,12 @@ function AdminOverviewPage() {
     roleScopes.find((s) => s.scopeId === activeScopeId)?.label.replace(/\s*\(FACULTY\)/gi, "") ??
     (activeScopeId === "FACULTY" ? "Toàn Khoa CNTT" : activeScopeId);
 
+  const timeBoundTotal = TIME_BOUND_QUEUES.reduce((sum, item) => sum + item.count, 0);
+  const approvalTotal = APPROVAL_QUEUES.reduce((sum, item) => sum + item.count, 0);
+  const activeQueueCount = [...TIME_BOUND_QUEUES, ...APPROVAL_QUEUES].filter(
+    (item) => item.count > 0
+  ).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
@@ -139,7 +264,7 @@ function AdminOverviewPage() {
             <Badge variant="info">Đơn vị đang thao tác: {activeScopeLabel}</Badge>
           </div>
           <h1 className="mt-2 font-display text-2xl font-medium text-foreground sm:text-3xl">
-            Việc Cần Xử lý Hôm nay
+            Việc Cần Xử lý
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Tổng hợp các đầu việc vận hành ưu tiên, cảnh báo SLA 24h và hàng đợi phê duyệt theo phạm vi đơn vị.
@@ -162,121 +287,71 @@ function AdminOverviewPage() {
         </div>
       </div>
 
-      {/* 5 Actionable Operational Queue Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <Badge variant="outline" className="gap-1">
-                <Clock className="h-3 w-3" />
-                <span>Cửa sổ 48h</span>
-              </Badge>
-              <span className="tabular-mono text-2xl font-bold text-foreground">0 ca</span>
+      {/* Grouped Operational Queues: Time-bound SLA (7 cols) + Approvals (5 cols) */}
+      <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
+        <section
+          aria-labelledby="queue-sla-heading"
+          className="overflow-hidden rounded-[20px] border border-border bg-card shadow-sm lg:col-span-7"
+        >
+          <header className="flex items-center justify-between gap-3 border-b border-border/80 px-5 py-4">
+            <div className="min-w-0">
+              <h2 id="queue-sla-heading" className="text-sm font-semibold text-foreground">
+                Hàng đợi theo thời hạn &amp; SLA
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Ưu tiên xử lý trong cửa sổ 24h – 48h và đối soát cuối ca trực.
+              </p>
             </div>
-            <CardTitle className="mt-2 text-base">Hậu kiểm Điểm danh 48 giờ</CardTitle>
-            <CardDescription className="text-xs">
-              Rà soát các lượt điểm danh gắn cờ cảnh báo trước khi khóa sổ cấp E-Certificate.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
-              <Link to="/admin/attendance">
-                <QrCode className="h-3.5 w-3.5" />
-                <span>Mở Hậu kiểm 48h</span>
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+            <Badge variant={timeBoundTotal > 0 ? "warning" : "secondary"} className="tabular-mono shrink-0">
+              {timeBoundTotal} cần xử lý
+            </Badge>
+          </header>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <Badge variant="info">Phê duyệt BTV</Badge>
-              <span className="tabular-mono text-2xl font-bold text-primary">0 sự kiện</span>
-            </div>
-            <CardTitle className="mt-2 text-base">Sự kiện Chờ Duyệt Xuất bản</CardTitle>
-            <CardDescription className="text-xs">
-              Thẩm định kế hoạch sự kiện và nhãn quyền lợi Cộng ĐRL, CTXH, CĐDN trước khi mở cổng đăng ký.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
-              <Link to="/admin/events">
-                <CalendarCheck2 className="h-3.5 w-3.5" />
-                <span>Thẩm định &amp; Xuất bản</span>
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+          <ul className="divide-y divide-border/80">
+            {TIME_BOUND_QUEUES.map((item) => (
+              <OperationalQueueRow key={item.key} item={item} />
+            ))}
+          </ul>
+        </section>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <Badge variant="outline" className="gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                <span>SLA 24h</span>
-              </Badge>
-              <span className="tabular-mono text-2xl font-bold text-foreground">0 hội thoại</span>
+        <section
+          aria-labelledby="queue-approval-heading"
+          className="overflow-hidden rounded-[20px] border border-border bg-card shadow-sm lg:col-span-5"
+        >
+          <header className="flex items-center justify-between gap-3 border-b border-border/80 px-5 py-4">
+            <div className="min-w-0">
+              <h2 id="queue-approval-heading" className="text-sm font-semibold text-foreground">
+                Phê duyệt &amp; Hội đồng
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Thẩm định cấp BTV và xét duyệt hồ sơ theo đợt.
+              </p>
             </div>
-            <CardTitle className="mt-2 text-base">Hộp thư Sinh viên &amp; SLA</CardTitle>
-            <CardDescription className="text-xs">
-              Theo dõi và phản hồi các hội thoại Q&amp;A Messenger từ sinh viên đúng cam kết 24 giờ.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
-              <Link to="/admin/inbox">
-                <Inbox className="h-3.5 w-3.5" />
-                <span>Mở Hộp thư SLA 24h</span>
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+            <Badge variant={approvalTotal > 0 ? "info" : "secondary"} className="tabular-mono shrink-0">
+              {approvalTotal} chờ duyệt
+            </Badge>
+          </header>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <Badge variant="outline" className="gap-1">
-                <ShieldAlert className="h-3 w-3" />
-                <span>Cuối ca trực</span>
-              </Badge>
-              <span className="tabular-mono text-2xl font-bold text-foreground">0 phiếu</span>
-            </div>
-            <CardTitle className="mt-2 text-base">Phiếu Tiền mặt COD Chờ Bàn giao</CardTitle>
-            <CardDescription className="text-xs">
-              Đối soát tiền mặt thu hộ tại bàn trực và xác nhận bàn giao cho Thủ quỹ cuối ca.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
-              <Link to="/admin/store">
-                <Banknote className="h-3.5 w-3.5" />
-                <span>Đối soát &amp; Bàn giao COD</span>
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+          <ul className="divide-y divide-border/80">
+            {APPROVAL_QUEUES.map((item) => (
+              <OperationalQueueRow key={item.key} item={item} />
+            ))}
+          </ul>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary">Đợt xét cấp Khoa</Badge>
-              <span className="tabular-mono text-2xl font-bold text-primary">0 hồ sơ</span>
+          <footer className="flex items-center justify-between gap-3 border-t border-border/80 bg-muted/35 px-5 py-3.5 text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-status-success" />
+              <span>
+                {activeQueueCount === 0
+                  ? "Tất cả 5 hàng đợi vận hành đang sạch."
+                  : `Còn ${activeQueueCount}/5 hàng đợi có đầu việc cần xử lý.`}
+              </span>
             </div>
-            <CardTitle className="mt-2 text-base">Hồ sơ SV5T &amp; Đơn Phúc khảo</CardTitle>
-            <CardDescription className="text-xs">
-              Rà soát minh chứng 5 tiêu chí và giải quyết đơn phúc khảo trong cửa sổ công bố kết quả.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="sm" variant="outline" className="w-full rounded-full">
-              <Link to="/admin/sv5t">
-                <Award className="h-3.5 w-3.5" />
-                <span>Mở Hội đồng SV5T</span>
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+            <span className="tabular-mono shrink-0 font-semibold text-foreground">
+              {activeQueueCount}/5 hàng đợi
+            </span>
+          </footer>
+        </section>
       </div>
     </div>
   );

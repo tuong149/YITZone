@@ -378,8 +378,26 @@ export async function fetchRbacOrgUnits() {
   return res.data.data;
 }
 
-export async function fetchRbacModules() {
-  const res = await apiClient.get("/rbac/modules");
+export async function fetchRbacModules(includeInactive = true) {
+  const res = await apiClient.get("/rbac/modules", { params: { includeInactive } });
+  if (!res.data.success) throw new Error(res.data.detail);
+  return res.data.data;
+}
+
+export async function fetchAtomicPermissions() {
+  const res = await apiClient.get("/rbac/permissions");
+  if (!res.data.success) throw new Error(res.data.detail);
+  return res.data.data;
+}
+
+export async function createRbacModule(payload) {
+  const res = await apiClient.post("/rbac/modules", payload);
+  if (!res.data.success) throw new Error(res.data.detail);
+  return res.data.data;
+}
+
+export async function updateRbacModule(moduleCode, payload) {
+  const res = await apiClient.put(`/rbac/modules/${encodeURIComponent(moduleCode)}`, payload);
   if (!res.data.success) throw new Error(res.data.detail);
   return res.data.data;
 }
@@ -422,10 +440,19 @@ export function useRoster(search) {
   });
 }
 
-export function useRbacModules() {
+export function useRbacModules(includeInactive = true) {
   return useQuery({
-    queryKey: ["rbac", "modules"],
-    queryFn: fetchRbacModules,
+    queryKey: ["rbac", "modules", includeInactive],
+    queryFn: () => fetchRbacModules(includeInactive),
+    retry: false
+  });
+}
+
+export function useAtomicPermissions(enabled = true) {
+  return useQuery({
+    queryKey: ["rbac", "permissions"],
+    queryFn: fetchAtomicPermissions,
+    enabled,
     retry: false
   });
 }

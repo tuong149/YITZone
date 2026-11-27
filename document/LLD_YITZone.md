@@ -312,7 +312,7 @@ erDiagram
         object noShowPolicy "Embedded: {enabled: boolean, thresholdCount: 3, lockDurationDays: 14}"
         int maxAttendees "Số lượng sinh viên tham dự tối đa"
         string organizerRecruitmentScope "INTERNAL_CTV_ONLY | FACULTY_WIDE"
-        array organizerPositions "Embedded (CRUD động theo sự kiện): [{positionId, code, name, isEnabled, slots, description}] (gợi ý mẫu 7 vị trí chuẩn)"
+        array organizerPositions "Embedded (CRUD động theo sự kiện): [{positionId, code, name, isEnabled, slots, description, defaultModuleCodes: string[]}] (gợi ý mẫu 7 vị trí chuẩn kèm gói quyền tạm thời mặc định cho luồng duyệt BTC 1 chạm)"
         object registrationFormConfig "Embedded: {attendeeMode: ONE_CLICK|CUSTOM_FORM, attendeeCustomFields[], organizerCustomFields[]}"
         ObjectId surveyId FK "Nullable: Biểu mẫu khảo sát gắn kèm sau sự kiện"
         boolean requireSurveyForCert "Bắt buộc hoàn thành khảo sát mới cấp E-Cert"

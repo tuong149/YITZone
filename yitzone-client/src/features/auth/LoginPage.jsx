@@ -21,6 +21,7 @@ import { apiClient, extractApiErrorMessage } from "@/lib/api-client";
 import { canAccessAdminWorkspace } from "@/lib/permissions";
 import { getOrCreateDeviceKeyPair } from "@/lib/webcrypto";
 import { useAuthStore, AUTH_REDIRECT_STORAGE_KEY } from "@/stores/auth-store";
+import { pushAppToast } from "@/stores/toast-store";
 
 const IS_OIDC_AVAILABLE = import.meta.env.VITE_OIDC_ENABLED !== "false";
 
@@ -140,6 +141,16 @@ export function LoginPage() {
       // Non-blocking if device token endpoint is unavailable
     }
 
+    const displayName = authPayload.fullName ?? authPayload.email ?? fallbackEmail;
+    pushAppToast({
+      variant: "success",
+      title: "Đăng nhập thành công",
+      description: displayName
+        ? `Chào mừng ${displayName} quay trở lại YITZone.`
+        : "Phiên tài khoản YITZone đã được kích hoạt.",
+      durationMs: 4000
+    });
+
     const defaultLanding = canAccessAdminWorkspace(true, authorities) ? "/admin" : "/";
     consumeRedirectAndNavigate(defaultLanding);
   };
@@ -252,6 +263,12 @@ export function LoginPage() {
       setRegNotice(
         "Đã gửi mã xác thực 6 số (hiệu lực 5–10 phút) tới email của bạn. Hệ thống sẽ tự đối chiếu danh sách sinh viên chính thức của Trường."
       );
+      pushAppToast({
+        variant: "info",
+        title: "Đã gửi mã OTP xác thực",
+        description: `Vui lòng kiểm tra hộp thư ${regEmail.trim()} và nhập mã 6 chữ số.`,
+        durationMs: 4500
+      });
     } catch (err) {
       setRegError(
         extractApiErrorMessage(err, "Không thể gửi yêu cầu đăng ký. Vui lòng kiểm tra kết nối máy chủ.")
@@ -320,6 +337,12 @@ export function LoginPage() {
         email: forgotEmail.trim()
       });
       setForgotSent(true);
+      pushAppToast({
+        variant: "info",
+        title: "Đã gửi yêu cầu khôi phục mật khẩu",
+        description: "Nếu email hợp lệ, mã OTP 6 chữ số sẽ được gửi tới hộp thư trong ít phút.",
+        durationMs: 4500
+      });
     } catch (err) {
       setResetNotice(
         extractApiErrorMessage(err, "Không thể gửi yêu cầu đặt lại mật khẩu lúc này. Vui lòng thử lại sau.")
@@ -359,6 +382,12 @@ export function LoginPage() {
       setLoginEmail(forgotEmail.trim());
       setLoginPassword("");
       setLoginInfoMsg("Đặt lại mật khẩu thành công. Các thiết bị đăng nhập cũ đã được đăng xuất tự động.");
+      pushAppToast({
+        variant: "success",
+        title: "Đặt lại mật khẩu thành công",
+        description: "Toàn bộ phiên đăng nhập cũ đã được thu hồi. Bạn có thể đăng nhập bằng mật khẩu mới.",
+        durationMs: 5000
+      });
       setActiveTab("login");
     } catch (err) {
       setResetNotice(

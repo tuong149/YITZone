@@ -89,6 +89,11 @@ public class RbacGrantService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, HttpStatus.NOT_FOUND,
                         "Không tìm thấy gói quyền: " + request.moduleCode()));
 
+        if (!module.isActive()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, HttpStatus.BAD_REQUEST,
+                    "Gói quyền " + module.getModuleCode() + " đang ở trạng thái tạm ngưng, không thể cấp phát");
+        }
+
         boolean isBtv = hasAuthority(grantor, "ROLE_STANDING_COMMITTEE");
         if (module.isNonDelegable() && !isBtv) {
             recordAudit(

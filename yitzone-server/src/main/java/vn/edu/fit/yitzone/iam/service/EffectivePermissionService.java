@@ -183,11 +183,10 @@ public class EffectivePermissionService {
                 }
                 String scopeId = am.scopeId() != null && !am.scopeId().isBlank() ? am.scopeId() : "FACULTY";
                 String scopeType = am.scopeType() != null && !am.scopeType().isBlank() ? am.scopeType() : "FACULTY";
-                allowedScopes.add(scopeId);
-                authorities.add(am.moduleCode());
-
                 PermissionModule mod = modulesByCode.get(am.moduleCode());
-                if (mod != null && mod.getIncludedPermissions() != null) {
+                if (mod != null && mod.isActive() && mod.getIncludedPermissions() != null) {
+                    allowedScopes.add(scopeId);
+                    authorities.add(am.moduleCode());
                     for (String perm : mod.getIncludedPermissions()) {
                         authorities.add(perm);
                         grants.add(new EffectiveGrant(perm, scopeType, scopeId, am.expiresAt()));

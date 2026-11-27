@@ -1,27 +1,43 @@
 package vn.edu.fit.yitzone.iam;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import vn.edu.fit.yitzone.audit.domain.Notification;
 import vn.edu.fit.yitzone.audit.repository.NotificationRepository;
 import vn.edu.fit.yitzone.audit.service.AuditLogService;
 import vn.edu.fit.yitzone.common.exception.BusinessException;
+import vn.edu.fit.yitzone.common.security.JwtTokenService;
 import vn.edu.fit.yitzone.iam.domain.HrProposal;
 import vn.edu.fit.yitzone.iam.domain.OrgUnit;
 import vn.edu.fit.yitzone.iam.domain.RoleCode;
 import vn.edu.fit.yitzone.iam.domain.User;
 import vn.edu.fit.yitzone.iam.domain.UserAuthIdentity;
 import vn.edu.fit.yitzone.iam.repository.HrProposalRepository;
+import vn.edu.fit.yitzone.iam.repository.OfficialDirectoryRosterRepository;
 import vn.edu.fit.yitzone.iam.repository.OrgUnitRepository;
+import vn.edu.fit.yitzone.iam.repository.PermissionModuleRepository;
+import vn.edu.fit.yitzone.iam.repository.RoleRepository;
 import vn.edu.fit.yitzone.iam.repository.UserAuthIdentityRepository;
 import vn.edu.fit.yitzone.iam.repository.UserRepository;
+import vn.edu.fit.yitzone.iam.service.AccountAdminService;
 import vn.edu.fit.yitzone.iam.service.CtvLifecycleService;
+import vn.edu.fit.yitzone.iam.service.EffectivePermissionService;
+import vn.edu.fit.yitzone.iam.service.FacultyMajorCatalogService;
+import vn.edu.fit.yitzone.iam.service.HybridAuthService;
 import vn.edu.fit.yitzone.iam.service.IamBootstrapSeeder;
+import vn.edu.fit.yitzone.iam.service.IdentityResolutionService;
 import vn.edu.fit.yitzone.iam.service.OtpService;
 import vn.edu.fit.yitzone.iam.service.RbacCacheInvalidationService;
+import vn.edu.fit.yitzone.iam.service.RefreshTokenService;
+import vn.edu.fit.yitzone.iam.service.TotpMfaService;
 import vn.edu.fit.yitzone.iam.service.UnitHrService;
 import vn.edu.fit.yitzone.iam.service.UserLifecycleProfileService;
+import vn.edu.fit.yitzone.iam.service.WalkInAutoLinkService;
 import vn.edu.fit.yitzone.office.domain.OfficeAsset;
 import vn.edu.fit.yitzone.office.domain.OfficeDutyShift;
 import vn.edu.fit.yitzone.office.repository.OfficeAssetRepository;
@@ -234,6 +250,199 @@ class UserLifecycleAndUnitHrTest {
         assertThat(savedNotifications).anyMatch(n -> ofitLead.getId().equals(n.getRecipientUserId())
                 && n.getType() == Notification.NotificationType.DUTY_SWAP);
         assertThat(cacheService.isTokenVersionValid(ctvEmfit.getId(), 1L)).isFalse();
+    }
+
+    @Test
+    void ucIam05GraduatedAlumniLogsInWithPersonalEmailWhileArchivedIsBlocked() {
+        String secret = "test-jwt-secret-key-at-least-64-characters-long-for-hmac-sha-256-yitzone";
+        Map<String, User> users = new ConcurrentHashMap<>();
+        Map<String, UserAuthIdentity> identities = new ConcurrentHashMap<>();
+
+        User sv = new User();
+        sv.setId("u-alumni");
+        sv.setEmail("21110001@student.hcmute.edu.vn");
+        sv.setFullName("Trần Cựu Sinh Viên");
+        sv.setStudentCode("21110001");
+        sv.setPersonalEmail("alumni.tran@gmail.com");
+        sv.setPersonalEmailVerified(true);
+        sv.setLifecycleStatus(User.LifecycleStatus.GRADUATED);
+        users.put(sv.getId(), sv);
+
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
+        UserAuthIdentity id = new UserAuthIdentity();
+        id.setId("auth-alumni");
+        id.setUserId(sv.getId());
+        id.setEmail(sv.getEmail());
+        id.setEmailVerified(true);
+        id.setPasswordHash(encoder.encode("Alumni@2026"));
+        identities.put(sv.getId(), id);
+
+        UserRepository userRepo = mockUserRepo(users);
+        UserAuthIdentityRepository idRepo = Mockito.mock(UserAuthIdentityRepository.class);
+        when(idRepo.findByUserId(anyString())).thenAnswer(inv -> Optional.ofNullable(identities.get(inv.getArgument(0))));
+        when(idRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        IamBootstrapSeeder seeder = new IamBootstrapSeeder(null, null, null);
+        RoleRepository roleRepo = Mockito.mock(RoleRepository.class);
+        PermissionModuleRepository modRepo = Mockito.mock(PermissionModuleRepository.class);
+        OrgUnitRepository unitRepo = Mockito.mock(OrgUnitRepository.class);
+        when(roleRepo.findAll()).thenReturn(seeder.buildStandardRoles());
+        when(modRepo.findAll()).thenReturn(seeder.buildStandardPermissionModules());
+        when(unitRepo.findAll()).thenReturn(seeder.buildStandardOrgUnits());
+
+        HybridAuthService authService = new HybridAuthService(
+                userRepo, idRepo, null, encoder,
+                new OtpService(null, null, "no-reply@yitzone.fit.edu.vn", secret),
+                new TotpMfaService(secret),
+                new RefreshTokenService(null, new ObjectMapper(), 604800L),
+                new JwtTokenService(secret, 900L),
+                new EffectivePermissionService(userRepo, roleRepo, modRepo, unitRepo, new RbacCacheInvalidationService(null)),
+                new IdentityResolutionService(Mockito.mock(OfficialDirectoryRosterRepository.class), new FacultyMajorCatalogService(null), List.of("student.hcmute.edu.vn")),
+                new WalkInAutoLinkService(null),
+                new AuditLogService(null, null),
+                null
+        );
+
+        // Graduated alumni logs in using verified personalEmail + password -> lands on exact same User
+        var session = authService.loginWithPassword("alumni.tran@gmail.com", "Alumni@2026");
+        assertThat(session.payload().userId()).isEqualTo("u-alumni");
+        assertThat(session.payload().studentCode()).isEqualTo("21110001");
+
+        // Transitioning to ARCHIVED blocks password login (403 FORBIDDEN)
+        sv.setLifecycleStatus(User.LifecycleStatus.ARCHIVED);
+        assertThatThrownBy(() -> authService.loginWithPassword("alumni.tran@gmail.com", "Alumni@2026"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void ucIam07TeamLeaderDirectExecuteCommitteeTransferAndIsolatedAnnouncement() {
+        IamBootstrapSeeder seeder = new IamBootstrapSeeder(null, null, null);
+        List<OrgUnit> standardUnits = seeder.buildStandardOrgUnits();
+        Instant now = Instant.now();
+
+        Map<String, User> users = new ConcurrentHashMap<>();
+        User teamLeaderTt = userWithRole("u-tl-tt", "22110101", "Tổ trưởng Truyền thông", RoleCode.TEAM_LEADER, "EMFIT_TT", now);
+        User headEmfit = userWithRole("u-head-emfit", "22110102", "Trưởng Ban EMFIT", RoleCode.COMMITTEE_HEAD, "EMFIT", now);
+        User ctvTt = userWithRole("u-ctv-tt", "22110103", "CTV TT", RoleCode.COLLABORATOR, "EMFIT_TT", now);
+        User ctvOfit = userWithRole("u-ctv-ofit", "22110104", "CTV OFIT", RoleCode.COLLABORATOR, "OFIT_CM", now);
+        User freshStudent = new User();
+        freshStudent.setId("u-fresh");
+        freshStudent.setStudentCode("22110888");
+        freshStudent.setEmail("22110888@student.hcmute.edu.vn");
+        freshStudent.setFullName("Sinh viên mới");
+        users.put(teamLeaderTt.getId(), teamLeaderTt);
+        users.put(headEmfit.getId(), headEmfit);
+        users.put(ctvTt.getId(), ctvTt);
+        users.put(ctvOfit.getId(), ctvOfit);
+        users.put(freshStudent.getId(), freshStudent);
+
+        UserRepository userRepo = mockUserRepo(users);
+        OrgUnitRepository unitRepo = Mockito.mock(OrgUnitRepository.class);
+        when(unitRepo.findAll()).thenReturn(standardUnits);
+        when(unitRepo.findById(anyString())).thenAnswer(inv -> standardUnits.stream()
+                .filter(u -> inv.getArgument(0).equals(u.getId())).findFirst());
+        when(unitRepo.findByCode(anyString())).thenAnswer(inv -> standardUnits.stream()
+                .filter(u -> inv.getArgument(0).equals(u.getCode())).findFirst());
+
+        List<Notification> savedNotifs = new ArrayList<>();
+        NotificationRepository notifRepo = Mockito.mock(NotificationRepository.class);
+        when(notifRepo.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            savedNotifs.add(n);
+            return n;
+        });
+
+        UnitHrService unitHrService = new UnitHrService(
+                userRepo, unitRepo, Mockito.mock(HrProposalRepository.class), null, notifRepo, null,
+                new RbacCacheInvalidationService(null), new AuditLogService(null, null)
+        );
+
+        // 1. TEAM_LEADER executes directly in own team EMFIT_TT
+        var onboarded = unitHrService.executeDirectAction("EMFIT_TT",
+                new UnitHrService.DirectHrActionRequest("22110888", HrProposal.ProposalType.ONBOARD_CTV, null, null, "Tiếp nhận trực tiếp"),
+                teamLeaderTt.getId());
+        assertThat(onboarded.unitId()).isEqualTo("EMFIT_TT");
+
+        // 2. TEAM_LEADER blocked (403) from executing in sibling team EMFIT_VH
+        assertThatThrownBy(() -> unitHrService.executeDirectAction("EMFIT_VH",
+                new UnitHrService.DirectHrActionRequest("22110888", HrProposal.ProposalType.ONBOARD_CTV, null, null, "Vượt tổ"),
+                teamLeaderTt.getId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
+
+        // 3. COMMITTEE_HEAD transfers CTV between child teams EMFIT_TT -> EMFIT_VH
+        var transferred = unitHrService.executeDirectAction("EMFIT_TT",
+                new UnitHrService.DirectHrActionRequest("22110103", HrProposal.ProposalType.TRANSFER_TEAM, "EMFIT_VH", null, "Điều chuyển nội bộ Ban"),
+                headEmfit.getId());
+        assertThat(transferred.unitId()).isEqualTo("EMFIT_VH");
+
+        // 4. Isolated unit announcement to EMFIT_VH notifies only EMFIT_VH members, never OFIT
+        var announcement = unitHrService.sendUnitAnnouncement("EMFIT_VH", "Họp Tổ Vận hành", "Triệu tập họp 18h", headEmfit.getId());
+        assertThat(announcement.recipientCount()).isEqualTo(1);
+        assertThat(savedNotifs).hasSize(1);
+        assertThat(savedNotifs.get(0).getRecipientUserId()).isEqualTo(ctvTt.getId());
+        assertThat(savedNotifs).noneMatch(n -> ctvOfit.getId().equals(n.getRecipientUserId()));
+    }
+
+    @Test
+    void accountAdminServiceBlocksSelfLockAndInvalidatesSessionsOnTargetLock() {
+        Map<String, User> users = new ConcurrentHashMap<>();
+        Map<String, UserAuthIdentity> identities = new ConcurrentHashMap<>();
+
+        User admin = new User();
+        admin.setId("u-admin");
+        admin.setEmail("btv@hcmute.edu.vn");
+        admin.setFullName("Admin BTV");
+        admin.setPermissionVersion(1L);
+        users.put(admin.getId(), admin);
+
+        User target = new User();
+        target.setId("u-target");
+        target.setEmail("sv@student.hcmute.edu.vn");
+        target.setFullName("Sinh viên bị khóa");
+        target.setPermissionVersion(1L);
+        users.put(target.getId(), target);
+
+        UserAuthIdentity targetId = new UserAuthIdentity();
+        targetId.setId("auth-target");
+        targetId.setUserId(target.getId());
+        targetId.setEmail(target.getEmail());
+        targetId.setRefreshTokenVersion(1L);
+        identities.put(target.getId(), targetId);
+
+        UserRepository userRepo = mockUserRepo(users);
+        UserAuthIdentityRepository idRepo = Mockito.mock(UserAuthIdentityRepository.class);
+        when(idRepo.findByUserId(anyString())).thenAnswer(inv -> Optional.ofNullable(identities.get(inv.getArgument(0))));
+        when(idRepo.save(any())).thenAnswer(inv -> {
+            UserAuthIdentity saved = inv.getArgument(0);
+            identities.put(saved.getUserId(), saved);
+            return saved;
+        });
+
+        RbacCacheInvalidationService cacheService = new RbacCacheInvalidationService(null);
+        AccountAdminService adminService = new AccountAdminService(
+                userRepo, idRepo, new BCryptPasswordEncoder(4), cacheService, null,
+                new RefreshTokenService(null, new ObjectMapper(), 604800L), new AuditLogService(null, null)
+        );
+        var adminAuth = new UsernamePasswordAuthenticationToken(
+                admin.getId(), null, List.of(new SimpleGrantedAuthority("ROLE_STANDING_COMMITTEE"))
+        );
+
+        // Self-lock is rejected (400 BAD_REQUEST)
+        assertThatThrownBy(() -> adminService.updateAccountStatus(
+                admin.getId(), new AccountAdminService.UpdateStatusRequest(null, true, "Tự khóa"), adminAuth
+        )).isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        // Locking another user invalidates RBAC cache & bumps refreshTokenVersion
+        var locked = adminService.updateAccountStatus(
+                target.getId(), new AccountAdminService.UpdateStatusRequest(null, true, "Vi phạm quy chế"), adminAuth
+        );
+        assertThat(locked.locked()).isTrue();
+        assertThat(target.getPermissionVersion()).isEqualTo(2L);
+        assertThat(targetId.getRefreshTokenVersion()).isEqualTo(2L);
+        assertThat(cacheService.isTokenVersionValid(target.getId(), 1L)).isFalse();
     }
 
     private User userWithRole(String id, String mssv, String name, RoleCode role, String unitId, Instant now) {

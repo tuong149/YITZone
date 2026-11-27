@@ -60,6 +60,7 @@ import { ALL_ADMIN_AUTHORITIES, hasAnyPermission, PERMISSIONS } from "@/lib/perm
 import { hasUserLocalDrafts, useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
 import { useThemeStore } from "@/stores/theme-store";
+import { pushAppToast } from "@/stores/toast-store";
 import { cn } from "@/lib/utils";
 
 const PRIMARY_NAV = [
@@ -171,6 +172,12 @@ export function AppLayout() {
     }
     clearSession({ reason: "logout" });
     setMobileMenuOpen(false);
+    pushAppToast({
+      variant: "info",
+      title: "Đã đăng xuất",
+      description: "Phiên làm việc của bạn đã được đóng an toàn.",
+      durationMs: 3500
+    });
   };
 
   const isAuthenticated = Boolean(accessToken);
@@ -895,6 +902,12 @@ export function AppLayout() {
                 setLogoutConfirmOpen(false);
                 setMobileMenuOpen(false);
                 clearSession({ reason: "logout" });
+                pushAppToast({
+                  variant: "info",
+                  title: "Đã đăng xuất",
+                  description: "Phiên làm việc và dữ liệu tạm trên trình duyệt đã được xóa an toàn.",
+                  durationMs: 3500
+                });
               }}
             >
               Đăng xuất &amp; Xóa dữ liệu tạm

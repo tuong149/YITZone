@@ -22,6 +22,7 @@ import {
 } from "@/features/iam/api";
 import { formatFacultyDisplayName } from "@/features/iam/data/faculty-major-catalog";
 import { extractApiErrorMessage } from "@/lib/api-client";
+import { pushAppToast } from "@/stores/toast-store";
 
 const INITIAL_UNION_PROFILE = {
   className: "",
@@ -109,6 +110,12 @@ export function ProfileInfoSection({
       });
       setSavedProfile(form);
       setSaveSuccess(true);
+      pushAppToast({
+        variant: "success",
+        title: "Đã lưu hồ sơ Đoàn – Hội",
+        description: "Thông tin lớp, chi đoàn và ngày kết nạp của bạn đã được cập nhật.",
+        durationMs: 4000
+      });
     } catch (err) {
       setFormError(extractApiErrorMessage(err, "Không thể lưu hồ sơ Đoàn – Hội lên máy chủ."));
     } finally {
@@ -138,6 +145,12 @@ export function ProfileInfoSection({
     try {
       await linkPersonalEmail(trimmed);
       setOtpSent(true);
+      pushAppToast({
+        variant: "info",
+        title: "Đã gửi mã OTP email cá nhân",
+        description: `Vui lòng kiểm tra hộp thư ${trimmed} để nhập mã xác thực 6 chữ số.`,
+        durationMs: 4500
+      });
     } catch (err) {
       setEmailError(extractApiErrorMessage(err, "Không thể gửi mã OTP tới email cá nhân."));
     } finally {
@@ -156,6 +169,12 @@ export function ProfileInfoSection({
       const res = await verifyPersonalEmailOtp(otpValue.trim());
       setOtpSent(false);
       setOtpValue("");
+      pushAppToast({
+        variant: "success",
+        title: "Đã xác thực email cá nhân",
+        description: "Email dự phòng đã được liên kết để đăng nhập sau khi tốt nghiệp.",
+        durationMs: 4500
+      });
       onUpdateAccountHealth({
         backupEmail: res.personalEmail || personalEmail.trim(),
         backupEmailVerified: true

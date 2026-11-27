@@ -18,6 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { loadOnboardingState } from "@/features/iam/data/onboarding-storage";
 import { extractApiErrorMessage } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
+import { pushAppToast } from "@/stores/toast-store";
 import {
   createPrivacyRequest,
   downloadPersonalDataExport,
@@ -110,6 +111,12 @@ export function PrivacyCenterPage() {
       setExportNotice(
         `Đã tải xuống bản sao dữ liệu cá nhân định dạng ${format} và ghi nhận vào lịch sử yêu cầu.`
       );
+      pushAppToast({
+        variant: "success",
+        title: `Đã tải bản sao dữ liệu (${format})`,
+        description: "Bản sao dữ liệu cá nhân đã được xuất và lưu vào lịch sử yêu cầu.",
+        durationMs: 4000
+      });
     } catch (err) {
       setExportError(
         extractApiErrorMessage(
@@ -283,6 +290,12 @@ export function PrivacyCenterPage() {
             });
             void refetchRequests();
             setDeletionSubmitted(reason);
+            pushAppToast({
+              variant: "warning",
+              title: "Đã gửi yêu cầu ẩn danh hóa",
+              description: "Yêu cầu đã được chuyển tới Ban Thường vụ để xét duyệt theo Luật BVDLCN.",
+              durationMs: 5000
+            });
           } catch (err) {
             setExportError(extractApiErrorMessage(err, "Không thể gửi yêu cầu ẩn danh hóa tài khoản."));
           }

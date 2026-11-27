@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
+
+const EXIT_ANIMATION_MS = 160;
 
 const CATEGORY_META = {
   EVENT: {
@@ -45,18 +47,63 @@ export function NotificationPopup() {
   const markAsRead = useNotificationStore((s) => s.markAsRead);
 
   const [paused, setPaused] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const remainingRef = useRef(AUTO_DISMISS_MS);
+  const startedAtRef = useRef(0);
+  const exitTimerRef = useRef(null);
+
+  const triggerExit = useCallback(() => {
+    setExiting((prev) => {
+      if (prev) return true;
+      exitTimerRef.current = window.setTimeout(() => {
+        dismissPopup();
+      }, EXIT_ANIMATION_MS);
+      return true;
+    });
+  }, [dismissPopup]);
 
   useEffect(() => {
-    if (!activePopup || paused) return;
+    remainingRef.current = AUTO_DISMISS_MS;
+    startedAtRef.current = 0;
+    setPaused(false);
+    setExiting(false);
+    if (exitTimerRef.current) {
+      window.clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = null;
+    }
+  }, [activePopup?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (exitTimerRef.current) {
+        window.clearTimeout(exitTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activePopup || paused || exiting) return;
+    if (remainingRef.current <= 0) {
+      triggerExit();
+      return;
+    }
+    startedAtRef.current = Date.now();
     const timer = window.setTimeout(() => {
-      dismissPopup();
-    }, AUTO_DISMISS_MS);
-    return () => window.clearTimeout(timer);
-  }, [activePopup, paused, dismissPopup]);
+      remainingRef.current = 0;
+      triggerExit();
+    }, remainingRef.current);
+    return () => {
+      window.clearTimeout(timer);
+      if (startedAtRef.current > 0) {
+        const elapsed = Date.now() - startedAtRef.current;
+        remainingRef.current = Math.max(0, remainingRef.current - elapsed);
+      }
+    };
+  }, [activePopup, paused, exiting, triggerExit]);
 
   if (!activePopup) return null;
 
-  const meta = CATEGORY_META[activePopup.category];
+  const meta = CATEGORY_META[activePopup.category] ?? CATEGORY_META.EVENT;
   const Icon = meta.icon;
 
   const handleOpen = () => {
@@ -68,6 +115,7 @@ export function NotificationPopup() {
 
   return (
     <aside
+      key={activePopup.id}
       role="status"
       aria-live="polite"
       aria-label="Thông báo mới"
@@ -75,7 +123,12 @@ export function NotificationPopup() {
       onMouseLeave={() => setPaused(false)}
       className="fixed right-3 top-[68px] z-[55] w-[min(92vw,390px)] sm:right-6"
     >
-      <div className="liquid-glass-card overflow-hidden rounded-[22px] border border-primary/30 shadow-floating transition-all">
+      <div
+        className={cn(
+          "liquid-glass-card overflow-hidden rounded-[22px] border border-primary/30 shadow-floating transition-[border-color,box-shadow]",
+          exiting ? "yit-toast-exit" : "yit-toast-motion"
+        )}
+      >
         <div className="p-4">
           <div className="flex items-start gap-3">
             <div
@@ -99,9 +152,9 @@ export function NotificationPopup() {
                 </div>
                 <button
                   type="button"
-                  onClick={dismissPopup}
+                  onClick={triggerExit}
                   aria-label="Đóng pop-up thông báo"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:hover:bg-white/10"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -128,7 +181,7 @@ export function NotificationPopup() {
                   type="button"
                   onClick={() => {
                     markAsRead(activePopup.id);
-                    dismissPopup();
+                    triggerExit();
                   }}
                   className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
@@ -139,9 +192,15 @@ export function NotificationPopup() {
           </div>
         </div>
 
-        {/* Subtle bottom indicator bar */}
+        {/* Synchronized countdown progress bar */}
         <div className="h-1 w-full bg-primary/15">
-          <div className="h-full w-full origin-left bg-primary/70 transition-opacity" />
+          <div
+            className="yit-toast-countdown h-full w-full origin-left bg-primary/70"
+            style={{
+              animationDuration: `${AUTO_DISMISS_MS}ms`,
+              animationPlayState: paused || exiting ? "paused" : "running"
+            }}
+          />
         </div>
       </div>
     </aside>

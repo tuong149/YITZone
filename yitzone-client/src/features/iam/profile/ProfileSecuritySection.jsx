@@ -27,6 +27,7 @@ import {
   verifyTotpMfa
 } from "@/features/iam/api";
 import { extractApiErrorMessage } from "@/lib/api-client";
+import { pushAppToast } from "@/stores/toast-store";
 
 const INITIAL_SESSIONS = [];
 
@@ -97,6 +98,12 @@ export function ProfileSecuritySection({
       setPwSuccess(
         "Đã cập nhật mật khẩu thành công, thu hồi toàn bộ Refresh Token của các phiên khác và gửi email cảnh báo bảo mật."
       );
+      pushAppToast({
+        variant: "success",
+        title: "Cập nhật mật khẩu thành công",
+        description: "Các phiên đăng nhập trên thiết bị khác đã được thu hồi tự động.",
+        durationMs: 4500
+      });
     } catch (err) {
       setPwError(
         extractApiErrorMessage(err, "Không thể cập nhật mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.")
@@ -159,6 +166,12 @@ export function ProfileSecuritySection({
       setMfaOtp("");
       setMfaSetup(null);
       onUpdateAccountHealth({ mfaEnabled: true });
+      pushAppToast({
+        variant: "success",
+        title: "Đã bật xác thực 2 lớp (TOTP MFA)",
+        description: "Tài khoản của bạn hiện được bảo vệ thêm một lớp mã xác thực 6 chữ số.",
+        durationMs: 4500
+      });
     } catch (err) {
       setMfaError(
         extractApiErrorMessage(

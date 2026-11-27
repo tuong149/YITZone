@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,9 +49,14 @@ class HybridAuthAndOidcLinkingTest {
     private static final String TEST_SECRET = "test-jwt-secret-key-at-least-64-characters-long-for-hmac-sha-256-yitzone";
 
     private TestHarness buildHarness() {
+        return buildHarness(false);
+    }
+
+    private TestHarness buildHarness(boolean enforceAdminMfa) {
         Map<String, User> usersById = new ConcurrentHashMap<>();
         Map<String, UserAuthIdentity> identitiesByUserId = new ConcurrentHashMap<>();
         AtomicInteger idSeq = new AtomicInteger(1);
+        AtomicReference<String> lastOtpCode = new AtomicReference<>();
 
         UserRepository userRepo = Mockito.mock(UserRepository.class);
         when(userRepo.save(any(User.class))).thenAnswer(inv -> {
@@ -108,7 +114,14 @@ class HybridAuthAndOidcLinkingTest {
         when(consentRepo.findByUserIdAndConsentTypeAndPolicyVersion(any(), any(), any())).thenReturn(Optional.empty());
         when(consentRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        OtpService otpService = new OtpService(null, null, "no-reply@yitzone.fit.edu.vn", TEST_SECRET);
+        OtpService otpService = new OtpService(null, null, "no-reply@yitzone.fit.edu.vn", TEST_SECRET) {
+            @Override
+            public GeneratedOtp generateOtp(UserAuthIdentity.OtpPurpose purpose) {
+                GeneratedOtp generated = super.generateOtp(purpose);
+                lastOtpCode.set(generated.rawCode());
+                return generated;
+            }
+        };
         TotpMfaService mfaService = new TotpMfaService(TEST_SECRET);
         RefreshTokenService refreshService = new RefreshTokenService(null, new ObjectMapper(), 604800L);
         JwtTokenService jwtService = new JwtTokenService(TEST_SECRET, 900L);
@@ -119,9 +132,9 @@ class HybridAuthAndOidcLinkingTest {
         HybridAuthService authService = new HybridAuthService(
                 userRepo, idRepo, consentRepo, new BCryptPasswordEncoder(4),
                 otpService, mfaService, refreshService, jwtService,
-                effectiveService, idResService, autoLinkService, new AuditLogService(null, null), null
+                effectiveService, idResService, autoLinkService, new AuditLogService(null, null), null, enforceAdminMfa
         );
-        return new TestHarness(authService, usersById, identitiesByUserId, pendingWalkIn, mfaService);
+        return new TestHarness(authService, usersById, identitiesByUserId, pendingWalkIn, mfaService, lastOtpCode);
     }
 
     @Test
@@ -180,12 +193,108 @@ class HybridAuthAndOidcLinkingTest {
                 .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
     }
 
+    @Test
+    void ucIam01And02VerifiesEmailOtpRosterGuestFallbackAndLinksVerifiedAccountWithGoogle() {
+        TestHarness h = buildHarness();
+
+        // 1. Missing PDPL consent -> 400 BAD_REQUEST
+        assertThatThrownBy(() -> h.authService.registerWithEmail("Nguyễn Minh Khôi", "22110418@student.hcmute.edu.vn", "Strong@2026", false))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        // 2. Weak password -> 400 BAD_REQUEST
+        assertThatThrownBy(() -> h.authService.registerWithEmail("Nguyễn Minh Khôi", "22110418@student.hcmute.edu.vn", "weak", true))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        // 3. Register school email + verify OTP -> auto-assigns MSSV 22110418 (FIT 110) + auto-links PENDING_SSO_LINK
+        var regResult = h.authService.registerWithEmail("Nguyễn Minh Khôi", "22110418@student.hcmute.edu.vn", "Strong@2026", true);
+        assertThat(regResult.status()).isEqualTo("OTP_SENT");
+        var verified = h.authService.verifyRegistrationOtp("22110418@student.hcmute.edu.vn", h.lastOtpCode.get());
+        String originalUserId = verified.payload().userId();
+        assertThat(verified.payload().studentCode()).isEqualTo("22110418");
+        assertThat(h.usersById.get(originalUserId).getMajorCode()).isEqualTo("110");
+        assertThat(h.pendingWalkIn.getSsoLinkStatus()).isEqualTo(EventAttendance.SsoLinkStatus.LINKED);
+
+        // 4. Verified Account Linking (SRS FR-IAM-01 case a): Google Workspace login merges into SAME User & keeps password
+        var googleLinked = h.authService.authenticateGoogleOidc("google-sub-418", "22110418@student.hcmute.edu.vn", "Nguyễn Minh Khôi", true);
+        assertThat(googleLinked.payload().userId()).isEqualTo(originalUserId);
+        assertThat(h.identitiesByUserId.get(originalUserId).getGoogleSub()).isEqualTo("google-sub-418");
+        assertThat(h.identitiesByUserId.get(originalUserId).getPasswordHash()).isNotNull();
+
+        // Both password and Google login remain usable on the same User
+        var pwLogin = h.authService.loginWithPassword("22110418@student.hcmute.edu.vn", "Strong@2026");
+        assertThat(pwLogin.payload().userId()).isEqualTo(originalUserId);
+
+        // 5. External email -> TEMP_GUEST without studentCode
+        h.authService.registerWithEmail("Khách Mời Ngoài", "guest.speaker@gmail.com", "Guest@2026", true);
+        var guestSession = h.authService.verifyRegistrationOtp("guest.speaker@gmail.com", h.lastOtpCode.get());
+        User guestUser = h.usersById.get(guestSession.payload().userId());
+        assertThat(guestUser.getUserType()).isEqualTo(User.UserType.TEMP_GUEST);
+        assertThat(guestUser.getStudentCode()).isNull();
+
+        // 6. Unverified OIDC email -> 401 UNAUTHORIZED
+        assertThatThrownBy(() -> h.authService.authenticateGoogleOidc("google-sub-bad", "fake@student.hcmute.edu.vn", "Fake", false))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        // 7. Google-only existing email attempting password registration -> 409 CONFLICT guidance
+        h.authService.authenticateGoogleOidc("google-sub-only", "googleonly@student.hcmute.edu.vn", "Google Only", true);
+        assertThatThrownBy(() -> h.authService.registerWithEmail("Google Only", "googleonly@student.hcmute.edu.vn", "Strong@2026", true))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void ucIam03EnforcesMandatoryAdminMfaNeutralForgotPasswordAndBulkRefreshRevocation() {
+        TestHarness h = buildHarness(true);
+
+        // Create BTV user with password
+        var issued = h.authService.authenticateGoogleOidc("google-sub-btv", "btv@hcmute.edu.vn", "Bí thư Đoàn Khoa", true);
+        String btvId = issued.payload().userId();
+        User btv = h.usersById.get(btvId);
+        btv.setRoleScopes(List.of(new User.RoleScope(
+                vn.edu.fit.yitzone.iam.domain.RoleCode.STANDING_COMMITTEE,
+                null, "BCH_DOAN", "FACULTY", "FACULTY", "2026-2027", Instant.now().minusSeconds(60), null, null
+        )));
+        h.authService.changeOrSetupPassword(btvId, null, "BtvStrong@2026");
+
+        // 1. Mandatory Admin MFA: login returns mfaSetupRequired=true
+        var challenge = h.authService.loginWithPassword("btv@hcmute.edu.vn", "BtvStrong@2026");
+        assertThat(challenge.payload().mfaRequired()).isTrue();
+        assertThat(challenge.payload().mfaSetupRequired()).isTrue();
+        assertThat(challenge.payload().mfaSecret()).isNotBlank();
+
+        // 2. Completing MFA challenge enables MFA and issues refresh token; disabling MFA is blocked (403)
+        String code = h.mfaService.generateCode(challenge.payload().mfaSecret(), Instant.now());
+        var verified = h.authService.verifyMfaLoginChallenge(challenge.payload().mfaChallengeToken(), code);
+        assertThat(verified.payload().accessToken()).isNotBlank();
+        assertThat(h.identitiesByUserId.get(btvId).isMfaTotpEnabled()).isTrue();
+        String oldRefreshToken = verified.refreshToken().rawToken();
+
+        assertThatThrownBy(() -> h.authService.disableTotpMfa(btvId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
+
+        // 3. Forgot password neutral for non-existent email (no exception)
+        h.authService.requestPasswordReset("nonexistent.user@hcmute.edu.vn");
+
+        // 4. Forgot + Reset password revokes all previously issued Refresh Tokens
+        h.authService.requestPasswordReset("btv@hcmute.edu.vn");
+        h.authService.completePasswordReset("btv@hcmute.edu.vn", h.lastOtpCode.get(), "BtvReset@2026");
+
+        assertThatThrownBy(() -> h.authService.refreshSession(oldRefreshToken))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
+    }
+
     private record TestHarness(
             HybridAuthService authService,
             Map<String, User> usersById,
             Map<String, UserAuthIdentity> identitiesByUserId,
             EventAttendance pendingWalkIn,
-            TotpMfaService mfaService
+            TotpMfaService mfaService,
+            AtomicReference<String> lastOtpCode
     ) {
     }
 }

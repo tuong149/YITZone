@@ -34,6 +34,7 @@ import { logoutSession } from "@/features/iam/api";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore } from "@/stores/theme-store";
+import { pushAppToast } from "@/stores/toast-store";
 import { cn } from "@/lib/utils";
 
 const ADMIN_GROUPS = [
@@ -252,6 +253,12 @@ export function AdminLayout() {
       // Proceed with local logout even if server is unreachable
     }
     clearSession({ reason: "logout" });
+    pushAppToast({
+      variant: "info",
+      title: "Đã đăng xuất",
+      description: "Phiên quản trị của bạn đã được đóng an toàn.",
+      durationMs: 3500
+    });
     void navigate("/login", { replace: true });
   };
 

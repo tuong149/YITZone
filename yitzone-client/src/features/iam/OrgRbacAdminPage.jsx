@@ -1,6 +1,18 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Building2, KeyRound, Lock, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Building2,
+  Eye,
+  KeyRound,
+  Lock,
+  Pencil,
+  Plus,
+  Power,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  Trash2
+} from "lucide-react";
 import { AuditActionDialog } from "@/components/ui/audit-action-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,10 +37,12 @@ import { useEventStore } from "@/stores/event-store";
 import {
   createRbacGrant,
   revokeRbacGrant,
+  updateRbacModule,
   useOrgUnits,
   useRbacGrants,
   useRbacModules
 } from "./api";
+import { PermissionModuleDialog } from "./PermissionModuleDialog";
 
 const EXECUTIVE_BODIES = [
   {
@@ -111,8 +125,14 @@ export function OrgRbacAdminPage() {
   const [grantMsg, setGrantMsg] = useState(null);
   const [submittingGrant, setSubmittingGrant] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState(null);
+  const [moduleSearch, setModuleSearch] = useState("");
+  const [moduleFilter, setModuleFilter] = useState("ALL");
+  const [moduleDialogOpen, setModuleDialogOpen] = useState(false);
+  const [editingModule, setEditingModule] = useState(null);
+  const [moduleNotice, setModuleNotice] = useState(null);
+  const [toggleModuleTarget, setToggleModuleTarget] = useState(null);
 
-  const { data: apiModules } = useRbacModules();
+  const { data: apiModules, refetch: refetchModules } = useRbacModules(true);
   const { data: apiGrants, refetch: refetchGrants } = useRbacGrants();
   const { data: apiOrgUnits } = useOrgUnits();
   const { data: apiEvents, isLoading: loadingEvents } = useEvents();
@@ -125,11 +145,46 @@ export function OrgRbacAdminPage() {
         code: m.moduleCode,
         label: m.name,
         nonDelegable: Boolean(m.nonDelegable),
+        systemDefault: m.systemDefault !== false,
+        active: m.active !== false,
+        includedPermissions: Array.isArray(m.includedPermissions) ? m.includedPermissions : [],
         note: m.description ?? ""
       }));
     }
-    return RBAC_MODULES;
+    return RBAC_MODULES.map((m) => ({
+      ...m,
+      systemDefault: true,
+      active: true,
+      includedPermissions: []
+    }));
   }, [apiModules]);
+
+  const activeGrantableModules = useMemo(
+    () => effectiveModules.filter((m) => m.active !== false),
+    [effectiveModules]
+  );
+
+  const filteredModules = useMemo(() => {
+    const q = moduleSearch.trim().toLowerCase();
+    return effectiveModules.filter((m) => {
+      if (moduleFilter === "DEFAULT" && !m.systemDefault) return false;
+      if (moduleFilter === "CUSTOM" && m.systemDefault) return false;
+      if (moduleFilter === "INACTIVE" && m.active !== false) return false;
+      if (!q) return true;
+      const hay = `${m.code} ${m.label} ${m.note} ${(m.includedPermissions || []).join(" ")}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [effectiveModules, moduleSearch, moduleFilter]);
+
+  const moduleCounts = useMemo(
+    () => ({
+      all: effectiveModules.length,
+      defaultCount: effectiveModules.filter((m) => m.systemDefault).length,
+      customCount: effectiveModules.filter((m) => !m.systemDefault).length,
+      inactiveCount: effectiveModules.filter((m) => m.active === false).length
+    }),
+    [effectiveModules]
+  );
 
   const moduleMap = useMemo(
     () => new Map(effectiveModules.map((m) => [m.code, m])),
@@ -282,22 +337,117 @@ export function OrgRbacAdminPage() {
   };
 
   const moduleCols = [
-    { key: "code", header: "Mã Gói", render: (m) => <span className="tabular-mono font-semibold">{m.code}</span> },
-    { key: "label", header: "Tên Gói Quyền", render: (m) => <span className="font-medium">{m.label}</span> },
+    {
+      key: "code",
+      header: "Mã Gói",
+      render: (m) => (
+        <div className="space-y-1">
+          <div className="tabular-mono font-semibold text-foreground">{m.code}</div>
+          <div className="flex flex-wrap items-center gap-1">
+            {m.systemDefault ? (
+              <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                Mặc định
+              </Badge>
+            ) : (
+              <Badge variant="default" className="px-1.5 py-0 text-[10px]">
+                Tùy chỉnh
+              </Badge>
+            )}
+            {m.active === false && (
+              <Badge variant="outline" className="px-1.5 py-0 text-[10px] text-muted-foreground">
+                Tạm ngưng
+              </Badge>
+            )}
+          </div>
+        </div>
+      )
+    },
+    {
+      key: "label",
+      header: "Tên & Mô tả Gói Quyền",
+      render: (m) => (
+        <div className="space-y-0.5">
+          <div className={`font-medium ${m.active === false ? "text-muted-foreground line-through" : "text-foreground"}`}>
+            {m.label}
+          </div>
+          {m.note && <div className="text-xs text-muted-foreground">{m.note}</div>}
+        </div>
+      )
+    },
+    {
+      key: "permissions",
+      header: "Quyền hạn",
+      render: (m) => {
+        const perms = m.includedPermissions || [];
+        return (
+          <div className="space-y-1">
+            <span className="tabular-mono text-xs font-medium text-foreground">
+              {perms.length} quyền
+            </span>
+            {perms.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {perms.slice(0, 2).map((p) => (
+                  <span
+                    key={p}
+                    className="tabular-mono rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                  >
+                    {p}
+                  </span>
+                ))}
+                {perms.length > 2 && (
+                  <span className="tabular-mono text-[10px] text-muted-foreground">
+                    +{perms.length - 2}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
+    },
     {
       key: "delegation",
-      header: "Phân loại Ủy quyền",
+      header: "Ủy quyền",
       render: (m) =>
         m.nonDelegable ? (
           <Badge variant="danger">
             <Lock className="h-3 w-3" />
-            Non-delegable (BTV)
+            Chỉ BTV
           </Badge>
         ) : (
-          <Badge variant="success">Ủy quyền theo Scope/TTL</Badge>
+          <Badge variant="success">Có thể ủy quyền</Badge>
         )
     },
-    { key: "note", header: "Nguyên tắc phân quyền", render: (m) => <span className="text-xs text-muted-foreground">{m.note}</span> }
+    {
+      key: "actions",
+      header: "Thao tác",
+      align: "right",
+      render: (m) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setEditingModule(m);
+              setModuleDialogOpen(true);
+            }}
+          >
+            {m.systemDefault ? <Eye className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+            <span>{m.systemDefault ? "Chi tiết" : "Sửa"}</span>
+          </Button>
+          {!m.systemDefault && (
+            <Button
+              variant={m.active === false ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setToggleModuleTarget(m)}
+            >
+              <Power className="h-3.5 w-3.5" />
+              <span>{m.active === false ? "Kích hoạt" : "Tạm ngưng"}</span>
+            </Button>
+          )}
+        </div>
+      )
+    }
   ];
 
   const grantCols = [
@@ -333,15 +483,15 @@ export function OrgRbacAdminPage() {
         </div>
       )
     },
-    { key: "exp", header: "Hết hạn (TTL)", render: (g) => <span className="tabular-mono text-xs text-muted-foreground">{g.expiresAt}</span> },
+    { key: "exp", header: "Hết hạn", render: (g) => <span className="tabular-mono text-xs text-muted-foreground">{g.expiresAt}</span> },
     {
       key: "action",
-      header: "Thu hồi ≤ 5s",
+      header: "Thao tác",
       align: "right",
       render: (g) => (
         <Button variant="destructive" size="sm" onClick={() => setRevokeTarget(g)}>
           <Trash2 className="h-3.5 w-3.5" />
-          Thu hồi ngay
+          Thu hồi
         </Button>
       )
     }
@@ -351,18 +501,18 @@ export function OrgRbacAdminPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-medium text-foreground">
-          Cây Tổ chức 4 Ban – 9 Tổ &amp; 20 Gói Quyền Động
+          Tổ chức &amp; Phân quyền
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Hợp quyền Union đa chức vụ, kiểm soát phạm vi cô lập và thu hồi tức thì qua Redis Pub/Sub trong vòng 5 giây.
+          Quản lý cơ cấu đơn vị, gói quyền và ủy quyền theo phạm vi.
         </p>
       </div>
 
       <Tabs defaultValue="grants">
         <TabsList>
-          <TabsTrigger value="grants">Cấp phát &amp; Thu hồi ≤ 5s</TabsTrigger>
-          <TabsTrigger value="tree">Cây Tổ chức 4 Ban – 9 Tổ</TabsTrigger>
-          <TabsTrigger value="modules">Cấu trúc 20 Gói Quyền</TabsTrigger>
+          <TabsTrigger value="grants">Cấp phát &amp; Thu hồi</TabsTrigger>
+          <TabsTrigger value="tree">Cây Tổ chức</TabsTrigger>
+          <TabsTrigger value="modules">Gói Quyền</TabsTrigger>
         </TabsList>
 
         <TabsContent value="grants" className="space-y-5">
@@ -370,10 +520,10 @@ export function OrgRbacAdminPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <KeyRound className="h-5 w-5 text-primary" />
-                Cấp phát Gói Quyền Theo Phạm vi &amp; Thời hạn
+                Cấp phát Gói Quyền
               </CardTitle>
               <CardDescription>
-                Hệ thống tự động chặn vượt thẩm quyền và từ chối ủy quyền nhóm chỉ dành cho BTV.
+                Gán gói quyền cho tài khoản theo đơn vị hoặc sự kiện.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -386,10 +536,11 @@ export function OrgRbacAdminPage() {
                         <SelectValue placeholder="Chọn tên gói quyền..." />
                       </SelectTrigger>
                       <SelectContent className="max-h-80 max-w-[min(92vw,520px)]">
-                        {effectiveModules.map((m) => (
+                        {activeGrantableModules.map((m) => (
                           <SelectItem key={m.code} value={m.code} className="py-2">
                             {m.label}
                             {m.nonDelegable ? " · Chỉ BTV" : ""}
+                            {!m.systemDefault ? " · Tùy chỉnh" : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -449,7 +600,7 @@ export function OrgRbacAdminPage() {
                         <SelectContent className="max-h-80">
                           {groupedOrgUnits.committees.length > 0 && (
                             <SelectGroup>
-                              <SelectLabel>4 Ban Chức năng</SelectLabel>
+                              <SelectLabel>Ban Chức năng</SelectLabel>
                               {groupedOrgUnits.committees.map((u) => (
                                 <SelectItem key={u.code} value={u.code}>
                                   {u.name}
@@ -461,7 +612,7 @@ export function OrgRbacAdminPage() {
                             <>
                               <SelectSeparator />
                               <SelectGroup>
-                                <SelectLabel>9 Tổ Trực thuộc</SelectLabel>
+                                <SelectLabel>Tổ Trực thuộc</SelectLabel>
                                 {groupedOrgUnits.teams.map((u) => (
                                   <SelectItem key={u.code} value={u.code}>
                                     {u.name}
@@ -651,9 +802,7 @@ export function OrgRbacAdminPage() {
                     </span>
                     <Badge variant="default" className="tabular-mono">{body.code}</Badge>
                   </CardTitle>
-                  <CardDescription>
-                    ancestors: [&quot;FIT&quot;] · {body.governanceNote}
-                  </CardDescription>
+                  <CardDescription>{body.governanceNote}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
                   {body.slots.map((slot) => (
@@ -677,7 +826,6 @@ export function OrgRbacAdminPage() {
                     </span>
                     <Badge variant="secondary" className="tabular-mono">{dept.code}</Badge>
                   </CardTitle>
-                  <CardDescription>ancestors: [&quot;FIT&quot;, &quot;{dept.code}&quot;]</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
                   {dept.teams.map((t) => (
@@ -691,23 +839,152 @@ export function OrgRbacAdminPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="modules">
-          <DataTable columns={moduleCols} data={effectiveModules} />
+        <TabsContent value="modules" className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-72">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={moduleSearch}
+                  onChange={(e) => setModuleSearch(e.target.value)}
+                  placeholder="Tìm mã gói, tên hoặc mã quyền..."
+                  className="h-9 rounded-full pl-9 text-sm"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { key: "ALL", label: "Tất cả", count: moduleCounts.all },
+                  { key: "DEFAULT", label: "Mặc định", count: moduleCounts.defaultCount },
+                  { key: "CUSTOM", label: "Tùy chỉnh", count: moduleCounts.customCount },
+                  { key: "INACTIVE", label: "Tạm ngưng", count: moduleCounts.inactiveCount }
+                ].map((chip) => {
+                  const active = moduleFilter === chip.key;
+                  return (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      onClick={() => setModuleFilter(chip.key)}
+                      className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      <span>{chip.label}</span>
+                      <span className="tabular-mono opacity-80">{chip.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              className="h-9 rounded-full"
+              onClick={() => {
+                setEditingModule(null);
+                setModuleDialogOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              <span>Tạo gói quyền mới</span>
+            </Button>
+          </div>
+
+          {moduleNotice && (
+            <div
+              className={`flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-medium ${
+                moduleNotice.type === "ok"
+                  ? "border-status-success/30 bg-status-success/10 text-status-success"
+                  : "border-status-danger/30 bg-status-danger/10 text-status-danger"
+              }`}
+            >
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              <span>{moduleNotice.text}</span>
+            </div>
+          )}
+
+          <DataTable columns={moduleCols} data={filteredModules} />
         </TabsContent>
       </Tabs>
+
+      <PermissionModuleDialog
+        open={moduleDialogOpen}
+        onOpenChange={setModuleDialogOpen}
+        moduleItem={editingModule}
+        onSaved={(saved, mode) => {
+          void refetchModules();
+          setModuleNotice({
+            type: "ok",
+            text:
+              mode === "create"
+                ? `Đã tạo gói quyền ${saved.moduleCode} (${saved.name}).`
+                : `Đã cập nhật gói quyền ${saved.moduleCode}.`
+          });
+        }}
+      />
+
+      <AuditActionDialog
+        open={Boolean(toggleModuleTarget)}
+        onOpenChange={(open) => {
+          if (!open) setToggleModuleTarget(null);
+        }}
+        title={
+          toggleModuleTarget?.active === false
+            ? "Kích hoạt lại Gói Quyền"
+            : "Tạm ngưng Gói Quyền"
+        }
+        description={
+          toggleModuleTarget?.active === false
+            ? "Gói quyền sẽ hoạt động trở lại và có thể tiếp tục cấp phát."
+            : "Gói quyền sẽ bị ẩn khỏi danh sách cấp phát mới và ngừng hiệu lực với các tài khoản đang giữ."
+        }
+        targetSummary={
+          toggleModuleTarget ? `${toggleModuleTarget.code} · ${toggleModuleTarget.label}` : ""
+        }
+        actionCode={
+          toggleModuleTarget?.active === false ? "RBAC_MODULE_REACTIVATE" : "RBAC_MODULE_DISABLE"
+        }
+        confirmLabel={
+          toggleModuleTarget?.active === false ? "Kích hoạt" : "Tạm ngưng"
+        }
+        onConfirm={async (reason) => {
+          if (!toggleModuleTarget) return;
+          try {
+            const nextActive = toggleModuleTarget.active === false;
+            await updateRbacModule(toggleModuleTarget.code, {
+              active: nextActive,
+              reason
+            });
+            void refetchModules();
+            setModuleNotice({
+              type: "ok",
+              text: nextActive
+                ? `Đã kích hoạt lại gói quyền ${toggleModuleTarget.code}.`
+                : `Đã tạm ngưng gói quyền ${toggleModuleTarget.code}.`
+            });
+          } catch (err) {
+            setModuleNotice({
+              type: "err",
+              text: extractApiErrorMessage(err, "Không thể cập nhật trạng thái gói quyền.")
+            });
+          }
+        }}
+      />
 
       <AuditActionDialog
         open={Boolean(revokeTarget)}
         onOpenChange={(open) => {
           if (!open) setRevokeTarget(null);
         }}
-        title="Thu hồi Gói Quyền Tức thì (≤ 5 giây)"
-        description="Hệ thống sẽ tăng permissionVersion và phát tín hiệu Redis Pub/Sub rbac:invalidate để mọi API kế tiếp của tài khoản này bị chặn 403 ngay lập tức."
+        title="Thu hồi Gói Quyền"
+        description="Quyền truy cập của tài khoản sẽ bị thu hồi ngay sau khi xác nhận."
         targetSummary={
           revokeTarget ? `${revokeTarget.userName} · ${revokeTarget.moduleCode} (${revokeTarget.scopeLabel})` : ""
         }
         actionCode="RBAC_GRANT_REVOKE"
-        confirmLabel="Thu hồi ngay & Ghi Audit Log"
+        confirmLabel="Xác nhận thu hồi"
         onConfirm={async (reason) => {
           if (!revokeTarget) return;
           try {
@@ -720,7 +997,7 @@ export function OrgRbacAdminPage() {
             void refetchGrants();
             setGrantMsg({
               type: "ok",
-              text: `Đã thu hồi ${revokeTarget.moduleCode} của ${revokeTarget.userName} và xóa cache quyền trên Redis (≤ 5s).`
+              text: `Đã thu hồi gói ${revokeTarget.moduleCode} của ${revokeTarget.userName}.`
             });
           } catch (err) {
             setGrantMsg({

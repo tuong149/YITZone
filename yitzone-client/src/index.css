@@ -547,9 +547,21 @@
     animation: yit-drawer-in 260ms var(--motion-ease-out) both;
   }
 
-  /* System Toast arrival */
+  /* System Toast & Notification Popup arrival / exit / countdown */
   .yit-toast-motion {
     animation: yit-toast-in 240ms var(--motion-ease-out) both;
+  }
+
+  .yit-toast-exit {
+    animation: yit-toast-out 160ms var(--motion-ease-out) forwards;
+    pointer-events: none;
+  }
+
+  .yit-toast-countdown {
+    animation-name: yit-toast-countdown;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+    will-change: transform;
   }
 
   /* Tab Content subtle continuity */
@@ -664,11 +676,31 @@
 @keyframes yit-toast-in {
   from {
     opacity: 0;
-    transform: translateX(14px) scale(0.98);
+    transform: translateX(18px) scale(0.975);
   }
   to {
     opacity: 1;
     transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes yit-toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(16px) scale(0.98);
+  }
+}
+
+@keyframes yit-toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
   }
 }
 
@@ -757,7 +789,8 @@
   }
 
   .yit-dialog-motion[data-state="closed"],
-  .yit-popover-motion[data-state="closed"] {
+  .yit-popover-motion[data-state="closed"],
+  .yit-toast-exit {
     animation-name: yit-overlay-out !important;
   }
 
